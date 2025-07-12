@@ -303,6 +303,7 @@ fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMa
         var parts = std.mem.splitScalar(u8, trimmed, ';');
         const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
         const property = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+        const value_str = if (parts.next()) |v| std.mem.trim(u8, v, " \t") else "";
 
         const range = try parseCodePointRange(cp_str);
 
@@ -352,7 +353,16 @@ fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMa
             } else if (std.mem.eql(u8, property, "Grapheme_Link")) {
                 result.value_ptr.grapheme_link = true;
             } else if (std.mem.eql(u8, property, "InCB")) {
-                result.value_ptr.incb = true;
+                if (std.mem.eql(u8, value_str, "Linker")) {
+                    result.value_ptr.indic_conjunct_break = .linker;
+                } else if (std.mem.eql(u8, value_str, "Consonant")) {
+                    result.value_ptr.indic_conjunct_break = .consonant;
+                } else if (std.mem.eql(u8, value_str, "Extend")) {
+                    result.value_ptr.indic_conjunct_break = .extend;
+                } else {
+                    std.log.err("Unknown InCB value: {s}", .{value_str});
+                    unreachable;
+                }
             } else {
                 std.log.err("Unknown DerivedCoreProperties property: {s}", .{property});
                 unreachable;

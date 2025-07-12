@@ -98,7 +98,14 @@ pub const CaseFolding = struct {
     full_len: u2 = 0,
 };
 
-pub const DerivedCoreProperties = packed struct {
+pub const IndicConjunctBreak = enum {
+    none,
+    linker,
+    consonant,
+    extend,
+};
+
+pub const DerivedCoreProperties = struct {
     math: bool = false,
     alphabetic: bool = false,
     lowercase: bool = false,
@@ -118,7 +125,7 @@ pub const DerivedCoreProperties = packed struct {
     grapheme_extend: bool = false,
     grapheme_base: bool = false,
     grapheme_link: bool = false,
-    incb: bool = false,
+    indic_conjunct_break: IndicConjunctBreak = .none,
 };
 
 pub const EastAsianWidth = enum {
