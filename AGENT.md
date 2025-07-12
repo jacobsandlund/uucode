@@ -16,6 +16,8 @@ The architecture works in a few layers:
 * Test with: `zig build test`
 * Format code with: `zig fmt`
 
+Always `zig build test` and `zig build` to check that changes still pass.
+
 ## Code Style
 
 Follow Zig standard conventions, but keep imports at the top.

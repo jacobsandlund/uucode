@@ -1,14 +1,14 @@
 const std = @import("std");
 
-pub const OffsetLen = packed struct {
-    offset: u24,
-    len: u8,
-};
-
 pub const min_code_point: u21 = 0x0000;
 pub const max_code_point: u21 = 0x10FFFF;
 pub const num_code_points: u21 = max_code_point + 1;
 pub const code_point_range_end: u21 = max_code_point + 1;
+
+pub const OffsetLen = packed struct {
+    offset: u24,
+    len: u8,
+};
 
 pub const FullData = struct {
     // UnicodeData fields
@@ -249,3 +249,33 @@ pub const EmojiData = packed struct {
     emoji_component: bool = false,
     extended_pictographic: bool = false,
 };
+
+pub fn SelectedData(comptime fields: []const []const u8) type {
+    const full_data_info = @typeInfo(FullData);
+    const full_fields = full_data_info.@"struct".fields;
+
+    var selected_fields: [fields.len]std.builtin.Type.StructField = undefined;
+
+    for (fields, 0..) |field_name, i| {
+        var found = false;
+        for (full_fields) |full_field| {
+            if (std.mem.eql(u8, field_name, full_field.name)) {
+                selected_fields[i] = full_field;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            @compileError("Field '" ++ field_name ++ "' not found in FullData");
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = &selected_fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}

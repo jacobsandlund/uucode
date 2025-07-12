@@ -55,7 +55,7 @@ fn getCodePointOffset(
     return .{ .offset = offset, .len = @intCast(slice.len) };
 }
 
-pub fn write(allocator: std.mem.Allocator, ucd: *const Ucd, comptime SelectedDataType: type, writer: anytype) !void {
+pub fn write(comptime SelectedData: type, allocator: std.mem.Allocator, ucd: *const Ucd, writer: anytype) !void {
     var string_map = std.StringHashMapUnmanaged(u24){};
     defer string_map.deinit(allocator);
     var strings = std.ArrayList(u8).init(allocator);
@@ -66,8 +66,7 @@ pub fn write(allocator: std.mem.Allocator, ucd: *const Ucd, comptime SelectedDat
     var codepoints = std.ArrayList(u21).init(allocator);
     defer codepoints.deinit();
 
-    // Collect all SelectedData structures, only processing needed fields
-    var selected_data_items = try std.ArrayList(SelectedDataType).initCapacity(allocator, data.num_code_points);
+    var selected_data_items = try std.ArrayList(SelectedData).initCapacity(allocator, data.num_code_points);
     defer selected_data_items.deinit();
 
     var cp: u21 = data.min_code_point;
@@ -79,112 +78,151 @@ pub fn write(allocator: std.mem.Allocator, ucd: *const Ucd, comptime SelectedDat
         const grapheme_break = ucd.grapheme_break.get(cp) orelse data.GraphemeBreak.other;
         const emoji_data = ucd.emoji_data.get(cp) orelse data.EmojiData{};
 
-        var selected_data = SelectedDataType{};
+        var selected_data = SelectedData{};
 
-        // Use comptime reflection to only process fields that exist in SelectedDataType
-        const fields = std.meta.fields(SelectedDataType);
-        inline for (fields) |field| {
-            // Handle fields based on name. When adding new fields to SelectedData,
-            // add the corresponding cases here.
-            if (comptime std.mem.eql(u8, field.name, "case_folding_simple")) {
-                @field(selected_data, field.name) = case_folding.simple;
-            } else if (comptime std.mem.eql(u8, field.name, "case_folding_turkish")) {
-                @field(selected_data, field.name) = case_folding.turkish orelse 0;
-            } else if (comptime std.mem.eql(u8, field.name, "case_folding_full")) {
-                @field(selected_data, field.name) = case_folding.full;
-            } else if (comptime std.mem.eql(u8, field.name, "case_folding_full_len")) {
-                @field(selected_data, field.name) = case_folding.full_len;
-            } else if (comptime std.mem.eql(u8, field.name, "name")) {
-                @field(selected_data, field.name) = try getStringOffset(allocator, &string_map, &strings, unicode_data.name);
-            } else if (comptime std.mem.eql(u8, field.name, "unicode_1_name")) {
-                @field(selected_data, field.name) = try getStringOffset(allocator, &string_map, &strings, unicode_data.unicode_1_name);
-            } else if (comptime std.mem.eql(u8, field.name, "iso_comment")) {
-                @field(selected_data, field.name) = try getStringOffset(allocator, &string_map, &strings, unicode_data.iso_comment);
-            } else if (comptime std.mem.eql(u8, field.name, "numeric_value_numeric")) {
-                @field(selected_data, field.name) = try getStringOffset(allocator, &string_map, &strings, unicode_data.numeric_value_numeric);
-            } else if (comptime std.mem.eql(u8, field.name, "decomposition_mapping")) {
-                @field(selected_data, field.name) = try getCodePointOffset(allocator, &codepoint_map, &codepoints, unicode_data.decomposition_mapping);
-            } else if (comptime std.mem.eql(u8, field.name, "general_category")) {
-                @field(selected_data, field.name) = unicode_data.general_category;
-            } else if (comptime std.mem.eql(u8, field.name, "canonical_combining_class")) {
-                @field(selected_data, field.name) = unicode_data.canonical_combining_class;
-            } else if (comptime std.mem.eql(u8, field.name, "bidi_class")) {
-                @field(selected_data, field.name) = unicode_data.bidi_class;
-            } else if (comptime std.mem.eql(u8, field.name, "decomposition_type")) {
-                @field(selected_data, field.name) = unicode_data.decomposition_type;
-            } else if (comptime std.mem.eql(u8, field.name, "numeric_type")) {
-                @field(selected_data, field.name) = unicode_data.numeric_type;
-            } else if (comptime std.mem.eql(u8, field.name, "numeric_value_decimal")) {
-                @field(selected_data, field.name) = unicode_data.numeric_value_decimal;
-            } else if (comptime std.mem.eql(u8, field.name, "numeric_value_digit")) {
-                @field(selected_data, field.name) = unicode_data.numeric_value_digit;
-            } else if (comptime std.mem.eql(u8, field.name, "bidi_mirrored")) {
-                @field(selected_data, field.name) = unicode_data.bidi_mirrored;
-            } else if (comptime std.mem.eql(u8, field.name, "simple_uppercase_mapping")) {
-                @field(selected_data, field.name) = unicode_data.simple_uppercase_mapping;
-            } else if (comptime std.mem.eql(u8, field.name, "simple_lowercase_mapping")) {
-                @field(selected_data, field.name) = unicode_data.simple_lowercase_mapping;
-            } else if (comptime std.mem.eql(u8, field.name, "simple_titlecase_mapping")) {
-                @field(selected_data, field.name) = unicode_data.simple_titlecase_mapping;
-            } else if (comptime std.mem.eql(u8, field.name, "math")) {
-                @field(selected_data, field.name) = derived_core_properties.math;
-            } else if (comptime std.mem.eql(u8, field.name, "alphabetic")) {
-                @field(selected_data, field.name) = derived_core_properties.alphabetic;
-            } else if (comptime std.mem.eql(u8, field.name, "lowercase")) {
-                @field(selected_data, field.name) = derived_core_properties.lowercase;
-            } else if (comptime std.mem.eql(u8, field.name, "uppercase")) {
-                @field(selected_data, field.name) = derived_core_properties.uppercase;
-            } else if (comptime std.mem.eql(u8, field.name, "cased")) {
-                @field(selected_data, field.name) = derived_core_properties.cased;
-            } else if (comptime std.mem.eql(u8, field.name, "case_ignorable")) {
-                @field(selected_data, field.name) = derived_core_properties.case_ignorable;
-            } else if (comptime std.mem.eql(u8, field.name, "changes_when_lowercased")) {
-                @field(selected_data, field.name) = derived_core_properties.changes_when_lowercased;
-            } else if (comptime std.mem.eql(u8, field.name, "changes_when_uppercased")) {
-                @field(selected_data, field.name) = derived_core_properties.changes_when_uppercased;
-            } else if (comptime std.mem.eql(u8, field.name, "changes_when_titlecased")) {
-                @field(selected_data, field.name) = derived_core_properties.changes_when_titlecased;
-            } else if (comptime std.mem.eql(u8, field.name, "changes_when_casefolded")) {
-                @field(selected_data, field.name) = derived_core_properties.changes_when_casefolded;
-            } else if (comptime std.mem.eql(u8, field.name, "changes_when_casemapped")) {
-                @field(selected_data, field.name) = derived_core_properties.changes_when_casemapped;
-            } else if (comptime std.mem.eql(u8, field.name, "id_start")) {
-                @field(selected_data, field.name) = derived_core_properties.id_start;
-            } else if (comptime std.mem.eql(u8, field.name, "id_continue")) {
-                @field(selected_data, field.name) = derived_core_properties.id_continue;
-            } else if (comptime std.mem.eql(u8, field.name, "xid_start")) {
-                @field(selected_data, field.name) = derived_core_properties.xid_start;
-            } else if (comptime std.mem.eql(u8, field.name, "xid_continue")) {
-                @field(selected_data, field.name) = derived_core_properties.xid_continue;
-            } else if (comptime std.mem.eql(u8, field.name, "default_ignorable_code_point")) {
-                @field(selected_data, field.name) = derived_core_properties.default_ignorable_code_point;
-            } else if (comptime std.mem.eql(u8, field.name, "grapheme_extend")) {
-                @field(selected_data, field.name) = derived_core_properties.grapheme_extend;
-            } else if (comptime std.mem.eql(u8, field.name, "grapheme_base")) {
-                @field(selected_data, field.name) = derived_core_properties.grapheme_base;
-            } else if (comptime std.mem.eql(u8, field.name, "grapheme_link")) {
-                @field(selected_data, field.name) = derived_core_properties.grapheme_link;
-            } else if (comptime std.mem.eql(u8, field.name, "indic_conjunct_break")) {
-                @field(selected_data, field.name) = derived_core_properties.indic_conjunct_break;
-            } else if (comptime std.mem.eql(u8, field.name, "east_asian_width")) {
-                @field(selected_data, field.name) = east_asian_width;
-            } else if (comptime std.mem.eql(u8, field.name, "grapheme_break")) {
-                @field(selected_data, field.name) = grapheme_break;
-            } else if (comptime std.mem.eql(u8, field.name, "emoji")) {
-                @field(selected_data, field.name) = emoji_data.emoji;
-            } else if (comptime std.mem.eql(u8, field.name, "emoji_presentation")) {
-                @field(selected_data, field.name) = emoji_data.emoji_presentation;
-            } else if (comptime std.mem.eql(u8, field.name, "emoji_modifier")) {
-                @field(selected_data, field.name) = emoji_data.emoji_modifier;
-            } else if (comptime std.mem.eql(u8, field.name, "emoji_modifier_base")) {
-                @field(selected_data, field.name) = emoji_data.emoji_modifier_base;
-            } else if (comptime std.mem.eql(u8, field.name, "emoji_component")) {
-                @field(selected_data, field.name) = emoji_data.emoji_component;
-            } else if (comptime std.mem.eql(u8, field.name, "extended_pictographic")) {
-                @field(selected_data, field.name) = emoji_data.extended_pictographic;
-            } else {
-                @compileError("Unknown field '" ++ field.name ++ "' in SelectedData");
-            }
+        if (@hasField(SelectedData, "case_folding_simple")) {
+            selected_data.case_folding_simple = case_folding.simple;
+        }
+        if (@hasField(SelectedData, "case_folding_turkish")) {
+            selected_data.case_folding_turkish = case_folding.turkish orelse 0;
+        }
+        if (@hasField(SelectedData, "case_folding_full")) {
+            selected_data.case_folding_full = case_folding.full;
+        }
+        if (@hasField(SelectedData, "case_folding_full_len")) {
+            selected_data.case_folding_full_len = case_folding.full_len;
+        }
+        if (@hasField(SelectedData, "name")) {
+            selected_data.name = try getStringOffset(allocator, &string_map, &strings, unicode_data.name);
+        }
+        if (@hasField(SelectedData, "unicode_1_name")) {
+            selected_data.unicode_1_name = try getStringOffset(allocator, &string_map, &strings, unicode_data.unicode_1_name);
+        }
+        if (@hasField(SelectedData, "iso_comment")) {
+            selected_data.iso_comment = try getStringOffset(allocator, &string_map, &strings, unicode_data.iso_comment);
+        }
+        if (@hasField(SelectedData, "numeric_value_numeric")) {
+            selected_data.numeric_value_numeric = try getStringOffset(allocator, &string_map, &strings, unicode_data.numeric_value_numeric);
+        }
+        if (@hasField(SelectedData, "decomposition_mapping")) {
+            selected_data.decomposition_mapping = try getCodePointOffset(allocator, &codepoint_map, &codepoints, unicode_data.decomposition_mapping);
+        }
+        if (@hasField(SelectedData, "general_category")) {
+            selected_data.general_category = unicode_data.general_category;
+        }
+        if (@hasField(SelectedData, "canonical_combining_class")) {
+            selected_data.canonical_combining_class = unicode_data.canonical_combining_class;
+        }
+        if (@hasField(SelectedData, "bidi_class")) {
+            selected_data.bidi_class = unicode_data.bidi_class;
+        }
+        if (@hasField(SelectedData, "decomposition_type")) {
+            selected_data.decomposition_type = unicode_data.decomposition_type;
+        }
+        if (@hasField(SelectedData, "numeric_type")) {
+            selected_data.numeric_type = unicode_data.numeric_type;
+        }
+        if (@hasField(SelectedData, "numeric_value_decimal")) {
+            selected_data.numeric_value_decimal = unicode_data.numeric_value_decimal;
+        }
+        if (@hasField(SelectedData, "numeric_value_digit")) {
+            selected_data.numeric_value_digit = unicode_data.numeric_value_digit;
+        }
+        if (@hasField(SelectedData, "bidi_mirrored")) {
+            selected_data.bidi_mirrored = unicode_data.bidi_mirrored;
+        }
+        if (@hasField(SelectedData, "simple_uppercase_mapping")) {
+            selected_data.simple_uppercase_mapping = unicode_data.simple_uppercase_mapping;
+        }
+        if (@hasField(SelectedData, "simple_lowercase_mapping")) {
+            selected_data.simple_lowercase_mapping = unicode_data.simple_lowercase_mapping;
+        }
+        if (@hasField(SelectedData, "simple_titlecase_mapping")) {
+            selected_data.simple_titlecase_mapping = unicode_data.simple_titlecase_mapping;
+        }
+        if (@hasField(SelectedData, "math")) {
+            selected_data.math = derived_core_properties.math;
+        }
+        if (@hasField(SelectedData, "alphabetic")) {
+            selected_data.alphabetic = derived_core_properties.alphabetic;
+        }
+        if (@hasField(SelectedData, "lowercase")) {
+            selected_data.lowercase = derived_core_properties.lowercase;
+        }
+        if (@hasField(SelectedData, "uppercase")) {
+            selected_data.uppercase = derived_core_properties.uppercase;
+        }
+        if (@hasField(SelectedData, "cased")) {
+            selected_data.cased = derived_core_properties.cased;
+        }
+        if (@hasField(SelectedData, "case_ignorable")) {
+            selected_data.case_ignorable = derived_core_properties.case_ignorable;
+        }
+        if (@hasField(SelectedData, "changes_when_lowercased")) {
+            selected_data.changes_when_lowercased = derived_core_properties.changes_when_lowercased;
+        }
+        if (@hasField(SelectedData, "changes_when_uppercased")) {
+            selected_data.changes_when_uppercased = derived_core_properties.changes_when_uppercased;
+        }
+        if (@hasField(SelectedData, "changes_when_titlecased")) {
+            selected_data.changes_when_titlecased = derived_core_properties.changes_when_titlecased;
+        }
+        if (@hasField(SelectedData, "changes_when_casefolded")) {
+            selected_data.changes_when_casefolded = derived_core_properties.changes_when_casefolded;
+        }
+        if (@hasField(SelectedData, "changes_when_casemapped")) {
+            selected_data.changes_when_casemapped = derived_core_properties.changes_when_casemapped;
+        }
+        if (@hasField(SelectedData, "id_start")) {
+            selected_data.id_start = derived_core_properties.id_start;
+        }
+        if (@hasField(SelectedData, "id_continue")) {
+            selected_data.id_continue = derived_core_properties.id_continue;
+        }
+        if (@hasField(SelectedData, "xid_start")) {
+            selected_data.xid_start = derived_core_properties.xid_start;
+        }
+        if (@hasField(SelectedData, "xid_continue")) {
+            selected_data.xid_continue = derived_core_properties.xid_continue;
+        }
+        if (@hasField(SelectedData, "default_ignorable_code_point")) {
+            selected_data.default_ignorable_code_point = derived_core_properties.default_ignorable_code_point;
+        }
+        if (@hasField(SelectedData, "grapheme_extend")) {
+            selected_data.grapheme_extend = derived_core_properties.grapheme_extend;
+        }
+        if (@hasField(SelectedData, "grapheme_base")) {
+            selected_data.grapheme_base = derived_core_properties.grapheme_base;
+        }
+        if (@hasField(SelectedData, "grapheme_link")) {
+            selected_data.grapheme_link = derived_core_properties.grapheme_link;
+        }
+        if (@hasField(SelectedData, "indic_conjunct_break")) {
+            selected_data.indic_conjunct_break = derived_core_properties.indic_conjunct_break;
+        }
+        if (@hasField(SelectedData, "east_asian_width")) {
+            selected_data.east_asian_width = east_asian_width;
+        }
+        if (@hasField(SelectedData, "grapheme_break")) {
+            selected_data.grapheme_break = grapheme_break;
+        }
+        if (@hasField(SelectedData, "emoji")) {
+            selected_data.emoji = emoji_data.emoji;
+        }
+        if (@hasField(SelectedData, "emoji_presentation")) {
+            selected_data.emoji_presentation = emoji_data.emoji_presentation;
+        }
+        if (@hasField(SelectedData, "emoji_modifier")) {
+            selected_data.emoji_modifier = emoji_data.emoji_modifier;
+        }
+        if (@hasField(SelectedData, "emoji_modifier_base")) {
+            selected_data.emoji_modifier_base = emoji_data.emoji_modifier_base;
+        }
+        if (@hasField(SelectedData, "emoji_component")) {
+            selected_data.emoji_component = emoji_data.emoji_component;
+        }
+        if (@hasField(SelectedData, "extended_pictographic")) {
+            selected_data.extended_pictographic = emoji_data.extended_pictographic;
         }
 
         try selected_data_items.append(selected_data);
@@ -198,11 +236,11 @@ pub fn write(allocator: std.mem.Allocator, ucd: *const Ucd, comptime SelectedDat
         \\
         \\// TODO: Uncomment when ready for full implementation
         \\// pub const strings: [{}]u8 = .{{
-        \\// 
+        \\//
         \\// }};
-        \\// 
+        \\//
         \\// pub const codepoints: [{}]u21 = .{{
-        \\// 
+        \\//
         \\// }};
         \\
         \\pub const table: [{}]u21 = .{{
@@ -231,7 +269,7 @@ pub const std_options: std.Options = .{
 };
 
 pub fn main() !void {
-    const SelectedData = @import("SelectedData");
+    const fields = @import("fields");
 
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -240,6 +278,8 @@ pub fn main() !void {
     var args_iter = try std.process.argsWithAllocator(allocator);
     defer args_iter.deinit();
     _ = args_iter.skip(); // Skip program name
+
+    // Get output path (only argument now)
     const output_path = args_iter.next() orelse @panic("No output file arg!");
 
     var out_file = try std.fs.cwd().createFile(output_path, .{});
@@ -249,5 +289,6 @@ pub fn main() !void {
     var ucd = try Ucd.init(allocator);
     defer ucd.deinit(allocator);
 
-    try write(allocator, &ucd, SelectedData.SelectedData, writer);
+    const SelectedData = data.SelectedData(&fields.fields);
+    try write(SelectedData, allocator, &ucd, writer);
 }
