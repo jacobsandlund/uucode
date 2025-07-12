@@ -1,7 +1,7 @@
 //! This File is Layer 1 of the architecture (see /AGENT.md), processing
 //! the Unicode Character Database (UCD) files (see https://www.unicode.org/reports/tr44/).
 //!
-//! The following UCD files are processed, with general structure:
+//! The following files are processed, with general structure:
 //!
 //! - UnicodeData.txt
 //!   - keyed by code point
@@ -21,189 +21,66 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
+const data = @import("../data.zig");
 
-pub const GeneralCategory = enum {
-    Lu, // Letter, uppercase
-    Ll, // Letter, lowercase
-    Lt, // Letter, titlecase
-    Lm, // Letter, modifier
-    Lo, // Letter, other
-    Mn, // Mark, nonspacing
-    Mc, // Mark, spacing combining
-    Me, // Mark, enclosing
-    Nd, // Number, decimal digit
-    Nl, // Number, letter
-    No, // Number, other
-    Pc, // Punctuation, connector
-    Pd, // Punctuation, dash
-    Ps, // Punctuation, open
-    Pe, // Punctuation, close
-    Pi, // Punctuation, initial quote
-    Pf, // Punctuation, final quote
-    Po, // Punctuation, other
-    Sm, // Symbol, math
-    Sc, // Symbol, currency
-    Sk, // Symbol, modifier
-    So, // Symbol, other
-    Zs, // Separator, space
-    Zl, // Separator, line
-    Zp, // Separator, paragraph
-    Cc, // Other, control
-    Cf, // Other, format
-    Cs, // Other, surrogate
-    Co, // Other, private use
-    Cn, // Other, not assigned
-};
+const UnicodeData = data.UnicodeData;
+const CaseFolding = data.CaseFolding;
+const DerivedCoreProperties = data.DerivedCoreProperties;
+const EastAsianWidth = data.EastAsianWidth;
+const GraphemeBreak = data.GraphemeBreak;
+const EmojiData = data.EmojiData;
 
-pub const BidiClass = enum {
-    L, // Left-to-Right
-    LRE, // Left-to-Right Embedding
-    LRO, // Left-to-Right Override
-    R, // Right-to-Left
-    AL, // Right-to-Left Arabic
-    RLE, // Right-to-Left Embedding
-    RLO, // Right-to-Left Override
-    PDF, // Pop Directional Format
-    EN, // European Number
-    ES, // European Number Separator
-    ET, // European Number Terminator
-    AN, // Arabic Number
-    CS, // Common Number Separator
-    NSM, // Nonspacing Mark
-    BN, // Boundary Neutral
-    B, // Paragraph Separator
-    S, // Segment Separator
-    WS, // Whitespace
-    ON, // Other Neutrals
-    LRI, // Left-to-Right Isolate
-    RLI, // Right-to-Left Isolate
-    FSI, // First Strong Isolate
-    PDI, // Pop Directional Isolate
-};
+unicode_data: []UnicodeData,
+case_folding: std.AutoHashMapUnmanaged(u21, CaseFolding),
+derived_core_properties: std.AutoHashMapUnmanaged(u21, DerivedCoreProperties),
+east_asian_width: std.AutoHashMapUnmanaged(u21, EastAsianWidth),
+grapheme_break: std.AutoHashMapUnmanaged(u21, GraphemeBreak),
+emoji_data: std.AutoHashMapUnmanaged(u21, EmojiData),
+string_pool: std.ArrayListUnmanaged(u8),
 
-pub const UnicodeDataValue = struct {
-    name: []const u8,
-    general_category: GeneralCategory,
-    canonical_combining_class: u8,
-    bidi_class: BidiClass,
-    decomposition_type: []const u8,
-    decomposition_mapping: []const u8,
-    numeric_type: []const u8,
-    numeric_value: []const u8,
-    numeric_digit: []const u8,
-    bidi_mirrored: bool,
-    unicode_1_name: []const u8,
-    iso_comment: []const u8,
-    simple_uppercase_mapping: ?u21,
-    simple_lowercase_mapping: ?u21,
-    simple_titlecase_mapping: ?u21,
-};
+const Ucd = @This();
 
-pub const CaseFoldingValue = struct {
-    status: u8,
-    mapping: [3]u21,
-    mapping_len: u2,
-};
+pub fn init(allocator: std.mem.Allocator) !Ucd {
+    const unicode_data = try allocator.alloc(UnicodeData, data.num_code_points);
 
-pub const DerivedCorePropertiesValue = packed struct {
-    math: bool = false,
-    alphabetic: bool = false,
-    lowercase: bool = false,
-    uppercase: bool = false,
-    cased: bool = false,
-    case_ignorable: bool = false,
-    changes_when_lowercased: bool = false,
-    changes_when_uppercased: bool = false,
-    changes_when_titlecased: bool = false,
-    changes_when_casefolded: bool = false,
-    changes_when_casemapped: bool = false,
-    id_start: bool = false,
-    id_continue: bool = false,
-    xid_start: bool = false,
-    xid_continue: bool = false,
-    default_ignorable_code_point: bool = false,
-    grapheme_extend: bool = false,
-    grapheme_base: bool = false,
-    grapheme_link: bool = false,
-    incb: bool = false,
-};
-
-pub const EastAsianWidthValue = enum {
-    neutral,
-    fullwidth,
-    halfwidth,
-    wide,
-    narrow,
-    ambiguous,
-};
-
-pub const GraphemeBreakValue = enum {
-    other,
-    prepend,
-    cr,
-    lf,
-    control,
-    extend,
-    regional_indicator,
-    spacingmark,
-    l,
-    v,
-    t,
-    lv,
-    lvt,
-    zwj,
-};
-
-pub const EmojiDataValue = packed struct {
-    emoji: bool = false,
-    emoji_presentation: bool = false,
-    emoji_modifier: bool = false,
-    emoji_modifier_base: bool = false,
-    emoji_component: bool = false,
-    extended_pictographic: bool = false,
-};
-
-pub const ParsedUCD = struct {
-    unicode_data: std.AutoHashMap(u21, UnicodeDataValue),
-    case_folding: std.AutoHashMap(u21, CaseFoldingValue),
-    derived_core_properties: std.AutoHashMap(u21, DerivedCorePropertiesValue),
-    east_asian_width: std.AutoHashMap(u21, EastAsianWidthValue),
-    grapheme_break: std.AutoHashMap(u21, GraphemeBreakValue),
-    emoji_data: std.AutoHashMap(u21, EmojiDataValue),
-
-    pub fn deinit(self: *ParsedUCD) void {
-        self.unicode_data.deinit();
-        self.case_folding.deinit();
-        self.derived_core_properties.deinit();
-        self.east_asian_width.deinit();
-        self.grapheme_break.deinit();
-        self.emoji_data.deinit();
-    }
-};
-
-pub fn parseUCD(allocator: std.mem.Allocator) !ParsedUCD {
-    var unicode_data = std.AutoHashMap(u21, UnicodeDataValue).init(allocator);
-    var case_folding = std.AutoHashMap(u21, CaseFoldingValue).init(allocator);
-    var derived_core_properties = std.AutoHashMap(u21, DerivedCorePropertiesValue).init(allocator);
-    var east_asian_width = std.AutoHashMap(u21, EastAsianWidthValue).init(allocator);
-    var grapheme_break = std.AutoHashMap(u21, GraphemeBreakValue).init(allocator);
-    var emoji_data = std.AutoHashMap(u21, EmojiDataValue).init(allocator);
-
-    try parseUnicodeData(allocator, &unicode_data);
-    try parseCaseFolding(allocator, &case_folding);
-    try parseDerivedCoreProperties(allocator, &derived_core_properties);
-    try parseEastAsianWidth(allocator, &east_asian_width);
-    try parseGraphemeBreakProperty(allocator, &grapheme_break);
-    try parseEmojiData(allocator, &emoji_data);
-
-    return ParsedUCD{
+    var ucd = Ucd{
         .unicode_data = unicode_data,
-        .case_folding = case_folding,
-        .derived_core_properties = derived_core_properties,
-        .east_asian_width = east_asian_width,
-        .grapheme_break = grapheme_break,
-        .emoji_data = emoji_data,
+        .case_folding = .{},
+        .derived_core_properties = .{},
+        .east_asian_width = .{},
+        .grapheme_break = .{},
+        .emoji_data = .{},
+        .string_pool = .{},
     };
+
+    // Pre-allocate string pool capacity to prevent reallocation and pointer invalidation
+    // Update this capacity if UCD files change - see bin/download-ucd.sh
+    try ucd.string_pool.ensureTotalCapacityPrecise(allocator, 1152787); // Exact capacity needed
+
+    try parseUnicodeData(allocator, ucd.unicode_data, &ucd.string_pool);
+    try parseCaseFolding(allocator, &ucd.case_folding);
+    try parseDerivedCoreProperties(allocator, &ucd.derived_core_properties);
+    try parseEastAsianWidth(allocator, &ucd.east_asian_width);
+    try parseGraphemeBreakProperty(allocator, &ucd.grapheme_break);
+    try parseEmojiData(allocator, &ucd.emoji_data);
+
+    // Assert that string pool capacity is correctly sized
+    if (ucd.string_pool.items.len != ucd.string_pool.capacity) {
+        std.log.info("String pool usage: {} bytes (expected: 1152787)", .{ucd.string_pool.items.len});
+        @panic("String pool capacity mismatch - update capacity in init() to match actual usage");
+    }
+
+    return ucd;
+}
+
+pub fn deinit(self: *Ucd, allocator: std.mem.Allocator) void {
+    allocator.free(self.unicode_data);
+    self.case_folding.deinit(allocator);
+    self.derived_core_properties.deinit(allocator);
+    self.east_asian_width.deinit(allocator);
+    self.grapheme_break.deinit(allocator);
+    self.emoji_data.deinit(allocator);
+    self.string_pool.deinit(allocator);
 }
 
 fn parseCodePoint(str: []const u8) !u21 {
@@ -228,7 +105,14 @@ fn stripComment(line: []const u8) []const u8 {
     return std.mem.trim(u8, line, " \t");
 }
 
-fn parseUnicodeData(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, UnicodeDataValue)) !void {
+fn copyStringToPool(pool: *std.ArrayListUnmanaged(u8), str: []const u8) []const u8 {
+    if (str.len == 0) return "";
+    const start = pool.items.len;
+    pool.appendSliceAssumeCapacity(str);
+    return pool.items[start .. start + str.len];
+}
+
+fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *std.ArrayListUnmanaged(u8)) !void {
     const file_path = "data/ucd/UnicodeData.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -238,6 +122,26 @@ fn parseUnicodeData(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, Uni
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
+    var next_cp: u21 = data.min_code_point;
+    const default_data = UnicodeData{
+        .name = "",
+        .general_category = data.GeneralCategory.Cn, // Other, not assigned
+        .canonical_combining_class = 0,
+        .bidi_class = data.BidiClass.L,
+        .decomposition_type = "",
+        .decomposition_mapping = "",
+        .numeric_type = "",
+        .numeric_value = "",
+        .numeric_digit = "",
+        .bidi_mirrored = false,
+        .unicode_1_name = "",
+        .iso_comment = "",
+        .simple_uppercase_mapping = null,
+        .simple_lowercase_mapping = null,
+        .simple_titlecase_mapping = null,
+    };
+    var range_data: ?UnicodeData = null;
+
     while (lines.next()) |line| {
         const trimmed = stripComment(line);
         if (trimmed.len == 0) continue;
@@ -245,6 +149,11 @@ fn parseUnicodeData(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, Uni
         var parts = std.mem.splitScalar(u8, trimmed, ';');
         const cp_str = parts.next() orelse continue;
         const cp = try parseCodePoint(cp_str);
+
+        while (cp > next_cp) : (next_cp += 1) {
+            // Fill any gaps or ranges
+            array[next_cp - data.min_code_point] = range_data orelse default_data;
+        }
 
         const name = parts.next() orelse "";
         const general_category_str = parts.next() orelse "";
@@ -262,12 +171,12 @@ fn parseUnicodeData(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, Uni
         const simple_lowercase_mapping_str = parts.next() orelse "";
         const simple_titlecase_mapping_str = parts.next() orelse "";
 
-        const general_category = std.meta.stringToEnum(GeneralCategory, general_category_str) orelse {
+        const general_category = std.meta.stringToEnum(data.GeneralCategory, general_category_str) orelse {
             std.log.err("Unknown general category: {s}", .{general_category_str});
             unreachable;
         };
 
-        const bidi_class = std.meta.stringToEnum(BidiClass, bidi_class_str) orelse {
+        const bidi_class = std.meta.stringToEnum(data.BidiClass, bidi_class_str) orelse {
             std.log.err("Unknown bidi class: {s}", .{bidi_class_str});
             unreachable;
         };
@@ -276,27 +185,42 @@ fn parseUnicodeData(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, Uni
         const simple_lowercase_mapping = if (simple_lowercase_mapping_str.len == 0) null else try parseCodePoint(simple_lowercase_mapping_str);
         const simple_titlecase_mapping = if (simple_titlecase_mapping_str.len == 0) null else try parseCodePoint(simple_titlecase_mapping_str);
 
-        try map.put(cp, UnicodeDataValue{
-            .name = name,
+        const unicode_data = UnicodeData{
+            .name = copyStringToPool(pool, name),
             .general_category = general_category,
             .canonical_combining_class = canonical_combining_class,
             .bidi_class = bidi_class,
-            .decomposition_type = decomposition_type,
-            .decomposition_mapping = decomposition_mapping,
-            .numeric_type = numeric_type,
-            .numeric_value = numeric_value,
-            .numeric_digit = numeric_digit,
+            .decomposition_type = copyStringToPool(pool, decomposition_type),
+            .decomposition_mapping = copyStringToPool(pool, decomposition_mapping),
+            .numeric_type = copyStringToPool(pool, numeric_type),
+            .numeric_value = copyStringToPool(pool, numeric_value),
+            .numeric_digit = copyStringToPool(pool, numeric_digit),
             .bidi_mirrored = bidi_mirrored,
-            .unicode_1_name = unicode_1_name,
-            .iso_comment = iso_comment,
+            .unicode_1_name = copyStringToPool(pool, unicode_1_name),
+            .iso_comment = copyStringToPool(pool, iso_comment),
             .simple_uppercase_mapping = simple_uppercase_mapping,
             .simple_lowercase_mapping = simple_lowercase_mapping,
             .simple_titlecase_mapping = simple_titlecase_mapping,
-        });
+        };
+
+        // Handle range entries with "First>" and "Last>"
+        if (std.mem.endsWith(u8, name, "First>")) {
+            range_data = unicode_data;
+        } else if (std.mem.endsWith(u8, name, "Last>")) {
+            range_data = null;
+        }
+
+        array[cp - data.min_code_point] = unicode_data;
+        next_cp = cp + 1;
+    }
+
+    // Fill any remaining gaps at the end with default values
+    while (next_cp < data.code_point_range_end) : (next_cp += 1) {
+        array[next_cp - data.min_code_point] = default_data;
     }
 }
 
-fn parseCaseFolding(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, CaseFoldingValue)) !void {
+fn parseCaseFolding(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, CaseFolding)) !void {
     const file_path = "data/ucd/CaseFolding.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -334,15 +258,35 @@ fn parseCaseFolding(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, Cas
             mapping_len += 1;
         }
 
-        try map.put(cp, CaseFoldingValue{
-            .status = status,
-            .mapping = mapping,
-            .mapping_len = mapping_len,
-        });
+        const result = try map.getOrPut(allocator, cp);
+        if (!result.found_existing) {
+            result.value_ptr.* = CaseFolding{
+                .simple = undefined,
+                .full = undefined,
+            };
+        }
+
+        switch (status) {
+            'S', 'C' => {
+                std.debug.assert(mapping_len == 1);
+                result.value_ptr.simple = mapping[0];
+            },
+            'F' => {
+                std.debug.assert(mapping_len > 1);
+                for (mapping[0..mapping_len], 0..) |mapped_cp, i| {
+                    result.value_ptr.full[i] = mapped_cp;
+                }
+            },
+            'T' => {
+                std.debug.assert(mapping_len == 1);
+                result.value_ptr.turkish = mapping[0];
+            },
+            else => unreachable,
+        }
     }
 }
 
-fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, DerivedCorePropertiesValue)) !void {
+fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, DerivedCoreProperties)) !void {
     const file_path = "data/ucd/DerivedCoreProperties.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -364,9 +308,9 @@ fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMa
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
-            const result = try map.getOrPut(cp);
+            const result = try map.getOrPut(allocator, cp);
             if (!result.found_existing) {
-                result.value_ptr.* = DerivedCorePropertiesValue{};
+                result.value_ptr.* = DerivedCoreProperties{};
             }
 
             if (std.mem.eql(u8, property, "Math")) {
@@ -417,7 +361,7 @@ fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMa
     }
 }
 
-fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, EastAsianWidthValue)) !void {
+fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, EastAsianWidth)) !void {
     const file_path = "data/ucd/extracted/DerivedEastAsianWidth.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -438,17 +382,17 @@ fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, 
         const range = try parseCodePointRange(cp_str);
 
         const width = if (std.mem.eql(u8, width_str, "F"))
-            EastAsianWidthValue.fullwidth
+            EastAsianWidth.fullwidth
         else if (std.mem.eql(u8, width_str, "H"))
-            EastAsianWidthValue.halfwidth
+            EastAsianWidth.halfwidth
         else if (std.mem.eql(u8, width_str, "W"))
-            EastAsianWidthValue.wide
+            EastAsianWidth.wide
         else if (std.mem.eql(u8, width_str, "Na"))
-            EastAsianWidthValue.narrow
+            EastAsianWidth.narrow
         else if (std.mem.eql(u8, width_str, "A"))
-            EastAsianWidthValue.ambiguous
+            EastAsianWidth.ambiguous
         else if (std.mem.eql(u8, width_str, "N"))
-            EastAsianWidthValue.neutral
+            EastAsianWidth.neutral
         else {
             std.log.err("Unknown EastAsianWidth value: {s}", .{width_str});
             unreachable;
@@ -456,12 +400,12 @@ fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, 
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
-            try map.put(cp, width);
+            try map.put(allocator, cp, width);
         }
     }
 }
 
-fn parseGraphemeBreakProperty(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, GraphemeBreakValue)) !void {
+fn parseGraphemeBreakProperty(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, GraphemeBreak)) !void {
     const file_path = "data/ucd/auxiliary/GraphemeBreakProperty.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -482,42 +426,42 @@ fn parseGraphemeBreakProperty(allocator: std.mem.Allocator, map: *std.AutoHashMa
         const range = try parseCodePointRange(cp_str);
 
         const prop = if (std.mem.eql(u8, prop_str, "Prepend"))
-            GraphemeBreakValue.prepend
+            GraphemeBreak.prepend
         else if (std.mem.eql(u8, prop_str, "CR"))
-            GraphemeBreakValue.cr
+            GraphemeBreak.cr
         else if (std.mem.eql(u8, prop_str, "LF"))
-            GraphemeBreakValue.lf
+            GraphemeBreak.lf
         else if (std.mem.eql(u8, prop_str, "Control"))
-            GraphemeBreakValue.control
+            GraphemeBreak.control
         else if (std.mem.eql(u8, prop_str, "Extend"))
-            GraphemeBreakValue.extend
+            GraphemeBreak.extend
         else if (std.mem.eql(u8, prop_str, "Regional_Indicator"))
-            GraphemeBreakValue.regional_indicator
+            GraphemeBreak.regional_indicator
         else if (std.mem.eql(u8, prop_str, "SpacingMark"))
-            GraphemeBreakValue.spacingmark
+            GraphemeBreak.spacingmark
         else if (std.mem.eql(u8, prop_str, "L"))
-            GraphemeBreakValue.l
+            GraphemeBreak.l
         else if (std.mem.eql(u8, prop_str, "V"))
-            GraphemeBreakValue.v
+            GraphemeBreak.v
         else if (std.mem.eql(u8, prop_str, "T"))
-            GraphemeBreakValue.t
+            GraphemeBreak.t
         else if (std.mem.eql(u8, prop_str, "LV"))
-            GraphemeBreakValue.lv
+            GraphemeBreak.lv
         else if (std.mem.eql(u8, prop_str, "LVT"))
-            GraphemeBreakValue.lvt
+            GraphemeBreak.lvt
         else if (std.mem.eql(u8, prop_str, "ZWJ"))
-            GraphemeBreakValue.zwj
+            GraphemeBreak.zwj
         else
-            GraphemeBreakValue.other;
+            GraphemeBreak.other;
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
-            try map.put(cp, prop);
+            try map.put(allocator, cp, prop);
         }
     }
 }
 
-fn parseEmojiData(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, EmojiDataValue)) !void {
+fn parseEmojiData(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, EmojiData)) !void {
     const file_path = "data/ucd/emoji/emoji-data.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -539,9 +483,9 @@ fn parseEmojiData(allocator: std.mem.Allocator, map: *std.AutoHashMap(u21, Emoji
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
-            const result = try map.getOrPut(cp);
+            const result = try map.getOrPut(allocator, cp);
             if (!result.found_existing) {
-                result.value_ptr.* = EmojiDataValue{};
+                result.value_ptr.* = EmojiData{};
             }
 
             if (std.mem.eql(u8, prop_str, "Emoji")) {
@@ -585,11 +529,11 @@ test "strip comment" {
     try std.testing.expectEqualSlices(u8, "", stripComment("# comment"));
 }
 
-test "parseUCD with real data" {
+test "parse Ucd with real data" {
     const allocator = std.testing.allocator;
-    var parsed = try parseUCD(allocator);
-    defer parsed.deinit();
+    var ucd = try Ucd.init(allocator);
+    defer ucd.deinit(allocator);
 
-    try std.testing.expect(parsed.unicode_data.count() > 0);
-    try std.testing.expect(parsed.emoji_data.count() > 0);
+    try std.testing.expect(ucd.unicode_data.len > 0);
+    try std.testing.expect(ucd.emoji_data.count() > 0);
 }
