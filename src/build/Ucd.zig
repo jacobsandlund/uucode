@@ -147,7 +147,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = parts.next() orelse continue;
+        const cp_str = parts.next() orelse unreachable;
         const cp = try parseCodePoint(cp_str);
 
         while (cp > next_cp) : (next_cp += 1) {
@@ -235,10 +235,10 @@ fn parseCaseFolding(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next() orelse continue, " \t");
+        const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
         const cp = try parseCodePoint(cp_str);
 
-        const status_str = std.mem.trim(u8, parts.next() orelse continue, " \t");
+        const status_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
         const status = if (status_str.len > 0) status_str[0] else 0;
 
         const mapping_str = std.mem.trim(u8, parts.next() orelse "", " \t");
@@ -301,8 +301,8 @@ fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMa
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next() orelse continue, " \t");
-        const property = std.mem.trim(u8, parts.next() orelse continue, " \t");
+        const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+        const property = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
 
         const range = try parseCodePointRange(cp_str);
 
@@ -372,12 +372,42 @@ fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmana
 
     var lines = std.mem.splitScalar(u8, content, '\n');
     while (lines.next()) |line| {
-        const trimmed = stripComment(line);
+        const trimmed = std.mem.trim(u8, line, " \t");
         if (trimmed.len == 0) continue;
 
-        var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next() orelse continue, " \t");
-        const width_str = std.mem.trim(u8, parts.next() orelse continue, " \t");
+        // Handle @missing directives first
+        if (std.mem.startsWith(u8, trimmed, "# @missing:")) {
+            const missing_line = trimmed["# @missing:".len..];
+            var parts = std.mem.splitScalar(u8, missing_line, ';');
+            const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+            const width_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+
+            const range = try parseCodePointRange(cp_str);
+
+            // Skip `neutral` as it's the default
+            if (std.mem.eql(u8, width_str, "Neutral")) {
+                continue;
+            }
+
+            if (!std.mem.eql(u8, width_str, "Wide")) {
+                std.log.err("Unknown @missing EastAsianWidth value: {s}", .{width_str});
+                unreachable;
+            }
+
+            var cp: u21 = range.start;
+            while (cp <= range.end) : (cp += 1) {
+                try map.put(allocator, cp, .wide);
+            }
+            continue;
+        }
+
+        // Handle regular entries
+        const data_line = stripComment(trimmed);
+        if (data_line.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, data_line, ';');
+        const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+        const width_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
 
         const range = try parseCodePointRange(cp_str);
 
@@ -420,8 +450,8 @@ fn parseGraphemeBreakProperty(allocator: std.mem.Allocator, map: *std.AutoHashMa
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next() orelse continue, " \t");
-        const prop_str = std.mem.trim(u8, parts.next() orelse continue, " \t");
+        const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+        const prop_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
 
         const range = try parseCodePointRange(cp_str);
 
@@ -476,8 +506,8 @@ fn parseEmojiData(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next() orelse continue, " \t");
-        const prop_str = std.mem.trim(u8, parts.next() orelse continue, " \t");
+        const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+        const prop_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
 
         const range = try parseCodePointRange(cp_str);
 
