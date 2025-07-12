@@ -13,9 +13,10 @@ pub const FullData = struct {
     bidi_class: BidiClass,
     decomposition_type: DecompositionType,
     decomposition_mapping: []const u21,
-    numeric_type: []const u8,
-    numeric_value: []const u8,
-    numeric_digit: []const u8,
+    numeric_type: NumericType,
+    numeric_value_decimal: ?u4,
+    numeric_value_digit: ?u4,
+    numeric_value_numeric: []const u8,
     bidi_mirrored: bool,
     unicode_1_name: []const u8,
     iso_comment: []const u8,
@@ -146,6 +147,13 @@ pub const DecompositionType = enum {
     compat,
 };
 
+pub const NumericType = enum {
+    none,
+    decimal,
+    digit,
+    numeric,
+};
+
 pub const UnicodeData = struct {
     name: []const u8,
     general_category: GeneralCategory,
@@ -153,9 +161,10 @@ pub const UnicodeData = struct {
     bidi_class: BidiClass,
     decomposition_type: DecompositionType,
     decomposition_mapping: []const u21,
-    numeric_type: []const u8,
-    numeric_value: []const u8,
-    numeric_digit: []const u8,
+    numeric_type: NumericType,
+    numeric_value_decimal: ?u4,
+    numeric_value_digit: ?u4,
+    numeric_value_numeric: []const u8,
     bidi_mirrored: bool,
     unicode_1_name: []const u8,
     iso_comment: []const u8,

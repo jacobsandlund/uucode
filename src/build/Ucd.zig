@@ -51,7 +51,7 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
         .east_asian_width = .{},
         .grapheme_break = .{},
         .emoji_data = .{},
-        .string_pool = try std.ArrayListUnmanaged(u8).initCapacity(allocator, 1086572),
+        .string_pool = try std.ArrayListUnmanaged(u8).initCapacity(allocator, 1084036),
         .code_point_pool = try std.ArrayListUnmanaged(u21).initCapacity(allocator, 8739),
     };
 
@@ -64,13 +64,13 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
 
     // Assert that string pool capacity is correctly sized
     if (ucd.string_pool.items.len != ucd.string_pool.capacity) {
-        std.log.info("String pool usage: {} bytes (expected: 1086572)", .{ucd.string_pool.items.len});
+        std.log.info("String pool usage: {} bytes (expected: {})", .{ ucd.string_pool.items.len, ucd.string_pool.capacity });
         @panic("String pool capacity mismatch - update capacity in init() to match actual usage");
     }
 
     // Assert that code point pool capacity is correctly sized
     if (ucd.code_point_pool.items.len != ucd.code_point_pool.capacity) {
-        std.log.info("Code point pool usage: {} code points (expected: 8739)", .{ucd.code_point_pool.items.len});
+        std.log.info("Code point pool usage: {} code points (expected: {})", .{ ucd.code_point_pool.items.len, ucd.code_point_pool.capacity });
         @panic("Code point pool capacity mismatch - update capacity in init() to match actual usage");
     }
 
@@ -142,9 +142,10 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
         .bidi_class = data.BidiClass.L,
         .decomposition_type = data.DecompositionType.default,
         .decomposition_mapping = &[_]u21{},
-        .numeric_type = "",
-        .numeric_value = "",
-        .numeric_digit = "",
+        .numeric_type = data.NumericType.none,
+        .numeric_value_decimal = null,
+        .numeric_value_digit = null,
+        .numeric_value_numeric = "",
         .bidi_mirrored = false,
         .unicode_1_name = "",
         .iso_comment = "",
@@ -172,9 +173,9 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
         const canonical_combining_class = std.fmt.parseInt(u8, parts.next() orelse "0", 10) catch 0;
         const bidi_class_str = parts.next() orelse "";
         const decomposition_str = parts.next() orelse ""; // Combined type and mapping
-        const numeric_type = parts.next() orelse "";
-        const numeric_value = parts.next() orelse "";
-        const numeric_digit = parts.next() orelse "";
+        const numeric_decimal_str = parts.next() orelse ""; // Field 6: Numeric value for Decimal type
+        const numeric_digit_str = parts.next() orelse ""; // Field 7: Numeric value for Digit type
+        const numeric_numeric_str = parts.next() orelse ""; // Field 8: Numeric value for Numeric type
         const bidi_mirrored = std.mem.eql(u8, parts.next() orelse "", "Y");
         const unicode_1_name = parts.next() orelse "";
         const iso_comment = parts.next() orelse "";
@@ -240,6 +241,29 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
             }
         }
 
+        // Determine numeric type and parse values based on which field has a value
+        var numeric_type = data.NumericType.none;
+        var numeric_value_decimal: ?u4 = null;
+        var numeric_value_digit: ?u4 = null;
+        var numeric_value_numeric: []const u8 = "";
+
+        if (numeric_decimal_str.len > 0) {
+            numeric_type = data.NumericType.decimal;
+            numeric_value_decimal = std.fmt.parseInt(u4, numeric_decimal_str, 10) catch |err| {
+                std.log.err("Invalid decimal numeric value '{s}' at codepoint {X}: {}", .{ numeric_decimal_str, cp, err });
+                unreachable;
+            };
+        } else if (numeric_digit_str.len > 0) {
+            numeric_type = data.NumericType.digit;
+            numeric_value_digit = std.fmt.parseInt(u4, numeric_digit_str, 10) catch |err| {
+                std.log.err("Invalid digit numeric value '{s}' at codepoint {X}: {}", .{ numeric_digit_str, cp, err });
+                unreachable;
+            };
+        } else if (numeric_numeric_str.len > 0) {
+            numeric_type = data.NumericType.numeric;
+            numeric_value_numeric = copyStringToPool(pool, numeric_numeric_str);
+        }
+
         const unicode_data = UnicodeData{
             .name = copyStringToPool(pool, name),
             .general_category = general_category,
@@ -247,9 +271,10 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
             .bidi_class = bidi_class,
             .decomposition_type = decomposition_type,
             .decomposition_mapping = decomposition_mapping,
-            .numeric_type = copyStringToPool(pool, numeric_type),
-            .numeric_value = copyStringToPool(pool, numeric_value),
-            .numeric_digit = copyStringToPool(pool, numeric_digit),
+            .numeric_type = numeric_type,
+            .numeric_value_decimal = numeric_value_decimal,
+            .numeric_value_digit = numeric_value_digit,
+            .numeric_value_numeric = numeric_value_numeric,
             .bidi_mirrored = bidi_mirrored,
             .unicode_1_name = copyStringToPool(pool, unicode_1_name),
             .iso_comment = copyStringToPool(pool, iso_comment),
