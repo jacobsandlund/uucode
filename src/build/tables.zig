@@ -55,10 +55,7 @@ fn getCodePointOffset(
     return .{ .offset = offset, .len = @intCast(slice.len) };
 }
 
-pub fn write(allocator: std.mem.Allocator, writer: anytype) !void {
-    var ucd = try Ucd.init(allocator);
-    defer ucd.deinit(allocator);
-
+pub fn write(allocator: std.mem.Allocator, ucd: *const Ucd, writer: anytype) !void {
     var string_map = std.StringHashMapUnmanaged(u24){};
     defer string_map.deinit(allocator);
     var strings = std.ArrayList(u8).init(allocator);
@@ -182,9 +179,4 @@ pub fn write(allocator: std.mem.Allocator, writer: anytype) !void {
         \\};
         \\
     );
-}
-
-test {
-    @import("std").testing.refAllDeclsRecursive(@This());
-    @import("std").testing.refAllDeclsRecursive(Ucd);
 }

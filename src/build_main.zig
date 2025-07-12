@@ -3,6 +3,13 @@
 //! inside `src/build`.
 const std = @import("std");
 const tables = @import("build/tables.zig");
+const Ucd = @import("build/Ucd.zig");
+
+test {
+    @import("std").testing.refAllDeclsRecursive(@This());
+    @import("std").testing.refAllDeclsRecursive(tables);
+    @import("std").testing.refAllDeclsRecursive(Ucd);
+}
 
 pub const std_options: std.Options = .{
     .log_level = .debug,
@@ -22,5 +29,8 @@ pub fn main() !void {
     defer out_file.close();
     const writer = out_file.writer();
 
-    try tables.write(allocator, writer);
+    var ucd = try Ucd.init(allocator);
+    defer ucd.deinit(allocator);
+
+    try tables.write(allocator, &ucd, writer);
 }
