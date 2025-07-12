@@ -6,12 +6,64 @@ pub const num_code_points: u21 = max_code_point + 1;
 pub const code_point_range_end: u21 = max_code_point + 1;
 
 pub const FullData = struct {
-    unicode_data: UnicodeData,
-    case_folding: CaseFolding,
-    derived_core_properties: DerivedCoreProperties,
+    // UnicodeData fields
+    name: []const u8,
+    general_category: GeneralCategory,
+    canonical_combining_class: u8,
+    bidi_class: BidiClass,
+    decomposition_type: DecompositionType,
+    decomposition_mapping: []const u21,
+    numeric_type: []const u8,
+    numeric_value: []const u8,
+    numeric_digit: []const u8,
+    bidi_mirrored: bool,
+    unicode_1_name: []const u8,
+    iso_comment: []const u8,
+    simple_uppercase_mapping: ?u21,
+    simple_lowercase_mapping: ?u21,
+    simple_titlecase_mapping: ?u21,
+
+    // CaseFolding fields
+    case_folding_simple: u21 = 0,
+    case_folding_turkish: ?u21 = null,
+    case_folding_full: [3]u21 = .{ 0, 0, 0 },
+    case_folding_full_len: u2 = 0,
+
+    // DerivedCoreProperties fields
+    math: bool = false,
+    alphabetic: bool = false,
+    lowercase: bool = false,
+    uppercase: bool = false,
+    cased: bool = false,
+    case_ignorable: bool = false,
+    changes_when_lowercased: bool = false,
+    changes_when_uppercased: bool = false,
+    changes_when_titlecased: bool = false,
+    changes_when_casefolded: bool = false,
+    changes_when_casemapped: bool = false,
+    id_start: bool = false,
+    id_continue: bool = false,
+    xid_start: bool = false,
+    xid_continue: bool = false,
+    default_ignorable_code_point: bool = false,
+    grapheme_extend: bool = false,
+    grapheme_base: bool = false,
+    grapheme_link: bool = false,
+    indic_conjunct_break: IndicConjunctBreak = .none,
+
+    // EastAsianWidth field
     east_asian_width: EastAsianWidth,
+
+    // GraphemeBreak field
     grapheme_break: GraphemeBreak,
-    emoji_data: EmojiData,
+
+    // EmojiData fields
+    emoji: bool = false,
+    emoji_presentation: bool = false,
+    emoji_modifier: bool = false,
+    emoji_modifier_base: bool = false,
+    emoji_component: bool = false,
+    extended_pictographic: bool = false,
 };
 
 pub const GeneralCategory = enum {
@@ -73,13 +125,34 @@ pub const BidiClass = enum {
     PDI, // Pop Directional Isolate
 };
 
+pub const DecompositionType = enum {
+    default,
+    canonical,
+    font,
+    noBreak,
+    initial,
+    medial,
+    final,
+    isolated,
+    circle,
+    super,
+    sub,
+    vertical,
+    wide,
+    narrow,
+    small,
+    square,
+    fraction,
+    compat,
+};
+
 pub const UnicodeData = struct {
     name: []const u8,
     general_category: GeneralCategory,
     canonical_combining_class: u8,
     bidi_class: BidiClass,
-    decomposition_type: []const u8,
-    decomposition_mapping: []const u8,
+    decomposition_type: DecompositionType,
+    decomposition_mapping: []const u21,
     numeric_type: []const u8,
     numeric_value: []const u8,
     numeric_digit: []const u8,

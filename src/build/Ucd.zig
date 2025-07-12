@@ -37,6 +37,7 @@ east_asian_width: std.AutoHashMapUnmanaged(u21, EastAsianWidth),
 grapheme_break: std.AutoHashMapUnmanaged(u21, GraphemeBreak),
 emoji_data: std.AutoHashMapUnmanaged(u21, EmojiData),
 string_pool: std.ArrayListUnmanaged(u8),
+code_point_pool: std.ArrayListUnmanaged(u21),
 
 const Ucd = @This();
 
@@ -50,14 +51,11 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
         .east_asian_width = .{},
         .grapheme_break = .{},
         .emoji_data = .{},
-        .string_pool = .{},
+        .string_pool = try std.ArrayListUnmanaged(u8).initCapacity(allocator, 1086572),
+        .code_point_pool = try std.ArrayListUnmanaged(u21).initCapacity(allocator, 8739),
     };
 
-    // Pre-allocate string pool capacity to prevent reallocation and pointer invalidation
-    // Update this capacity if UCD files change - see bin/download-ucd.sh
-    try ucd.string_pool.ensureTotalCapacityPrecise(allocator, 1152787); // Exact capacity needed
-
-    try parseUnicodeData(allocator, ucd.unicode_data, &ucd.string_pool);
+    try parseUnicodeData(allocator, ucd.unicode_data, &ucd.string_pool, &ucd.code_point_pool);
     try parseCaseFolding(allocator, &ucd.case_folding);
     try parseDerivedCoreProperties(allocator, &ucd.derived_core_properties);
     try parseEastAsianWidth(allocator, &ucd.east_asian_width);
@@ -66,8 +64,14 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
 
     // Assert that string pool capacity is correctly sized
     if (ucd.string_pool.items.len != ucd.string_pool.capacity) {
-        std.log.info("String pool usage: {} bytes (expected: 1152787)", .{ucd.string_pool.items.len});
+        std.log.info("String pool usage: {} bytes (expected: 1086572)", .{ucd.string_pool.items.len});
         @panic("String pool capacity mismatch - update capacity in init() to match actual usage");
+    }
+
+    // Assert that code point pool capacity is correctly sized
+    if (ucd.code_point_pool.items.len != ucd.code_point_pool.capacity) {
+        std.log.info("Code point pool usage: {} code points (expected: 8739)", .{ucd.code_point_pool.items.len});
+        @panic("Code point pool capacity mismatch - update capacity in init() to match actual usage");
     }
 
     return ucd;
@@ -81,6 +85,7 @@ pub fn deinit(self: *Ucd, allocator: std.mem.Allocator) void {
     self.grapheme_break.deinit(allocator);
     self.emoji_data.deinit(allocator);
     self.string_pool.deinit(allocator);
+    self.code_point_pool.deinit(allocator);
 }
 
 fn parseCodePoint(str: []const u8) !u21 {
@@ -112,7 +117,14 @@ fn copyStringToPool(pool: *std.ArrayListUnmanaged(u8), str: []const u8) []const 
     return pool.items[start .. start + str.len];
 }
 
-fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *std.ArrayListUnmanaged(u8)) !void {
+fn copyCodePointsToPool(pool: *std.ArrayListUnmanaged(u21), code_points: []const u21) []const u21 {
+    if (code_points.len == 0) return &[_]u21{};
+    const start = pool.items.len;
+    pool.appendSliceAssumeCapacity(code_points);
+    return pool.items[start .. start + code_points.len];
+}
+
+fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *std.ArrayListUnmanaged(u8), code_point_pool: *std.ArrayListUnmanaged(u21)) !void {
     const file_path = "data/ucd/UnicodeData.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -128,8 +140,8 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
         .general_category = data.GeneralCategory.Cn, // Other, not assigned
         .canonical_combining_class = 0,
         .bidi_class = data.BidiClass.L,
-        .decomposition_type = "",
-        .decomposition_mapping = "",
+        .decomposition_type = data.DecompositionType.default,
+        .decomposition_mapping = &[_]u21{},
         .numeric_type = "",
         .numeric_value = "",
         .numeric_digit = "",
@@ -159,8 +171,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
         const general_category_str = parts.next() orelse "";
         const canonical_combining_class = std.fmt.parseInt(u8, parts.next() orelse "0", 10) catch 0;
         const bidi_class_str = parts.next() orelse "";
-        const decomposition_type = parts.next() orelse "";
-        const decomposition_mapping = parts.next() orelse "";
+        const decomposition_str = parts.next() orelse ""; // Combined type and mapping
         const numeric_type = parts.next() orelse "";
         const numeric_value = parts.next() orelse "";
         const numeric_digit = parts.next() orelse "";
@@ -185,13 +196,57 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
         const simple_lowercase_mapping = if (simple_lowercase_mapping_str.len == 0) null else try parseCodePoint(simple_lowercase_mapping_str);
         const simple_titlecase_mapping = if (simple_titlecase_mapping_str.len == 0) null else try parseCodePoint(simple_titlecase_mapping_str);
 
+        // Parse decomposition type and mapping from single field
+        // Default: character decomposes to itself (field 5 empty)
+        var decomposition_type = data.DecompositionType.default;
+        var decomposition_mapping: []const u21 = &[_]u21{};
+
+        if (decomposition_str.len > 0) {
+            // Non-empty field means canonical unless explicit type is given
+            decomposition_type = data.DecompositionType.canonical;
+            var mapping_str = decomposition_str;
+
+            if (std.mem.startsWith(u8, decomposition_str, "<")) {
+                // Compatibility decomposition with type in angle brackets
+                const end_bracket = std.mem.indexOf(u8, decomposition_str, ">") orelse {
+                    std.log.err("Invalid decomposition format: {s}", .{decomposition_str});
+                    unreachable;
+                };
+                const type_str = decomposition_str[1..end_bracket];
+                decomposition_type = std.meta.stringToEnum(data.DecompositionType, type_str) orelse {
+                    std.log.err("Unknown decomposition type: {s}", .{type_str});
+                    unreachable;
+                };
+                mapping_str = std.mem.trim(u8, decomposition_str[end_bracket + 1 ..], " \t");
+            }
+
+            // Parse code points from mapping string
+            if (mapping_str.len > 0) {
+                var mapping_parts = std.mem.splitScalar(u8, mapping_str, ' ');
+                var temp_mapping: [18]u21 = undefined; // Unicode spec says max 18
+                var mapping_len: u8 = 0;
+
+                while (mapping_parts.next()) |part| {
+                    if (part.len == 0) continue;
+                    if (mapping_len >= 18) {
+                        std.log.err("Decomposition mapping too long at {X}: {s}", .{ cp, decomposition_str });
+                        unreachable;
+                    }
+                    temp_mapping[mapping_len] = try parseCodePoint(part);
+                    mapping_len += 1;
+                }
+
+                decomposition_mapping = copyCodePointsToPool(code_point_pool, temp_mapping[0..mapping_len]);
+            }
+        }
+
         const unicode_data = UnicodeData{
             .name = copyStringToPool(pool, name),
             .general_category = general_category,
             .canonical_combining_class = canonical_combining_class,
             .bidi_class = bidi_class,
-            .decomposition_type = copyStringToPool(pool, decomposition_type),
-            .decomposition_mapping = copyStringToPool(pool, decomposition_mapping),
+            .decomposition_type = decomposition_type,
+            .decomposition_mapping = decomposition_mapping,
             .numeric_type = copyStringToPool(pool, numeric_type),
             .numeric_value = copyStringToPool(pool, numeric_value),
             .numeric_digit = copyStringToPool(pool, numeric_digit),

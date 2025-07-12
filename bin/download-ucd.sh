@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# When updating Unicode version, also update the string pool capacity in
-# `src/build/Ucd.zig`. Run `zig build` after updating UCD files and check the
-# log output for "String pool usage:". Update the capacity constant to match
-# the logged size
+# When updating Unicode version, also update the string pool and code point
+# pool capacities in `src/build/Ucd.zig`. Run `zig build` after updating UCD
+# files and see the failures, which will log "String pool usage:" and "Code
+# point pool usage:". Update the capacity constants to match
 
 UNICODE_VERSION="16.0.0"
 BASE_URL="https://www.unicode.org/Public/${UNICODE_VERSION}/ucd"
