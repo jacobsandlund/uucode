@@ -160,7 +160,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = parts.next() orelse unreachable;
+        const cp_str = parts.next().?;
         const cp = try parseCodePoint(cp_str);
 
         while (cp > next_cp) : (next_cp += 1) {
@@ -168,20 +168,20 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
             array[next_cp - data.min_code_point] = range_data orelse default_data;
         }
 
-        const name = parts.next() orelse "";
-        const general_category_str = parts.next() orelse "";
-        const canonical_combining_class = std.fmt.parseInt(u8, parts.next() orelse "0", 10) catch 0;
-        const bidi_class_str = parts.next() orelse "";
-        const decomposition_str = parts.next() orelse ""; // Combined type and mapping
-        const numeric_decimal_str = parts.next() orelse ""; // Field 6: Numeric value for Decimal type
-        const numeric_digit_str = parts.next() orelse ""; // Field 7: Numeric value for Digit type
-        const numeric_numeric_str = parts.next() orelse ""; // Field 8: Numeric value for Numeric type
-        const bidi_mirrored = std.mem.eql(u8, parts.next() orelse "", "Y");
-        const unicode_1_name = parts.next() orelse "";
-        const iso_comment = parts.next() orelse "";
-        const simple_uppercase_mapping_str = parts.next() orelse "";
-        const simple_lowercase_mapping_str = parts.next() orelse "";
-        const simple_titlecase_mapping_str = parts.next() orelse "";
+        const name = parts.next().?;
+        const general_category_str = parts.next().?;
+        const canonical_combining_class = std.fmt.parseInt(u8, parts.next().?, 10) catch 0;
+        const bidi_class_str = parts.next().?;
+        const decomposition_str = parts.next().?; // Combined type and mapping
+        const numeric_decimal_str = parts.next().?; // Field 6: Numeric value for Decimal type
+        const numeric_digit_str = parts.next().?; // Field 7: Numeric value for Digit type
+        const numeric_numeric_str = parts.next().?; // Field 8: Numeric value for Numeric type
+        const bidi_mirrored = std.mem.eql(u8, parts.next().?, "Y");
+        const unicode_1_name = parts.next().?;
+        const iso_comment = parts.next().?;
+        const simple_uppercase_mapping_str = parts.next().?;
+        const simple_lowercase_mapping_str = parts.next().?;
+        const simple_titlecase_mapping_str = parts.next().?;
 
         const general_category = std.meta.stringToEnum(data.GeneralCategory, general_category_str) orelse {
             std.log.err("Unknown general category: {s}", .{general_category_str});
@@ -315,10 +315,10 @@ fn parseCaseFolding(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
         const cp = try parseCodePoint(cp_str);
 
-        const status_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+        const status_str = std.mem.trim(u8, parts.next().?, " \t");
         const status = if (status_str.len > 0) status_str[0] else 0;
 
         const mapping_str = std.mem.trim(u8, parts.next() orelse "", " \t");
@@ -381,8 +381,8 @@ fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMa
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
-        const property = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const property = std.mem.trim(u8, parts.next().?, " \t");
         const value_str = if (parts.next()) |v| std.mem.trim(u8, v, " \t") else "";
 
         const range = try parseCodePointRange(cp_str);
@@ -469,8 +469,8 @@ fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmana
         if (std.mem.startsWith(u8, trimmed, "# @missing:")) {
             const missing_line = trimmed["# @missing:".len..];
             var parts = std.mem.splitScalar(u8, missing_line, ';');
-            const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
-            const width_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+            const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+            const width_str = std.mem.trim(u8, parts.next().?, " \t");
 
             const range = try parseCodePointRange(cp_str);
 
@@ -496,8 +496,8 @@ fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmana
         if (data_line.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, data_line, ';');
-        const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
-        const width_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const width_str = std.mem.trim(u8, parts.next().?, " \t");
 
         const range = try parseCodePointRange(cp_str);
 
@@ -540,8 +540,8 @@ fn parseGraphemeBreakProperty(allocator: std.mem.Allocator, map: *std.AutoHashMa
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
-        const prop_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const prop_str = std.mem.trim(u8, parts.next().?, " \t");
 
         const range = try parseCodePointRange(cp_str);
 
@@ -596,8 +596,8 @@ fn parseEmojiData(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
-        const prop_str = std.mem.trim(u8, parts.next() orelse unreachable, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const prop_str = std.mem.trim(u8, parts.next().?, " \t");
 
         const range = try parseCodePointRange(cp_str);
 

@@ -5,11 +5,16 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const tables_optimize = switch (optimize) {
+        .ReleaseFast => .ReleaseSafe,
+        else => optimize,
+    };
+
     const tables_exe = b.addExecutable(.{
         .name = "tables",
         .root_source_file = b.path("src/build_main.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = tables_optimize,
     });
     const run_tables_exe = b.addRunArtifact(tables_exe);
     run_tables_exe.stdio = .inherit;
