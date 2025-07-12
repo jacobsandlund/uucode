@@ -6,7 +6,7 @@ This library intends to provide a minimal set of unicode functionality to enable
 
 The architecture works in a few layers:
 
-* Layer 1 (@src/build/ucd.zig): Low-level parsing of the Unicode Character Database (`upd`).
+* Layer 1 (@src/build/Ucd.zig): Low-level parsing of the Unicode Character Database (UCD).
 * Layer 2 (@src/build/tables.zig): Grouping of the `ucd` by key type (e.g. code point), pointing to customizable information in the values, and generating zig files for these tables.
 * Layer 3 (@src/root.zig): Exposing API methods to look up information from the built tables.
 

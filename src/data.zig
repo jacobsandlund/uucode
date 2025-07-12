@@ -1,5 +1,10 @@
 const std = @import("std");
 
+pub const OffsetLen = packed struct {
+    offset: u24,
+    len: u8,
+};
+
 pub const min_code_point: u21 = 0x0000;
 pub const max_code_point: u21 = 0x10FFFF;
 pub const num_code_points: u21 = max_code_point + 1;
@@ -7,19 +12,19 @@ pub const code_point_range_end: u21 = max_code_point + 1;
 
 pub const FullData = struct {
     // UnicodeData fields
-    name: []const u8,
+    name: OffsetLen,
     general_category: GeneralCategory,
     canonical_combining_class: u8,
     bidi_class: BidiClass,
     decomposition_type: DecompositionType,
-    decomposition_mapping: []const u21,
+    decomposition_mapping: OffsetLen,
     numeric_type: NumericType,
     numeric_value_decimal: ?u4,
     numeric_value_digit: ?u4,
-    numeric_value_numeric: []const u8,
+    numeric_value_numeric: OffsetLen,
     bidi_mirrored: bool,
-    unicode_1_name: []const u8,
-    iso_comment: []const u8,
+    unicode_1_name: OffsetLen,
+    iso_comment: OffsetLen,
     simple_uppercase_mapping: ?u21,
     simple_lowercase_mapping: ?u21,
     simple_titlecase_mapping: ?u21,
@@ -67,7 +72,7 @@ pub const FullData = struct {
     extended_pictographic: bool = false,
 };
 
-pub const GeneralCategory = enum {
+pub const GeneralCategory = enum(u5) {
     Lu, // Letter, uppercase
     Ll, // Letter, lowercase
     Lt, // Letter, titlecase
@@ -100,7 +105,7 @@ pub const GeneralCategory = enum {
     Cn, // Other, not assigned
 };
 
-pub const BidiClass = enum {
+pub const BidiClass = enum(u5) {
     L, // Left-to-Right
     LRE, // Left-to-Right Embedding
     LRO, // Left-to-Right Override
@@ -126,7 +131,7 @@ pub const BidiClass = enum {
     PDI, // Pop Directional Isolate
 };
 
-pub const DecompositionType = enum {
+pub const DecompositionType = enum(u5) {
     default,
     canonical,
     font,
@@ -147,7 +152,7 @@ pub const DecompositionType = enum {
     compat,
 };
 
-pub const NumericType = enum {
+pub const NumericType = enum(u2) {
     none,
     decimal,
     digit,
@@ -180,7 +185,7 @@ pub const CaseFolding = struct {
     full_len: u2 = 0,
 };
 
-pub const IndicConjunctBreak = enum {
+pub const IndicConjunctBreak = enum(u2) {
     none,
     linker,
     consonant,
@@ -210,7 +215,7 @@ pub const DerivedCoreProperties = struct {
     indic_conjunct_break: IndicConjunctBreak = .none,
 };
 
-pub const EastAsianWidth = enum {
+pub const EastAsianWidth = enum(u3) {
     neutral,
     fullwidth,
     halfwidth,
@@ -219,7 +224,7 @@ pub const EastAsianWidth = enum {
     ambiguous,
 };
 
-pub const GraphemeBreak = enum {
+pub const GraphemeBreak = enum(u4) {
     other,
     prepend,
     cr,

@@ -112,6 +112,7 @@ fn stripComment(line: []const u8) []const u8 {
 
 fn copyStringToPool(pool: *std.ArrayListUnmanaged(u8), str: []const u8) []const u8 {
     if (str.len == 0) return "";
+    std.debug.assert(str.len <= 255);
     const start = pool.items.len;
     pool.appendSliceAssumeCapacity(str);
     return pool.items[start .. start + str.len];
@@ -119,6 +120,7 @@ fn copyStringToPool(pool: *std.ArrayListUnmanaged(u8), str: []const u8) []const 
 
 fn copyCodePointsToPool(pool: *std.ArrayListUnmanaged(u21), code_points: []const u21) []const u21 {
     if (code_points.len == 0) return &[_]u21{};
+    std.debug.assert(code_points.len <= 255);
     const start = pool.items.len;
     pool.appendSliceAssumeCapacity(code_points);
     return pool.items[start .. start + code_points.len];
