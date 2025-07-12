@@ -1,6 +1,6 @@
 const std = @import("std");
 const Ucd = @import("Ucd.zig");
-const data = @import("../data.zig");
+const data = @import("data");
 
 fn CodePointMap() type {
     return std.HashMapUnmanaged([]const u21, u24, struct {
@@ -55,7 +55,7 @@ fn getCodePointOffset(
     return .{ .offset = offset, .len = @intCast(slice.len) };
 }
 
-pub fn write(allocator: std.mem.Allocator, ucd: *const Ucd, writer: anytype) !void {
+pub fn write(allocator: std.mem.Allocator, ucd: *const Ucd, comptime SelectedDataType: type, writer: anytype) !void {
     var string_map = std.StringHashMapUnmanaged(u24){};
     defer string_map.deinit(allocator);
     var strings = std.ArrayList(u8).init(allocator);
@@ -66,9 +66,9 @@ pub fn write(allocator: std.mem.Allocator, ucd: *const Ucd, writer: anytype) !vo
     var codepoints = std.ArrayList(u21).init(allocator);
     defer codepoints.deinit();
 
-    // First pass: collect all FullData structures
-    var full_data_items = try std.ArrayList(data.FullData).initCapacity(allocator, data.num_code_points);
-    defer full_data_items.deinit();
+    // Collect all SelectedData structures, only processing needed fields
+    var selected_data_items = try std.ArrayList(SelectedDataType).initCapacity(allocator, data.num_code_points);
+    defer selected_data_items.deinit();
 
     var cp: u21 = data.min_code_point;
     while (cp < data.code_point_range_end) : (cp += 1) {
@@ -79,75 +79,115 @@ pub fn write(allocator: std.mem.Allocator, ucd: *const Ucd, writer: anytype) !vo
         const grapheme_break = ucd.grapheme_break.get(cp) orelse data.GraphemeBreak.other;
         const emoji_data = ucd.emoji_data.get(cp) orelse data.EmojiData{};
 
-        const name_info = try getStringOffset(allocator, &string_map, &strings, unicode_data.name);
-        const decomposition_info = try getCodePointOffset(allocator, &codepoint_map, &codepoints, unicode_data.decomposition_mapping);
-        const numeric_info = try getStringOffset(allocator, &string_map, &strings, unicode_data.numeric_value_numeric);
-        const unicode_1_name_info = try getStringOffset(allocator, &string_map, &strings, unicode_data.unicode_1_name);
-        const iso_comment_info = try getStringOffset(allocator, &string_map, &strings, unicode_data.iso_comment);
+        var selected_data = SelectedDataType{};
 
-        const full_data = data.FullData{
-            // UnicodeData fields
-            .name = name_info,
-            .general_category = unicode_data.general_category,
-            .canonical_combining_class = unicode_data.canonical_combining_class,
-            .bidi_class = unicode_data.bidi_class,
-            .decomposition_type = unicode_data.decomposition_type,
-            .decomposition_mapping = decomposition_info,
-            .numeric_type = unicode_data.numeric_type,
-            .numeric_value_decimal = unicode_data.numeric_value_decimal,
-            .numeric_value_digit = unicode_data.numeric_value_digit,
-            .numeric_value_numeric = numeric_info,
-            .bidi_mirrored = unicode_data.bidi_mirrored,
-            .unicode_1_name = unicode_1_name_info,
-            .iso_comment = iso_comment_info,
-            .simple_uppercase_mapping = unicode_data.simple_uppercase_mapping,
-            .simple_lowercase_mapping = unicode_data.simple_lowercase_mapping,
-            .simple_titlecase_mapping = unicode_data.simple_titlecase_mapping,
+        // Use comptime reflection to only process fields that exist in SelectedDataType
+        const fields = std.meta.fields(SelectedDataType);
+        inline for (fields) |field| {
+            // Handle fields based on name. When adding new fields to SelectedData,
+            // add the corresponding cases here.
+            if (comptime std.mem.eql(u8, field.name, "case_folding_simple")) {
+                @field(selected_data, field.name) = case_folding.simple;
+            } else if (comptime std.mem.eql(u8, field.name, "case_folding_turkish")) {
+                @field(selected_data, field.name) = case_folding.turkish orelse 0;
+            } else if (comptime std.mem.eql(u8, field.name, "case_folding_full")) {
+                @field(selected_data, field.name) = case_folding.full;
+            } else if (comptime std.mem.eql(u8, field.name, "case_folding_full_len")) {
+                @field(selected_data, field.name) = case_folding.full_len;
+            } else if (comptime std.mem.eql(u8, field.name, "name")) {
+                @field(selected_data, field.name) = try getStringOffset(allocator, &string_map, &strings, unicode_data.name);
+            } else if (comptime std.mem.eql(u8, field.name, "unicode_1_name")) {
+                @field(selected_data, field.name) = try getStringOffset(allocator, &string_map, &strings, unicode_data.unicode_1_name);
+            } else if (comptime std.mem.eql(u8, field.name, "iso_comment")) {
+                @field(selected_data, field.name) = try getStringOffset(allocator, &string_map, &strings, unicode_data.iso_comment);
+            } else if (comptime std.mem.eql(u8, field.name, "numeric_value_numeric")) {
+                @field(selected_data, field.name) = try getStringOffset(allocator, &string_map, &strings, unicode_data.numeric_value_numeric);
+            } else if (comptime std.mem.eql(u8, field.name, "decomposition_mapping")) {
+                @field(selected_data, field.name) = try getCodePointOffset(allocator, &codepoint_map, &codepoints, unicode_data.decomposition_mapping);
+            } else if (comptime std.mem.eql(u8, field.name, "general_category")) {
+                @field(selected_data, field.name) = unicode_data.general_category;
+            } else if (comptime std.mem.eql(u8, field.name, "canonical_combining_class")) {
+                @field(selected_data, field.name) = unicode_data.canonical_combining_class;
+            } else if (comptime std.mem.eql(u8, field.name, "bidi_class")) {
+                @field(selected_data, field.name) = unicode_data.bidi_class;
+            } else if (comptime std.mem.eql(u8, field.name, "decomposition_type")) {
+                @field(selected_data, field.name) = unicode_data.decomposition_type;
+            } else if (comptime std.mem.eql(u8, field.name, "numeric_type")) {
+                @field(selected_data, field.name) = unicode_data.numeric_type;
+            } else if (comptime std.mem.eql(u8, field.name, "numeric_value_decimal")) {
+                @field(selected_data, field.name) = unicode_data.numeric_value_decimal;
+            } else if (comptime std.mem.eql(u8, field.name, "numeric_value_digit")) {
+                @field(selected_data, field.name) = unicode_data.numeric_value_digit;
+            } else if (comptime std.mem.eql(u8, field.name, "bidi_mirrored")) {
+                @field(selected_data, field.name) = unicode_data.bidi_mirrored;
+            } else if (comptime std.mem.eql(u8, field.name, "simple_uppercase_mapping")) {
+                @field(selected_data, field.name) = unicode_data.simple_uppercase_mapping;
+            } else if (comptime std.mem.eql(u8, field.name, "simple_lowercase_mapping")) {
+                @field(selected_data, field.name) = unicode_data.simple_lowercase_mapping;
+            } else if (comptime std.mem.eql(u8, field.name, "simple_titlecase_mapping")) {
+                @field(selected_data, field.name) = unicode_data.simple_titlecase_mapping;
+            } else if (comptime std.mem.eql(u8, field.name, "math")) {
+                @field(selected_data, field.name) = derived_core_properties.math;
+            } else if (comptime std.mem.eql(u8, field.name, "alphabetic")) {
+                @field(selected_data, field.name) = derived_core_properties.alphabetic;
+            } else if (comptime std.mem.eql(u8, field.name, "lowercase")) {
+                @field(selected_data, field.name) = derived_core_properties.lowercase;
+            } else if (comptime std.mem.eql(u8, field.name, "uppercase")) {
+                @field(selected_data, field.name) = derived_core_properties.uppercase;
+            } else if (comptime std.mem.eql(u8, field.name, "cased")) {
+                @field(selected_data, field.name) = derived_core_properties.cased;
+            } else if (comptime std.mem.eql(u8, field.name, "case_ignorable")) {
+                @field(selected_data, field.name) = derived_core_properties.case_ignorable;
+            } else if (comptime std.mem.eql(u8, field.name, "changes_when_lowercased")) {
+                @field(selected_data, field.name) = derived_core_properties.changes_when_lowercased;
+            } else if (comptime std.mem.eql(u8, field.name, "changes_when_uppercased")) {
+                @field(selected_data, field.name) = derived_core_properties.changes_when_uppercased;
+            } else if (comptime std.mem.eql(u8, field.name, "changes_when_titlecased")) {
+                @field(selected_data, field.name) = derived_core_properties.changes_when_titlecased;
+            } else if (comptime std.mem.eql(u8, field.name, "changes_when_casefolded")) {
+                @field(selected_data, field.name) = derived_core_properties.changes_when_casefolded;
+            } else if (comptime std.mem.eql(u8, field.name, "changes_when_casemapped")) {
+                @field(selected_data, field.name) = derived_core_properties.changes_when_casemapped;
+            } else if (comptime std.mem.eql(u8, field.name, "id_start")) {
+                @field(selected_data, field.name) = derived_core_properties.id_start;
+            } else if (comptime std.mem.eql(u8, field.name, "id_continue")) {
+                @field(selected_data, field.name) = derived_core_properties.id_continue;
+            } else if (comptime std.mem.eql(u8, field.name, "xid_start")) {
+                @field(selected_data, field.name) = derived_core_properties.xid_start;
+            } else if (comptime std.mem.eql(u8, field.name, "xid_continue")) {
+                @field(selected_data, field.name) = derived_core_properties.xid_continue;
+            } else if (comptime std.mem.eql(u8, field.name, "default_ignorable_code_point")) {
+                @field(selected_data, field.name) = derived_core_properties.default_ignorable_code_point;
+            } else if (comptime std.mem.eql(u8, field.name, "grapheme_extend")) {
+                @field(selected_data, field.name) = derived_core_properties.grapheme_extend;
+            } else if (comptime std.mem.eql(u8, field.name, "grapheme_base")) {
+                @field(selected_data, field.name) = derived_core_properties.grapheme_base;
+            } else if (comptime std.mem.eql(u8, field.name, "grapheme_link")) {
+                @field(selected_data, field.name) = derived_core_properties.grapheme_link;
+            } else if (comptime std.mem.eql(u8, field.name, "indic_conjunct_break")) {
+                @field(selected_data, field.name) = derived_core_properties.indic_conjunct_break;
+            } else if (comptime std.mem.eql(u8, field.name, "east_asian_width")) {
+                @field(selected_data, field.name) = east_asian_width;
+            } else if (comptime std.mem.eql(u8, field.name, "grapheme_break")) {
+                @field(selected_data, field.name) = grapheme_break;
+            } else if (comptime std.mem.eql(u8, field.name, "emoji")) {
+                @field(selected_data, field.name) = emoji_data.emoji;
+            } else if (comptime std.mem.eql(u8, field.name, "emoji_presentation")) {
+                @field(selected_data, field.name) = emoji_data.emoji_presentation;
+            } else if (comptime std.mem.eql(u8, field.name, "emoji_modifier")) {
+                @field(selected_data, field.name) = emoji_data.emoji_modifier;
+            } else if (comptime std.mem.eql(u8, field.name, "emoji_modifier_base")) {
+                @field(selected_data, field.name) = emoji_data.emoji_modifier_base;
+            } else if (comptime std.mem.eql(u8, field.name, "emoji_component")) {
+                @field(selected_data, field.name) = emoji_data.emoji_component;
+            } else if (comptime std.mem.eql(u8, field.name, "extended_pictographic")) {
+                @field(selected_data, field.name) = emoji_data.extended_pictographic;
+            } else {
+                @compileError("Unknown field '" ++ field.name ++ "' in SelectedData");
+            }
+        }
 
-            // CaseFolding fields
-            .case_folding_simple = case_folding.simple,
-            .case_folding_turkish = case_folding.turkish,
-            .case_folding_full = case_folding.full,
-            .case_folding_full_len = case_folding.full_len,
-
-            // DerivedCoreProperties fields
-            .math = derived_core_properties.math,
-            .alphabetic = derived_core_properties.alphabetic,
-            .lowercase = derived_core_properties.lowercase,
-            .uppercase = derived_core_properties.uppercase,
-            .cased = derived_core_properties.cased,
-            .case_ignorable = derived_core_properties.case_ignorable,
-            .changes_when_lowercased = derived_core_properties.changes_when_lowercased,
-            .changes_when_uppercased = derived_core_properties.changes_when_uppercased,
-            .changes_when_titlecased = derived_core_properties.changes_when_titlecased,
-            .changes_when_casefolded = derived_core_properties.changes_when_casefolded,
-            .changes_when_casemapped = derived_core_properties.changes_when_casemapped,
-            .id_start = derived_core_properties.id_start,
-            .id_continue = derived_core_properties.id_continue,
-            .xid_start = derived_core_properties.xid_start,
-            .xid_continue = derived_core_properties.xid_continue,
-            .default_ignorable_code_point = derived_core_properties.default_ignorable_code_point,
-            .grapheme_extend = derived_core_properties.grapheme_extend,
-            .grapheme_base = derived_core_properties.grapheme_base,
-            .grapheme_link = derived_core_properties.grapheme_link,
-            .indic_conjunct_break = derived_core_properties.indic_conjunct_break,
-
-            // EastAsianWidth field
-            .east_asian_width = east_asian_width,
-
-            // GraphemeBreak field
-            .grapheme_break = grapheme_break,
-
-            // EmojiData fields
-            .emoji = emoji_data.emoji,
-            .emoji_presentation = emoji_data.emoji_presentation,
-            .emoji_modifier = emoji_data.emoji_modifier,
-            .emoji_modifier_base = emoji_data.emoji_modifier_base,
-            .emoji_component = emoji_data.emoji_component,
-            .extended_pictographic = emoji_data.extended_pictographic,
-        };
-
-        try full_data_items.append(full_data);
+        try selected_data_items.append(selected_data);
     }
 
     // Now write the output
@@ -170,7 +210,7 @@ pub fn write(allocator: std.mem.Allocator, ucd: *const Ucd, writer: anytype) !vo
     , .{ strings.items.len, codepoints.items.len, data.num_code_points });
 
     // Write simplified table data - just case_folding_simple for now
-    for (full_data_items.items) |item| {
+    for (selected_data_items.items) |item| {
         try writer.print("{}, ", .{item.case_folding_simple});
     }
 
@@ -179,4 +219,35 @@ pub fn write(allocator: std.mem.Allocator, ucd: *const Ucd, writer: anytype) !vo
         \\};
         \\
     );
+}
+
+test {
+    @import("std").testing.refAllDeclsRecursive(@This());
+    @import("std").testing.refAllDeclsRecursive(Ucd);
+}
+
+pub const std_options: std.Options = .{
+    .log_level = .debug,
+};
+
+pub fn main() !void {
+    const SelectedData = @import("SelectedData");
+
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var args_iter = try std.process.argsWithAllocator(allocator);
+    defer args_iter.deinit();
+    _ = args_iter.skip(); // Skip program name
+    const output_path = args_iter.next() orelse @panic("No output file arg!");
+
+    var out_file = try std.fs.cwd().createFile(output_path, .{});
+    defer out_file.close();
+    const writer = out_file.writer();
+
+    var ucd = try Ucd.init(allocator);
+    defer ucd.deinit(allocator);
+
+    try write(allocator, &ucd, SelectedData.SelectedData, writer);
 }

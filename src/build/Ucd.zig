@@ -21,7 +21,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const data = @import("../data.zig");
+const data = @import("data");
 
 const UnicodeData = data.UnicodeData;
 const CaseFolding = data.CaseFolding;

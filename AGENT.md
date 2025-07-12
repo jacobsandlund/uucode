@@ -22,6 +22,8 @@ Follow Zig standard conventions, but keep imports at the top.
 
 Prefer self-documenting code to comments, but add detailed comments for anything that needs explanation.
 
+Never leave trailing whitespace in lines of source code.
+
 ## Testing
 
 Add `test "<description here>"` blocks directly below code that it is testing, with more blocks at the bottom of module for testing the entire module.

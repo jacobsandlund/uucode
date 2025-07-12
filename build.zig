@@ -10,15 +10,16 @@ pub fn build(b: *std.Build) void {
         else => optimize,
     };
 
-    const tables_exe = b.addExecutable(.{
-        .name = "tables",
-        .root_source_file = b.path("src/build_main.zig"),
+    // Step 1: Generate SelectedData.zig
+    const selected_data_exe = b.addExecutable(.{
+        .name = "selected_data",
+        .root_source_file = b.path("src/build/selected_data.zig"),
         .target = target,
         .optimize = tables_optimize,
     });
-    const run_tables_exe = b.addRunArtifact(tables_exe);
-    run_tables_exe.stdio = .inherit;
-    const tables_out = run_tables_exe.addOutputFileArg("tables.zig");
+    const run_selected_data_exe = b.addRunArtifact(selected_data_exe);
+    run_selected_data_exe.stdio = .inherit;
+    const selected_data_out = run_selected_data_exe.addOutputFileArg("SelectedData.zig");
 
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
@@ -37,6 +38,29 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+
+    const selected_data_mod = b.createModule(.{
+        .root_source_file = selected_data_out,
+        .target = target,
+        .optimize = optimize,
+    });
+    selected_data_mod.addImport("data", data_mod);
+
+    // Step 2: Generate tables.zig using SelectedData.zig
+    const tables_exe = b.addExecutable(.{
+        .name = "tables",
+        .root_source_file = b.path("src/build/tables.zig"),
+        .target = target,
+        .optimize = tables_optimize,
+    });
+    tables_exe.root_module.addImport("SelectedData", selected_data_mod);
+    tables_exe.root_module.addImport("data", data_mod);
+    const run_tables_exe = b.addRunArtifact(tables_exe);
+    run_tables_exe.stdio = .inherit;
+    const tables_out = run_tables_exe.addOutputFileArg("tables.zig");
+
+    // tables_main depends on SelectedData.zig being generated first
+    run_tables_exe.step.dependOn(&run_selected_data_exe.step);
 
     const tables_mod = b.createModule(.{
         .root_source_file = tables_out,
