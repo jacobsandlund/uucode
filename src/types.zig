@@ -72,6 +72,37 @@ pub const FullData = struct {
     extended_pictographic: bool = false,
 };
 
+pub fn Data(comptime fields: []const []const u8) type {
+    const full_data_info = @typeInfo(FullData);
+    const full_fields = full_data_info.@"struct".fields;
+
+    var selected_fields: [fields.len]std.builtin.Type.StructField = undefined;
+
+    for (fields, 0..) |field_name, i| {
+        var found = false;
+        for (full_fields) |full_field| {
+            if (std.mem.eql(u8, field_name, full_field.name)) {
+                selected_fields[i] = full_field;
+                selected_fields[i].alignment = 0; // Required for packed structs
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            @compileError("Field '" ++ field_name ++ "' not found in FullData");
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .@"packed",
+            .fields = &selected_fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+
 pub const GeneralCategory = enum(u5) {
     Lu, // Letter, uppercase
     Ll, // Letter, lowercase
@@ -249,34 +280,3 @@ pub const EmojiData = packed struct {
     emoji_component: bool = false,
     extended_pictographic: bool = false,
 };
-
-pub fn SelectedData(comptime fields: []const []const u8) type {
-    const full_data_info = @typeInfo(FullData);
-    const full_fields = full_data_info.@"struct".fields;
-
-    var selected_fields: [fields.len]std.builtin.Type.StructField = undefined;
-
-    for (fields, 0..) |field_name, i| {
-        var found = false;
-        for (full_fields) |full_field| {
-            if (std.mem.eql(u8, field_name, full_field.name)) {
-                selected_fields[i] = full_field;
-                selected_fields[i].alignment = 0; // Required for packed structs
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            @compileError("Field '" ++ field_name ++ "' not found in FullData");
-        }
-    }
-
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .@"packed",
-            .fields = &selected_fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
-}

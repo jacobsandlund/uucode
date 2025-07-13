@@ -21,14 +21,14 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const data = @import("data");
+const types = @import("types");
 
-const UnicodeData = data.UnicodeData;
-const CaseFolding = data.CaseFolding;
-const DerivedCoreProperties = data.DerivedCoreProperties;
-const EastAsianWidth = data.EastAsianWidth;
-const GraphemeBreak = data.GraphemeBreak;
-const EmojiData = data.EmojiData;
+const UnicodeData = types.UnicodeData;
+const CaseFolding = types.CaseFolding;
+const DerivedCoreProperties = types.DerivedCoreProperties;
+const EastAsianWidth = types.EastAsianWidth;
+const GraphemeBreak = types.GraphemeBreak;
+const EmojiData = types.EmojiData;
 
 unicode_data: []UnicodeData,
 case_folding: std.AutoHashMapUnmanaged(u21, CaseFolding),
@@ -42,7 +42,7 @@ code_point_pool: std.ArrayListUnmanaged(u21),
 const Ucd = @This();
 
 pub fn init(allocator: std.mem.Allocator) !Ucd {
-    const unicode_data = try allocator.alloc(UnicodeData, data.num_code_points);
+    const unicode_data = try allocator.alloc(UnicodeData, types.num_code_points);
 
     var ucd = Ucd{
         .unicode_data = unicode_data,
@@ -136,15 +136,15 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
-    var next_cp: u21 = data.min_code_point;
+    var next_cp: u21 = types.min_code_point;
     const default_data = UnicodeData{
         .name = "",
-        .general_category = data.GeneralCategory.Cn, // Other, not assigned
+        .general_category = types.GeneralCategory.Cn, // Other, not assigned
         .canonical_combining_class = 0,
-        .bidi_class = data.BidiClass.L,
-        .decomposition_type = data.DecompositionType.default,
+        .bidi_class = types.BidiClass.L,
+        .decomposition_type = types.DecompositionType.default,
         .decomposition_mapping = &[_]u21{},
-        .numeric_type = data.NumericType.none,
+        .numeric_type = types.NumericType.none,
         .numeric_value_decimal = null,
         .numeric_value_digit = null,
         .numeric_value_numeric = "",
@@ -167,7 +167,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
 
         while (cp > next_cp) : (next_cp += 1) {
             // Fill any gaps or ranges
-            array[next_cp - data.min_code_point] = range_data orelse default_data;
+            array[next_cp - types.min_code_point] = range_data orelse default_data;
         }
 
         const name = parts.next().?;
@@ -185,12 +185,12 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
         const simple_lowercase_mapping_str = parts.next().?;
         const simple_titlecase_mapping_str = parts.next().?;
 
-        const general_category = std.meta.stringToEnum(data.GeneralCategory, general_category_str) orelse {
+        const general_category = std.meta.stringToEnum(types.GeneralCategory, general_category_str) orelse {
             std.log.err("Unknown general category: {s}", .{general_category_str});
             unreachable;
         };
 
-        const bidi_class = std.meta.stringToEnum(data.BidiClass, bidi_class_str) orelse {
+        const bidi_class = std.meta.stringToEnum(types.BidiClass, bidi_class_str) orelse {
             std.log.err("Unknown bidi class: {s}", .{bidi_class_str});
             unreachable;
         };
@@ -201,12 +201,12 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
 
         // Parse decomposition type and mapping from single field
         // Default: character decomposes to itself (field 5 empty)
-        var decomposition_type = data.DecompositionType.default;
+        var decomposition_type = types.DecompositionType.default;
         var decomposition_mapping: []const u21 = &[_]u21{};
 
         if (decomposition_str.len > 0) {
             // Non-empty field means canonical unless explicit type is given
-            decomposition_type = data.DecompositionType.canonical;
+            decomposition_type = types.DecompositionType.canonical;
             var mapping_str = decomposition_str;
 
             if (std.mem.startsWith(u8, decomposition_str, "<")) {
@@ -216,7 +216,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
                     unreachable;
                 };
                 const type_str = decomposition_str[1..end_bracket];
-                decomposition_type = std.meta.stringToEnum(data.DecompositionType, type_str) orelse {
+                decomposition_type = std.meta.stringToEnum(types.DecompositionType, type_str) orelse {
                     std.log.err("Unknown decomposition type: {s}", .{type_str});
                     unreachable;
                 };
@@ -244,25 +244,25 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
         }
 
         // Determine numeric type and parse values based on which field has a value
-        var numeric_type = data.NumericType.none;
+        var numeric_type = types.NumericType.none;
         var numeric_value_decimal: ?u4 = null;
         var numeric_value_digit: ?u4 = null;
         var numeric_value_numeric: []const u8 = "";
 
         if (numeric_decimal_str.len > 0) {
-            numeric_type = data.NumericType.decimal;
+            numeric_type = types.NumericType.decimal;
             numeric_value_decimal = std.fmt.parseInt(u4, numeric_decimal_str, 10) catch |err| {
                 std.log.err("Invalid decimal numeric value '{s}' at codepoint {X}: {}", .{ numeric_decimal_str, cp, err });
                 unreachable;
             };
         } else if (numeric_digit_str.len > 0) {
-            numeric_type = data.NumericType.digit;
+            numeric_type = types.NumericType.digit;
             numeric_value_digit = std.fmt.parseInt(u4, numeric_digit_str, 10) catch |err| {
                 std.log.err("Invalid digit numeric value '{s}' at codepoint {X}: {}", .{ numeric_digit_str, cp, err });
                 unreachable;
             };
         } else if (numeric_numeric_str.len > 0) {
-            numeric_type = data.NumericType.numeric;
+            numeric_type = types.NumericType.numeric;
             numeric_value_numeric = copyStringToPool(pool, numeric_numeric_str);
         }
 
@@ -292,13 +292,13 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
             range_data = null;
         }
 
-        array[cp - data.min_code_point] = unicode_data;
+        array[cp - types.min_code_point] = unicode_data;
         next_cp = cp + 1;
     }
 
     // Fill any remaining gaps at the end with default values
-    while (next_cp < data.code_point_range_end) : (next_cp += 1) {
-        array[next_cp - data.min_code_point] = default_data;
+    while (next_cp < types.code_point_range_end) : (next_cp += 1) {
+        array[next_cp - types.min_code_point] = default_data;
     }
 }
 

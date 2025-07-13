@@ -22,8 +22,8 @@ pub fn build(b: *std.Build) void {
         .root_module = lib_mod,
     });
 
-    const data_mod = b.createModule(.{
-        .root_source_file = b.path("src/data.zig"),
+    const types_mod = b.createModule(.{
+        .root_source_file = b.path("src/types.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -31,8 +31,10 @@ pub fn build(b: *std.Build) void {
     // Create fields file
     const fields_step = b.addWriteFiles();
     const fields_file = fields_step.add("fields.zig",
-        \\pub const fields = [_][]const u8{"case_folding_simple"};
-        \\
+        \\pub const fields = [_][]const []const u8{
+        \\    &[_][]const u8{"case_folding_simple"},
+        \\    &[_][]const u8{"alphabetic","lowercase","uppercase"},
+        \\};
     );
     const fields_mod = b.createModule(.{
         .root_source_file = fields_file,
@@ -47,7 +49,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = tables_optimize,
     });
-    tables_exe.root_module.addImport("data", data_mod);
+    tables_exe.root_module.addImport("types", types_mod);
     tables_exe.root_module.addImport("fields", fields_mod);
     const run_tables_exe = b.addRunArtifact(tables_exe);
     run_tables_exe.stdio = .inherit;
@@ -58,10 +60,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    tables_mod.addImport("data", data_mod);
+    tables_mod.addImport("types", types_mod);
 
     lib_mod.addImport("tables", tables_mod);
-    lib_mod.addImport("data", data_mod);
+    lib_mod.addImport("types", types_mod);
     tables_out.addStepDependencies(&lib.step);
 
     b.installArtifact(lib);

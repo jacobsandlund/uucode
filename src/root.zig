@@ -4,7 +4,7 @@
 const std = @import("std");
 const testing = std.testing;
 const tables = @import("tables");
-const data = @import("data");
+const types = @import("types");
 
 pub export fn add(a: i32, b: i32) i32 {
     return a + b;
@@ -15,17 +15,18 @@ test "basic add functionality" {
 }
 
 test "tables has correct number of entries" {
-    try testing.expect(tables.table.len == data.num_code_points);
+    try testing.expect(tables.table0.len == types.num_code_points);
+    try testing.expect(tables.table1.len == types.num_code_points);
 }
 
 test "ASCII 'A' has correct properties" {
-    const a_offset = tables.table[65]; // ASCII 'A'
-    const a_data = tables.selected_data[a_offset];
-    try testing.expect(a_data.case_folding_simple == 97); // 'a'
-}
+    const a_offset0 = tables.table0[65]; // ASCII 'A'
+    const a_data0 = tables.data0[a_offset0];
+    try testing.expect(a_data0.case_folding_simple == 97); // 'a'
 
-//test "ASCII '0' has correct properties" {
-//    const zero_data = tables.table[48]; // ASCII '0'
-//    try testing.expect(zero_data.unicode_data.general_category == .Nd);
-//    try testing.expect(zero_data.unicode_data.bidi_class == .EN);
-//}
+    const a_offset1 = tables.table1[65]; // ASCII 'A'
+    const a_data1 = tables.data1[a_offset1];
+    try testing.expect(a_data1.alphabetic == true);
+    try testing.expect(a_data1.uppercase == true);
+    try testing.expect(a_data1.lowercase == false);
+}
