@@ -360,6 +360,8 @@ pub fn writeData(
     }
 
     const fields_info = @typeInfo(Data);
+    const data_bit_size = @bitSizeOf(Data);
+    const IntType = std.meta.Int(.unsigned, data_bit_size);
 
     try writer.print(
         \\const Data{} = packed struct {{
@@ -376,21 +378,21 @@ pub fn writeData(
     );
 
     try writer.print(
-        \\pub const data{}: [{}]Data{} = .{{
+        \\pub const data{}: [{}]Data{} = @bitCast([{}]{s}{{
         \\
-    , .{ fields_index, data_array.items.len, fields_index });
+    , .{ fields_index, data_array.items.len, fields_index, data_array.items.len, @typeName(IntType) });
 
     for (data_array.items) |item| {
-        try writer.writeAll(".{");
-        inline for (fields_info.@"struct".fields) |field| {
-            try writer.print(".{s}={},", .{ field.name, @field(item, field.name) });
-        }
-        try writer.writeAll("},");
+        const as_int: IntType = @bitCast(item);
+        try writer.print("{},", .{as_int});
     }
 
-    try writer.print(
-        \\}};
+    try writer.writeAll(
+        \\});
         \\
+    );
+
+    try writer.print(
         \\pub const table{}: [{}]u24 = .{{
         \\
     , .{ fields_index, types.num_code_points });
