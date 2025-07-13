@@ -15,6 +15,21 @@ fn CodePointMap() type {
     }, std.hash_map.default_max_load_percentage);
 }
 
+fn SelectedDataMap(comptime SelectedData: type) type {
+    return std.HashMapUnmanaged(SelectedData, u24, struct {
+        pub fn hash(self: @This(), s: SelectedData) u64 {
+            _ = self;
+            var hasher = std.hash.Wyhash.init(0);
+            std.hash.autoHash(&hasher, s);
+            return hasher.final();
+        }
+        pub fn eql(self: @This(), a: SelectedData, b: SelectedData) bool {
+            _ = self;
+            return std.mem.eql(u8, std.mem.asBytes(&a), std.mem.asBytes(&b));
+        }
+    }, std.hash_map.default_max_load_percentage);
+}
+
 fn getStringOffset(
     allocator: std.mem.Allocator,
     string_map: *std.StringHashMapUnmanaged(u24),
@@ -55,6 +70,23 @@ fn getCodePointOffset(
     return .{ .offset = offset, .len = @intCast(slice.len) };
 }
 
+fn getSelectedDataOffset(
+    comptime SelectedData: type,
+    allocator: std.mem.Allocator,
+    selected_data_map: *SelectedDataMap(SelectedData),
+    selected_data_array: *std.ArrayList(SelectedData),
+    item: SelectedData,
+) !u24 {
+    if (selected_data_map.get(item)) |offset| {
+        return offset;
+    }
+
+    const offset: u24 = @intCast(selected_data_array.items.len);
+    try selected_data_array.append(item);
+    try selected_data_map.put(allocator, item, offset);
+    return offset;
+}
+
 pub fn write(comptime SelectedData: type, allocator: std.mem.Allocator, ucd: *const Ucd, writer: anytype) !void {
     var string_map = std.StringHashMapUnmanaged(u24){};
     defer string_map.deinit(allocator);
@@ -66,8 +98,13 @@ pub fn write(comptime SelectedData: type, allocator: std.mem.Allocator, ucd: *co
     var codepoints = std.ArrayList(u21).init(allocator);
     defer codepoints.deinit();
 
-    var selected_data_items = try std.ArrayList(SelectedData).initCapacity(allocator, data.num_code_points);
-    defer selected_data_items.deinit();
+    var selected_data_map = SelectedDataMap(SelectedData){};
+    defer selected_data_map.deinit(allocator);
+    var selected_data_array = std.ArrayList(SelectedData).init(allocator);
+    defer selected_data_array.deinit();
+
+    var offsets = try std.ArrayList(u24).initCapacity(allocator, data.num_code_points);
+    defer offsets.deinit();
 
     var cp: u21 = data.min_code_point;
     while (cp < data.code_point_range_end) : (cp += 1) {
@@ -225,13 +262,15 @@ pub fn write(comptime SelectedData: type, allocator: std.mem.Allocator, ucd: *co
             selected_data.extended_pictographic = emoji_data.extended_pictographic;
         }
 
-        try selected_data_items.append(selected_data);
+        const offset = try getSelectedDataOffset(SelectedData, allocator, &selected_data_map, &selected_data_array, selected_data);
+        try offsets.append(offset);
     }
 
     // Now write the output
     try writer.print(
         \\//! This file is auto-generated. Do not edit.
         \\
+        \\const std = @import("std");
         \\const data = @import("data");
         \\
         \\// TODO: Uncomment when ready for full implementation
@@ -243,13 +282,36 @@ pub fn write(comptime SelectedData: type, allocator: std.mem.Allocator, ucd: *co
         \\//
         \\// }};
         \\
-        \\pub const table: [{}]u21 = .{{
-        \\
-    , .{ strings.items.len, codepoints.items.len, data.num_code_points });
+        \\const SelectedData = 
+    , .{ strings.items.len, codepoints.items.len });
 
-    // Write simplified table data - just case_folding_simple for now
-    for (selected_data_items.items) |item| {
-        try writer.print("{}, ", .{item.case_folding_simple});
+    // Generate the SelectedData type based on the fields
+    const fields_info = @typeInfo(SelectedData);
+    try writer.print("packed struct {{\n", .{});
+    inline for (fields_info.@"struct".fields) |field| {
+        try writer.print("    {s}: {s},\n", .{ field.name, @typeName(field.type) });
+    }
+    try writer.print("}};\n\n", .{});
+
+    try writer.print("pub const selected_data: [{}]SelectedData = .{{\n", .{selected_data_array.items.len});
+
+    // Write the deduplicated SelectedData array
+    for (selected_data_array.items) |item| {
+        // Since SelectedData is a packed struct with the field order we know,
+        // we can safely write it as a struct literal
+        try writer.print("    SelectedData{{ .case_folding_simple = {} }}, \n", .{item.case_folding_simple});
+    }
+
+    try writer.print(
+        \\}};
+        \\
+        \\pub const table: [{}]u24 = .{{
+        \\
+    , .{data.num_code_points});
+
+    // Write offset table
+    for (offsets.items) |offset| {
+        try writer.print("{}, ", .{offset});
     }
 
     try writer.writeAll(

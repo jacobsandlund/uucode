@@ -261,6 +261,7 @@ pub fn SelectedData(comptime fields: []const []const u8) type {
         for (full_fields) |full_field| {
             if (std.mem.eql(u8, field_name, full_field.name)) {
                 selected_fields[i] = full_field;
+                selected_fields[i].alignment = 0; // Required for packed structs
                 found = true;
                 break;
             }
@@ -272,7 +273,7 @@ pub fn SelectedData(comptime fields: []const []const u8) type {
 
     return @Type(.{
         .@"struct" = .{
-            .layout = .auto,
+            .layout = .@"packed",
             .fields = &selected_fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,

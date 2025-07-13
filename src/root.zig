@@ -19,13 +19,9 @@ test "tables has correct number of entries" {
 }
 
 test "ASCII 'A' has correct properties" {
-    const a_data = tables.table[65]; // ASCII 'A'
-    //try testing.expect(a_data.unicode_data.general_category == .Lu);
-    //try testing.expect(a_data.unicode_data.bidi_class == .L);
-    //if (a_data.unicode_data.simple_lowercase_mapping) |lower| {
-    //    try testing.expect(lower == 97); // 'a'
-    //}
-    try testing.expect(a_data == 97); // 'a'
+    const a_offset = tables.table[65]; // ASCII 'A'
+    const a_data = tables.selected_data[a_offset];
+    try testing.expect(a_data.case_folding_simple == 97); // 'a'
 }
 
 //test "ASCII '0' has correct properties" {
