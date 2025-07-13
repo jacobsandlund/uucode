@@ -199,32 +199,9 @@ pub fn writeData(
 
         var data = Data{};
 
-        if (@hasField(Data, "case_folding_simple")) {
-            data.case_folding_simple = case_folding.simple;
-        }
-        if (@hasField(Data, "case_folding_turkish")) {
-            data.case_folding_turkish = case_folding.turkish orelse 0;
-        }
-        if (@hasField(Data, "case_folding_full")) {
-            data.case_folding_full = case_folding.full;
-        }
-        if (@hasField(Data, "case_folding_full_len")) {
-            data.case_folding_full_len = case_folding.full_len;
-        }
+        // UnicodeData fields
         if (@hasField(Data, "name")) {
             data.name = try getStringOffset(allocator, string_map, strings, unicode_data.name);
-        }
-        if (@hasField(Data, "unicode_1_name")) {
-            data.unicode_1_name = try getStringOffset(allocator, string_map, strings, unicode_data.unicode_1_name);
-        }
-        if (@hasField(Data, "iso_comment")) {
-            data.iso_comment = try getStringOffset(allocator, string_map, strings, unicode_data.iso_comment);
-        }
-        if (@hasField(Data, "numeric_value_numeric")) {
-            data.numeric_value_numeric = try getStringOffset(allocator, string_map, strings, unicode_data.numeric_value_numeric);
-        }
-        if (@hasField(Data, "decomposition_mapping")) {
-            data.decomposition_mapping = try getCodePointOffset(allocator, codepoint_map, codepoints, unicode_data.decomposition_mapping);
         }
         if (@hasField(Data, "general_category")) {
             data.general_category = unicode_data.general_category;
@@ -238,6 +215,9 @@ pub fn writeData(
         if (@hasField(Data, "decomposition_type")) {
             data.decomposition_type = unicode_data.decomposition_type;
         }
+        if (@hasField(Data, "decomposition_mapping")) {
+            data.decomposition_mapping = try getCodePointOffset(allocator, codepoint_map, codepoints, unicode_data.decomposition_mapping);
+        }
         if (@hasField(Data, "numeric_type")) {
             data.numeric_type = unicode_data.numeric_type;
         }
@@ -247,8 +227,17 @@ pub fn writeData(
         if (@hasField(Data, "numeric_value_digit")) {
             data.numeric_value_digit = unicode_data.numeric_value_digit;
         }
+        if (@hasField(Data, "numeric_value_numeric")) {
+            data.numeric_value_numeric = try getStringOffset(allocator, string_map, strings, unicode_data.numeric_value_numeric);
+        }
         if (@hasField(Data, "bidi_mirrored")) {
             data.bidi_mirrored = unicode_data.bidi_mirrored;
+        }
+        if (@hasField(Data, "unicode_1_name")) {
+            data.unicode_1_name = try getStringOffset(allocator, string_map, strings, unicode_data.unicode_1_name);
+        }
+        if (@hasField(Data, "iso_comment")) {
+            data.iso_comment = try getStringOffset(allocator, string_map, strings, unicode_data.iso_comment);
         }
         if (@hasField(Data, "simple_uppercase_mapping")) {
             data.simple_uppercase_mapping = unicode_data.simple_uppercase_mapping;
@@ -259,6 +248,22 @@ pub fn writeData(
         if (@hasField(Data, "simple_titlecase_mapping")) {
             data.simple_titlecase_mapping = unicode_data.simple_titlecase_mapping;
         }
+
+        // CaseFolding fields
+        if (@hasField(Data, "case_folding_simple")) {
+            data.case_folding_simple = case_folding.simple;
+        }
+        if (@hasField(Data, "case_folding_turkish")) {
+            data.case_folding_turkish = case_folding.turkish orelse 0;
+        }
+        if (@hasField(Data, "case_folding_full")) {
+            data.case_folding_full = case_folding.full;
+        }
+        if (@hasField(Data, "case_folding_full_len")) {
+            data.case_folding_full_len = case_folding.full_len;
+        }
+
+        // DerivedCoreProperties fields
         if (@hasField(Data, "math")) {
             data.math = derived_core_properties.math;
         }
@@ -319,12 +324,18 @@ pub fn writeData(
         if (@hasField(Data, "indic_conjunct_break")) {
             data.indic_conjunct_break = derived_core_properties.indic_conjunct_break;
         }
+
+        // EastAsianWidth field
         if (@hasField(Data, "east_asian_width")) {
             data.east_asian_width = east_asian_width;
         }
+
+        // GraphemeBreak field
         if (@hasField(Data, "grapheme_break")) {
             data.grapheme_break = grapheme_break;
         }
+
+        // EmojiData fields
         if (@hasField(Data, "emoji")) {
             data.emoji = emoji_data.emoji;
         }
