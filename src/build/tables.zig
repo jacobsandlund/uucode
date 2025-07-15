@@ -6,6 +6,24 @@ pub const std_options: std.Options = .{
     .log_level = .debug,
 };
 
+// Note: when updating the UCD, after first updating the capacities in
+// `src/build/Ucd.zig` (see Note there), run `zig build` and then update the
+// below `starting_config` with the printed log messages.
+pub const starting_config = types.UcdConfig{
+    .name_max_len = 88,
+    .name_max_offset = 1031607,
+    .decomposition_mapping_max_len = 18,
+    .decomposition_mapping_max_offset = 8739,
+    .numeric_value_numeric_max_len = 13,
+    .numeric_value_numeric_max_offset = 2302,
+    .unicode_1_name_max_len = 55,
+    .unicode_1_name_max_offset = 49956,
+    .iso_comment_max_len = 0,
+    .iso_comment_max_offset = 0,
+    .case_folding_full_max_len = 3,
+    .case_folding_full_max_offset = 224,
+};
+
 pub fn main() !void {
     const all_fields = @import("fields");
 
@@ -27,16 +45,6 @@ pub fn main() !void {
     var ucd = try Ucd.init(allocator);
     defer ucd.deinit(allocator);
 
-    var string_map = std.StringHashMapUnmanaged(u24){};
-    defer string_map.deinit(allocator);
-    var strings = std.ArrayList(u8).init(allocator);
-    defer strings.deinit();
-
-    var codepoint_map = CodePointMap{};
-    defer codepoint_map.deinit(allocator);
-    var codepoints = std.ArrayList(u21).init(allocator);
-    defer codepoints.deinit();
-
     try writer.writeAll(
         \\//! This file is auto-generated. Do not edit.
         \\
@@ -51,49 +59,10 @@ pub fn main() !void {
             i,
             allocator,
             &ucd,
-            &string_map,
-            &strings,
-            &codepoint_map,
-            &codepoints,
             writer,
         );
     }
-
-    if (strings.items.len > 0) {
-        try writer.print(
-            \\
-            \\pub const strings: [{}]u8 = "{s}";
-            \\
-        , .{ strings.items.len, strings.items });
-    }
-
-    if (codepoints.items.len > 0) {
-        try writer.print(
-            \\pub const codepoints: [{}]u21 = .{{
-            \\
-        , .{codepoints.items.len});
-
-        for (codepoints.items) |item| {
-            try writer.print("0x{x}", .{item});
-        }
-
-        try writer.writeAll(
-            \\}};
-            \\
-        );
-    }
 }
-
-const CodePointMap: type = std.HashMapUnmanaged([]const u21, u24, struct {
-    pub fn hash(self: @This(), s: []const u21) u64 {
-        _ = self;
-        return std.hash_map.hashString(std.mem.sliceAsBytes(s));
-    }
-    pub fn eql(self: @This(), a: []const u21, b: []const u21) bool {
-        _ = self;
-        return std.mem.eql(u21, a, b);
-    }
-}, std.hash_map.default_max_load_percentage);
 
 fn DataMap(comptime Data: type) type {
     return std.HashMapUnmanaged(Data, u24, struct {
@@ -108,46 +77,6 @@ fn DataMap(comptime Data: type) type {
             return std.mem.eql(u8, std.mem.asBytes(&a), std.mem.asBytes(&b));
         }
     }, std.hash_map.default_max_load_percentage);
-}
-
-fn getStringOffset(
-    allocator: std.mem.Allocator,
-    string_map: *std.StringHashMapUnmanaged(u24),
-    strings: *std.ArrayList(u8),
-    str: []const u8,
-) !types.OffsetLen {
-    if (str.len == 0) {
-        return .{ .offset = 0, .len = 0 };
-    }
-
-    if (string_map.get(str)) |offset| {
-        return .{ .offset = offset, .len = @intCast(str.len) };
-    }
-
-    const offset: u24 = @intCast(strings.items.len);
-    try strings.appendSlice(str);
-    try string_map.put(allocator, str, offset);
-    return .{ .offset = offset, .len = @intCast(str.len) };
-}
-
-fn getCodePointOffset(
-    allocator: std.mem.Allocator,
-    codepoint_map: *CodePointMap,
-    codepoints: *std.ArrayList(u21),
-    slice: []const u21,
-) !types.OffsetLen {
-    if (slice.len == 0) {
-        return .{ .offset = 0, .len = 0 };
-    }
-
-    if (codepoint_map.get(slice)) |offset| {
-        return .{ .offset = offset, .len = @intCast(slice.len) };
-    }
-
-    const offset: u24 = @intCast(codepoints.items.len);
-    try codepoints.appendSlice(slice);
-    try codepoint_map.put(allocator, slice, offset);
-    return .{ .offset = offset, .len = @intCast(slice.len) };
 }
 
 fn getDataOffset(
@@ -168,17 +97,30 @@ fn getDataOffset(
 }
 
 pub fn writeData(
-    comptime fields: []const []const u8,
+    comptime field_names: []const []const u8,
     fields_index: usize,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
-    string_map: *std.StringHashMapUnmanaged(u24),
-    strings: *std.ArrayList(u8),
-    codepoint_map: *CodePointMap,
-    codepoints: *std.ArrayList(u21),
     writer: anytype,
 ) !void {
-    const Data = types.Data(fields);
+    const Data = types.Data(field_names, starting_config);
+
+    const BackingArrays = types.Backing(Data, "BackingArrayLen");
+    const BackingMaps = types.Backing(Data, "BackingOffsetMap");
+    var backing = BackingArrays{};
+    const maps: BackingMaps = blk: {
+        var m: BackingMaps = undefined;
+        inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
+            @field(m, field.name) = try @FieldType(m, field.name).init(allocator);
+        }
+
+        break :blk m;
+    };
+    defer {
+        inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
+            @field(BackingMaps, field.name).deinit(allocator);
+        }
+    }
 
     var data_map = DataMap(Data){};
     defer data_map.deinit(allocator);
@@ -201,7 +143,7 @@ pub fn writeData(
 
         // UnicodeData fields
         if (@hasField(Data, "name")) {
-            data.name = try getStringOffset(allocator, string_map, strings, unicode_data.name);
+            data.name = Data.name.fromSlice(allocator, &backing.name, maps.name, unicode_data.name);
         }
         if (@hasField(Data, "general_category")) {
             data.general_category = unicode_data.general_category;
@@ -216,7 +158,7 @@ pub fn writeData(
             data.decomposition_type = unicode_data.decomposition_type;
         }
         if (@hasField(Data, "decomposition_mapping")) {
-            data.decomposition_mapping = try getCodePointOffset(allocator, codepoint_map, codepoints, unicode_data.decomposition_mapping);
+            data.decomposition_mapping = data.decomposition_mapping.fromSlice(allocator, &backing.decomposition_mapping, maps.decomposition_mapping, unicode_data.decomposition_mapping);
         }
         if (@hasField(Data, "numeric_type")) {
             data.numeric_type = unicode_data.numeric_type;
@@ -228,16 +170,16 @@ pub fn writeData(
             data.numeric_value_digit = unicode_data.numeric_value_digit;
         }
         if (@hasField(Data, "numeric_value_numeric")) {
-            data.numeric_value_numeric = try getStringOffset(allocator, string_map, strings, unicode_data.numeric_value_numeric);
+            data.numeric_value_numeric = Data.numeric_value_numeric.fromSlice(allocator, &backing.numeric_value_numeric, maps.numeric_value_numeric, unicode_data.numeric_value_numeric);
         }
         if (@hasField(Data, "bidi_mirrored")) {
             data.bidi_mirrored = unicode_data.bidi_mirrored;
         }
         if (@hasField(Data, "unicode_1_name")) {
-            data.unicode_1_name = try getStringOffset(allocator, string_map, strings, unicode_data.unicode_1_name);
+            data.unicode_1_name = Data.unicode_1_name.fromSlice(allocator, &backing.unicode_1_name, maps.unicode_1_name, unicode_data.unicode_1_name);
         }
         if (@hasField(Data, "iso_comment")) {
-            data.iso_comment = try getStringOffset(allocator, string_map, strings, unicode_data.iso_comment);
+            data.iso_comment = Data.iso_comment.fromSlice(allocator, &backing.iso_comment, maps.iso_comment, unicode_data.iso_comment);
         }
         if (@hasField(Data, "simple_uppercase_mapping")) {
             data.simple_uppercase_mapping = unicode_data.simple_uppercase_mapping;
@@ -254,7 +196,7 @@ pub fn writeData(
             data.case_folding_simple = case_folding.simple;
         }
         if (@hasField(Data, "case_folding_turkish")) {
-            data.case_folding_turkish = case_folding.turkish orelse 0;
+            data.case_folding_turkish = case_folding.turkish;
         }
         if (@hasField(Data, "case_folding_full")) {
             data.case_folding_full = case_folding.full;
@@ -359,40 +301,74 @@ pub fn writeData(
         try offsets.append(offset);
     }
 
-    const fields_info = @typeInfo(Data);
-    const data_bit_size = @bitSizeOf(Data);
-    const IntType = std.meta.Int(.unsigned, data_bit_size);
+    const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
 
     try writer.print(
-        \\const Data{} = packed struct {{
+        \\pub const Data{} = types.Data(&.{{
         \\
     , .{fields_index});
 
-    inline for (fields_info.@"struct".fields) |field| {
-        try writer.print("    {s}: {s},\n", .{ field.name, @typeName(field.type) });
+    inline for (field_names) |field_name| {
+        try writer.print("\"{s}\",", .{field_name});
     }
     try writer.writeAll(
-        \\};
         \\
+        \\}, .{
         \\
     );
+    inline for (@typeInfo(types.UcdConfig).@"struct".fields) |field| {
+        try writer.print(
+            \\    .{s} = {},
+            \\
+        , .{ field.name, @field(starting_config, field.name) });
+    }
 
     try writer.print(
+        \\}});
+        \\
         \\pub const data{}: [{}]Data{} = @bitCast([{}]{s}{{
         \\
-    , .{ fields_index, data_array.items.len, fields_index, data_array.items.len, @typeName(IntType) });
+    , .{ fields_index, data_array.items.len, fields_index, data_array.items.len, @typeName(IntEquivalent) });
 
     for (data_array.items) |item| {
-        const as_int: IntType = @bitCast(item);
+        const as_int: IntEquivalent = @bitCast(item);
         try writer.print("{},", .{as_int});
     }
 
     try writer.writeAll(
+        \\
         \\});
         \\
     );
 
     try writer.print(
+        \\
+        \\pub const backing{}: types.Backing(Data{}, "BackingArrayLen") = .{{
+        \\
+    , .{ fields_index, fields_index });
+
+    inline for (@typeInfo(BackingArrays).@"struct".fields) |field| {
+        try writer.print(
+            \\    .{s} = .{{
+            \\        .items = .{{
+        , .{field.name});
+
+        for (@field(backing, field.name).items) |item| {
+            try writer.print("{},", .{item});
+        }
+
+        try writer.print(
+            \\
+            \\}},
+            \\        .len = {},
+            \\    }},
+            \\
+        , .{@field(backing, field.name).len});
+    }
+
+    try writer.print(
+        \\}};
+        \\
         \\pub const table{}: [{}]u24 = .{{
         \\
     , .{ fields_index, types.num_code_points });

@@ -1,17 +1,12 @@
 #!/bin/bash
 
-# When updating Unicode version, also update the string pool and code point
-# pool capacities in `src/build/Ucd.zig`. Run `zig build` after updating UCD
-# files and see the failures, which will log "String pool usage:" and "Code
-# point pool usage:". Update the capacity constants to match
-
 UNICODE_VERSION="16.0.0"
 BASE_URL="https://www.unicode.org/Public/${UNICODE_VERSION}/ucd"
 TARGET_DIR="data/ucd"
 
 mkdir -p "$TARGET_DIR"
 
-echo "Downloading Unicode Character Database version $UNICODE_VERSION..."
+echo "Updating Unicode Character Database version $UNICODE_VERSION..."
 
 UCD_FILES=(
     "CaseFolding.txt"
@@ -30,3 +25,17 @@ for file in "${UCD_FILES[@]}"; do
 
     curl -L -o "$target_path" "$file_url"
 done
+
+echo
+echo
+echo "Next, see the note towards the top of 'src/build/Ucd.zig' and switch to"
+echo "using these increased capacities temporarily (commenting out the old"
+echo "ones):"
+echo
+echo "const string_pool_capacity = 10_000_000;"
+echo "const code_point_pool_capacity = 100_000;"
+echo
+echo "Then run 'zig build' and the error messages will print out the new"
+echo "constants to be used at the top of 'src/build/Ucd.zig', and"
+echo "'src/type.zig'."
+echo

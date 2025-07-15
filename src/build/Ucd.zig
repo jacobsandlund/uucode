@@ -22,6 +22,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const types = @import("types");
+const starting_config = @import("tables.zig").starting_config;
 
 const UnicodeData = types.UnicodeData;
 const CaseFolding = types.CaseFolding;
@@ -41,8 +42,16 @@ code_point_pool: std.ArrayListUnmanaged(u21),
 
 const Ucd = @This();
 
+// Note: when updating the UCD, give more capacity here and then run `zig
+// build` and then update the below constants with the printed log message.
+//const string_pool_capacity = 10_000_000;
+//const code_point_pool_capacity = 100_000;
+const string_pool_capacity = 1083865;
+const code_point_pool_capacity = 8739;
+
 pub fn init(allocator: std.mem.Allocator) !Ucd {
     const unicode_data = try allocator.alloc(UnicodeData, types.num_code_points);
+    var config = types.UcdConfig{};
 
     var ucd = Ucd{
         .unicode_data = unicode_data,
@@ -51,27 +60,93 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
         .east_asian_width = .{},
         .grapheme_break = .{},
         .emoji_data = .{},
-        .string_pool = try std.ArrayListUnmanaged(u8).initCapacity(allocator, 1084036),
-        .code_point_pool = try std.ArrayListUnmanaged(u21).initCapacity(allocator, 8739),
+        .string_pool = try std.ArrayListUnmanaged(u8).initCapacity(allocator, string_pool_capacity),
+        .code_point_pool = try std.ArrayListUnmanaged(u21).initCapacity(allocator, code_point_pool_capacity),
     };
 
-    try parseUnicodeData(allocator, ucd.unicode_data, &ucd.string_pool, &ucd.code_point_pool);
-    try parseCaseFolding(allocator, &ucd.case_folding);
+    try parseUnicodeData(allocator, ucd.unicode_data, &ucd.string_pool, &ucd.code_point_pool, &config);
+    try parseCaseFolding(allocator, &ucd.case_folding, &config);
     try parseDerivedCoreProperties(allocator, &ucd.derived_core_properties);
     try parseEastAsianWidth(allocator, &ucd.east_asian_width);
     try parseGraphemeBreakProperty(allocator, &ucd.grapheme_break);
     try parseEmojiData(allocator, &ucd.emoji_data);
 
-    // Assert that string pool capacity is correctly sized
-    if (ucd.string_pool.items.len != ucd.string_pool.capacity) {
-        std.log.info("String pool usage: {} bytes (expected: {})", .{ ucd.string_pool.items.len, ucd.string_pool.capacity });
-        @panic("String pool capacity mismatch - update capacity in init() to match actual usage");
+    var has_capacity_mismatch = false;
+    var has_config_mismatch = false;
+
+    if (ucd.string_pool.items.len != ucd.string_pool.capacity or
+        ucd.code_point_pool.items.len != ucd.code_point_pool.capacity)
+    {
+        has_capacity_mismatch = true;
+        std.log.err(
+            \\Update the capacities in 'src/build/Ucd.zig' to match this:
+            \\
+            \\// Note: when updating the UCD, give more capacity here and then run `zig
+            \\// build` and then update the below constants with the printed log message.
+            \\//const string_pool_capacity = 10_000_000;
+            \\//const code_point_pool_capacity = 100_000;
+            \\const string_pool_capacity = {};
+            \\const code_point_pool_capacity = {};
+            \\
+            \\
+        , .{ ucd.string_pool.items.len, ucd.code_point_pool.items.len });
     }
 
-    // Assert that code point pool capacity is correctly sized
-    if (ucd.code_point_pool.items.len != ucd.code_point_pool.capacity) {
-        std.log.info("Code point pool usage: {} code points (expected: {})", .{ ucd.code_point_pool.items.len, ucd.code_point_pool.capacity });
-        @panic("Code point pool capacity mismatch - update capacity in init() to match actual usage");
+    if (starting_config.name_max_len != config.name_max_len or
+        starting_config.name_max_offset != config.name_max_offset or
+        starting_config.decomposition_mapping_max_len != config.decomposition_mapping_max_len or
+        starting_config.decomposition_mapping_max_offset != config.decomposition_mapping_max_offset or
+        starting_config.numeric_value_numeric_max_len != config.numeric_value_numeric_max_len or
+        starting_config.numeric_value_numeric_max_offset != config.numeric_value_numeric_max_offset or
+        starting_config.unicode_1_name_max_len != config.unicode_1_name_max_len or
+        starting_config.unicode_1_name_max_offset != config.unicode_1_name_max_offset or
+        starting_config.iso_comment_max_len != config.iso_comment_max_len or
+        starting_config.iso_comment_max_offset != config.iso_comment_max_offset or
+        starting_config.case_folding_full_max_len != config.case_folding_full_max_len or
+        starting_config.case_folding_full_max_offset != config.case_folding_full_max_offset)
+    {
+        has_config_mismatch = true;
+
+        std.log.err(
+            \\Update the `starting_config` values in 'src/build/tables.zig' to match this:
+            \\
+            \\// Note: when updating the UCD, after first updating the capacities in
+            \\// `src/build/Ucd.zig` (see Note there), run `zig build` and then update the
+            \\// below `starting_config` with the printed log messages.
+            \\pub const starting_config = types.UcdConfig{{
+            \\    .name_max_len = {},
+            \\    .name_max_offset = {},
+            \\    .decomposition_mapping_max_len = {},
+            \\    .decomposition_mapping_max_offset = {},
+            \\    .numeric_value_numeric_max_len = {},
+            \\    .numeric_value_numeric_max_offset = {},
+            \\    .unicode_1_name_max_len = {},
+            \\    .unicode_1_name_max_offset = {},
+            \\    .iso_comment_max_len = {},
+            \\    .iso_comment_max_offset = {},
+            \\    .case_folding_full_max_len = {},
+            \\    .case_folding_full_max_offset = {},
+            \\}};
+            \\
+            \\
+        , .{
+            config.name_max_len,
+            config.name_max_offset,
+            config.decomposition_mapping_max_len,
+            config.decomposition_mapping_max_offset,
+            config.numeric_value_numeric_max_len,
+            config.numeric_value_numeric_max_offset,
+            config.unicode_1_name_max_len,
+            config.unicode_1_name_max_offset,
+            config.iso_comment_max_len,
+            config.iso_comment_max_offset,
+            config.case_folding_full_max_len,
+            config.case_folding_full_max_offset,
+        });
+    }
+
+    if (has_capacity_mismatch or has_config_mismatch) {
+        @panic("Capacity and/or `max_len` mismatch - update as instructed above");
     }
 
     return ucd;
@@ -126,7 +201,13 @@ fn copyCodePointsToPool(pool: *std.ArrayListUnmanaged(u21), code_points: []const
     return pool.items[start .. start + code_points.len];
 }
 
-fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *std.ArrayListUnmanaged(u8), code_point_pool: *std.ArrayListUnmanaged(u21)) !void {
+fn parseUnicodeData(
+    allocator: std.mem.Allocator,
+    array: []UnicodeData,
+    pool: *std.ArrayListUnmanaged(u8),
+    code_point_pool: *std.ArrayListUnmanaged(u21),
+    config: *types.UcdConfig,
+) !void {
     const file_path = "data/ucd/UnicodeData.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -157,7 +238,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
     };
     var range_data: ?UnicodeData = null;
 
-    while (lines.next()) |line| {
+    while (lines.next()) |line| : (next_cp += 1) {
         const trimmed = stripComment(line);
         if (trimmed.len == 0) continue;
 
@@ -170,7 +251,16 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
             array[next_cp - types.min_code_point] = range_data orelse default_data;
         }
 
-        const name = parts.next().?;
+        if (range_data != null) {
+            // We're in a range, so the next entry marks the last, with the same
+            // information.
+            std.debug.assert(std.mem.endsWith(u8, parts.next().?, "Last>"));
+            array[next_cp - types.min_code_point] = range_data.?;
+            range_data = null;
+            continue;
+        }
+
+        const name_str = parts.next().?;
         const general_category_str = parts.next().?;
         const canonical_combining_class = std.fmt.parseInt(u8, parts.next().?, 10) catch 0;
         const bidi_class_str = parts.next().?;
@@ -185,6 +275,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
         const simple_lowercase_mapping_str = parts.next().?;
         const simple_titlecase_mapping_str = parts.next().?;
 
+        const name = if (std.mem.endsWith(u8, name_str, "First>")) name_str["<".len..(name_str.len - ", First>".len)] else name_str;
         const general_category = std.meta.stringToEnum(types.GeneralCategory, general_category_str) orelse {
             std.log.err("Unknown general category: {s}", .{general_category_str});
             unreachable;
@@ -264,6 +355,9 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
         } else if (numeric_numeric_str.len > 0) {
             numeric_type = types.NumericType.numeric;
             numeric_value_numeric = copyStringToPool(pool, numeric_numeric_str);
+            if (numeric_value_numeric.len > config.numeric_value_numeric_max_len) {
+                config.numeric_value_numeric_max_len = numeric_value_numeric.len;
+            }
         }
 
         const unicode_data = UnicodeData{
@@ -285,15 +379,31 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
             .simple_titlecase_mapping = simple_titlecase_mapping,
         };
 
+        config.name_max_offset += unicode_data.name.len;
+        config.decomposition_mapping_max_offset += unicode_data.decomposition_mapping.len;
+        config.numeric_value_numeric_max_offset += unicode_data.numeric_value_numeric.len;
+        config.unicode_1_name_max_offset += unicode_data.unicode_1_name.len;
+        config.iso_comment_max_offset += unicode_data.iso_comment.len;
+
+        if (unicode_data.name.len > config.name_max_len) {
+            config.name_max_len = unicode_data.name.len;
+        }
+        if (unicode_data.decomposition_mapping.len > config.decomposition_mapping_max_len) {
+            config.decomposition_mapping_max_len = unicode_data.decomposition_mapping.len;
+        }
+        if (unicode_data.unicode_1_name.len > config.unicode_1_name_max_len) {
+            config.unicode_1_name_max_len = unicode_data.unicode_1_name.len;
+        }
+        if (unicode_data.iso_comment.len > config.iso_comment_max_len) {
+            config.iso_comment_max_len = unicode_data.iso_comment.len;
+        }
+
         // Handle range entries with "First>" and "Last>"
         if (std.mem.endsWith(u8, name, "First>")) {
             range_data = unicode_data;
-        } else if (std.mem.endsWith(u8, name, "Last>")) {
-            range_data = null;
         }
 
         array[cp - types.min_code_point] = unicode_data;
-        next_cp = cp + 1;
     }
 
     // Fill any remaining gaps at the end with default values
@@ -302,7 +412,11 @@ fn parseUnicodeData(allocator: std.mem.Allocator, array: []UnicodeData, pool: *s
     }
 }
 
-fn parseCaseFolding(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, CaseFolding)) !void {
+fn parseCaseFolding(
+    allocator: std.mem.Allocator,
+    map: *std.AutoHashMapUnmanaged(u21, CaseFolding),
+    config: *types.UcdConfig,
+) !void {
     const file_path = "data/ucd/CaseFolding.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -357,6 +471,12 @@ fn parseCaseFolding(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged
                 std.debug.assert(mapping_len > 1);
                 for (mapping[0..mapping_len], 0..) |mapped_cp, i| {
                     result.value_ptr.full[i] = mapped_cp;
+                }
+                result.value_ptr.full_len = @intCast(mapping_len);
+
+                config.case_folding_full_max_offset += mapping_len;
+                if (mapping_len > config.case_folding_full_max_len) {
+                    config.case_folding_full_max_len = mapping_len;
                 }
             },
             'T' => {
