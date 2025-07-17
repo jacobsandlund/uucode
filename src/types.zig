@@ -7,294 +7,147 @@ pub const code_point_range_end: u21 = max_code_point + 1;
 
 const safe_max_offset = std.math.maxInt(u24);
 
-pub fn FullData(comptime cfg: UcdConfig) type {
-    return struct {
-        // UnicodeData fields
-        name: OffsetLen(u8, cfg.name_max_len, cfg.name_max_offset, cfg.name_embedded_len),
-        general_category: GeneralCategory,
-        canonical_combining_class: u8,
-        bidi_class: BidiClass,
-        decomposition_type: DecompositionType,
-        decomposition_mapping: OffsetLen(u21, cfg.decomposition_mapping_max_len, cfg.decomposition_mapping_max_offset, cfg.decomposition_mapping_embedded_len),
-        numeric_type: NumericType,
-        numeric_value_decimal: ?u4,
-        numeric_value_digit: ?u4,
-        numeric_value_numeric: OffsetLen(u8, cfg.numeric_value_numeric_max_len, cfg.numeric_value_numeric_max_offset, cfg.numeric_value_numeric_embedded_len),
-        bidi_mirrored: bool,
-        unicode_1_name: OffsetLen(u8, cfg.unicode_1_name_max_len, cfg.unicode_1_name_max_offset, cfg.unicode_1_name_embedded_len),
-        iso_comment: OffsetLen(u8, cfg.iso_comment_max_len, cfg.iso_comment_max_offset, cfg.iso_comment_embedded_len),
-        simple_uppercase_mapping: ?u21,
-        simple_lowercase_mapping: ?u21,
-        simple_titlecase_mapping: ?u21,
+pub const FullData = struct {
+    // UnicodeData fields
+    name: []const u8,
+    general_category: GeneralCategory,
+    canonical_combining_class: u8,
+    bidi_class: BidiClass,
+    decomposition_type: DecompositionType,
+    decomposition_mapping: []const u21,
+    numeric_type: NumericType,
+    numeric_value_decimal: ?u4,
+    numeric_value_digit: ?u4,
+    numeric_value_numeric: []const u8,
+    bidi_mirrored: bool,
+    unicode_1_name: []const u8,
+    simple_uppercase_mapping: ?u21,
+    simple_lowercase_mapping: ?u21,
+    simple_titlecase_mapping: ?u21,
 
-        // CaseFolding fields
-        case_folding_simple: u21 = 0,
-        case_folding_turkish: ?u21 = null,
-        case_folding_full: OffsetLen(u21, cfg.case_folding_full_max_len, cfg.case_folding_full_max_offset, cfg.case_folding_full_embedded_len),
+    // CaseFolding fields
+    case_folding_simple: ?u21,
+    case_folding_turkish: ?u21,
+    case_folding_full: []const u21,
 
-        // DerivedCoreProperties fields
-        math: bool = false,
-        alphabetic: bool = false,
-        lowercase: bool = false,
-        uppercase: bool = false,
-        cased: bool = false,
-        case_ignorable: bool = false,
-        changes_when_lowercased: bool = false,
-        changes_when_uppercased: bool = false,
-        changes_when_titlecased: bool = false,
-        changes_when_casefolded: bool = false,
-        changes_when_casemapped: bool = false,
-        id_start: bool = false,
-        id_continue: bool = false,
-        xid_start: bool = false,
-        xid_continue: bool = false,
-        default_ignorable_code_point: bool = false,
-        grapheme_extend: bool = false,
-        grapheme_base: bool = false,
-        grapheme_link: bool = false,
-        indic_conjunct_break: IndicConjunctBreak = .none,
+    // DerivedCoreProperties fields
+    math: bool,
+    alphabetic: bool,
+    lowercase: bool,
+    uppercase: bool,
+    cased: bool,
+    case_ignorable: bool,
+    changes_when_lowercased: bool,
+    changes_when_uppercased: bool,
+    changes_when_titlecased: bool,
+    changes_when_casefolded: bool,
+    changes_when_casemapped: bool,
+    id_start: bool,
+    id_continue: bool,
+    xid_start: bool,
+    xid_continue: bool,
+    default_ignorable_code_point: bool,
+    grapheme_extend: bool,
+    grapheme_base: bool,
+    grapheme_link: bool,
+    indic_conjunct_break: IndicConjunctBreak,
 
-        // EastAsianWidth field
-        east_asian_width: EastAsianWidth,
+    // EastAsianWidth field
+    east_asian_width: EastAsianWidth,
 
-        // GraphemeBreak field
-        grapheme_break: GraphemeBreak,
+    // GraphemeBreak field
+    grapheme_break: GraphemeBreak,
 
-        // EmojiData fields
-        emoji: bool = false,
-        emoji_presentation: bool = false,
-        emoji_modifier: bool = false,
-        emoji_modifier_base: bool = false,
-        emoji_component: bool = false,
-        extended_pictographic: bool = false,
-    };
-}
-
-pub const UcdConfig = struct {
-    name_max_len: usize = 0,
-    name_max_offset: usize = 0,
-    name_embedded_len: usize = 0,
-    decomposition_mapping_max_len: usize = 0,
-    decomposition_mapping_max_offset: usize = 0,
-    decomposition_mapping_embedded_len: usize = 0,
-    numeric_value_numeric_max_len: usize = 0,
-    numeric_value_numeric_max_offset: usize = 0,
-    numeric_value_numeric_embedded_len: usize = 0,
-    unicode_1_name_max_len: usize = 0,
-    unicode_1_name_max_offset: usize = 0,
-    unicode_1_name_embedded_len: usize = 0,
-    iso_comment_max_len: usize = 0,
-    iso_comment_max_offset: usize = 0,
-    iso_comment_embedded_len: usize = 0,
-    case_folding_full_max_len: usize = 0,
-    case_folding_full_max_offset: usize = 0,
-    case_folding_full_embedded_len: usize = 0,
+    // EmojiData fields
+    emoji: bool,
+    emoji_presentation: bool,
+    emoji_modifier: bool,
+    emoji_modifier_base: bool,
+    emoji_component: bool,
+    extended_pictographic: bool,
 };
 
-pub fn Data(comptime field_names: []const []const u8, comptime cfg: UcdConfig) type {
-    const full_data_info = @typeInfo(FullData(cfg));
-    const full_fields = full_data_info.@"struct".fields;
+pub const UcdConfig = struct {
+    name: OffsetLenConfig = .{},
+    decomposition_mapping: OffsetLenConfig = .{},
+    numeric_value_numeric: OffsetLenConfig = .{},
+    unicode_1_name: OffsetLenConfig = .{},
+    case_folding_full: OffsetLenConfig = .{},
 
-    const full_fields_kvs: [full_fields.len]struct { []const u8, std.builtin.Type.StructField } = blk: {
-        var kvs: [full_fields.len]struct { []const u8, std.builtin.Type.StructField } = undefined;
-        for (full_fields, 0..) |full_field, i| {
-            kvs[i] = .{ full_field.name, full_field };
-        }
-
-        break :blk kvs;
-    };
-    const full_fields_map = std.static_string_map.StaticStringMap(std.builtin.Type.StructField).initComptime(full_fields_kvs);
-
-    var fields: [field_names.len]std.builtin.Type.StructField = undefined;
-
-    for (field_names, 0..) |field_name, i| {
-        const field = full_fields_map.get(field_name) orelse {
-            @compileError("Field '" ++ field_name ++ "' not found in FullData");
-        };
-
-        fields[i] = field;
-        fields[i].alignment = 0; // Required for packed structs
-    }
-
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .@"packed",
-            .fields = &fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
-}
-
-pub fn Backing(comptime DataType: type, comptime backing_type_name: []const u8) type {
-    const fields = @typeInfo(DataType).@"struct".fields;
-
-    var backing_arrays: [fields.len]std.builtin.Type.StructField = undefined;
-    var backed_fields_len: usize = 0;
-
-    inline for (fields) |field| {
-        switch (@typeInfo(field.type)) {
-            .@"struct" => {
-                if (@hasDecl(field.type, backing_type_name)) {
-                    backing_arrays[backed_fields_len] = .{
-                        .name = field.name,
-                        .type = @FieldType(field.type, backing_type_name),
-                    };
-                    backed_fields_len += 1;
-                }
-            },
-            else => {},
+    pub fn merge(self: *UcdConfig, other: UcdConfig) UcdConfig {
+        inline for (@typeInfo(UcdConfig).@"struct".fields) |field| {
+            @field(self, field.name).merge(@field(other, field.name));
         }
     }
 
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = backing_arrays[0..backed_fields_len],
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
-}
-
-pub fn ArrayLen(comptime T: type, comptime max_len_: comptime_int) type {
-    const Len_ = std.math.IntFittingRange(0, max_len_);
-
-    return struct {
-        items: [max_len_]T,
-        len: Len_,
-
-        pub const max_len = max_len_;
-        pub const Len = Len_;
-
-        fn appendSliceAssumeCapacity(self: *@This(), slice: []const T) void {
-            @memcpy(self.items[self.len..][0..slice.len], slice);
-            self.len += @intCast(slice.len);
-        }
-
-        fn toSlice(self: @This()) []T {
-            return self.items[0..self.len];
-        }
-    };
-}
-
-pub fn PackedArray(comptime T: type, comptime len: comptime_int) type {
-    const item_bits = @bitSizeOf(T);
-    const Bits = std.meta.Int(.unsigned, item_bits * len);
-
-    return packed struct {
-        const Self = @This();
-
-        bits: Bits,
-
-        pub const Array = ArrayLen(T, len);
-
-        pub fn fromSlice(slice: []const T) Self {
-            std.debug.assert(slice.len <= len);
-            var bits: Bits = 0;
-            for (slice, 0..) |item, i| {
-                bits |= @as(Bits, item) << item_bits * i;
-            }
-            return .{ .bits = bits };
-        }
-
-        pub fn toArray(self: Self, array: *Array) void {
-            inline for (0..len) |i| {
-                array[i] = @as(T, @truncate(self.bits >> item_bits * i));
+    pub fn eql(self: UcdConfig, other: UcdConfig) bool {
+        inline for (@typeInfo(UcdConfig).@"struct".fields) |field| {
+            if (!@field(self, field.name).eql(@field(other, field.name))) {
+                return false;
             }
         }
-    };
-}
+        return true;
+    }
+};
 
-pub fn OffsetLen(
-    comptime T: type,
-    comptime max_len: comptime_int,
-    comptime max_offset: comptime_int,
-    comptime embedded_len: comptime_int,
-) type {
-    const Offset = std.math.IntFittingRange(0, max_offset);
-    const Len = std.math.IntFittingRange(0, max_len);
-    const EmbeddedArray = PackedArray(T, embedded_len);
+const extra_space_when_updating_ucd = 1000;
+//const extra_space_when_updating_ucd = 0;
 
-    return packed struct {
-        data: packed union {
-            embedded: EmbeddedArray,
-            offset: Offset,
-        },
-        len: Len,
+pub const min_config = UcdConfig{
+    .name = .{
+        .max_len = 88,
+        .max_offset = 1031607 + 100 * extra_space_when_updating_ucd,
+        .embedded_len = 0,
+    },
+    .decomposition_mapping = .{
+        .max_len = 18,
+        .max_offset = 8739 + extra_space_when_updating_ucd,
+        .embedded_len = 0,
+    },
+    .numeric_value_numeric = .{
+        .max_len = 13,
+        .max_offset = 2302 + extra_space_when_updating_ucd,
+        .embedded_len = 0,
+    },
+    .unicode_1_name = .{
+        .max_len = 55,
+        .max_offset = 49956 + 5 * extra_space_when_updating_ucd,
+        .embedded_len = 0,
+    },
+    .case_folding_full = .{
+        .max_len = 3,
+        .max_offset = 224 + extra_space_when_updating_ucd,
+        .embedded_len = 0,
+    },
+};
 
-        pub const EmbeddedArrayLen = ArrayLen(T, embedded_len);
-        pub const BackingArrayLen = ArrayLen(T, max_offset);
-        pub const BackingOffsetMap = OffsetMap(T, Offset);
-
-        fn fromSlice(
-            allocator: std.mem.Allocator,
-            backing: *BackingArrayLen,
-            map: BackingOffsetMap,
-            slice: []const T,
-        ) @This() {
-            const len: Len = @intCast(slice.len);
-
-            if ((comptime embedded_len == max_len) or slice.len <= embedded_len) {
-                return .{
-                    .len = len,
-                    .data = .{
-                        .embedded = EmbeddedArray.fromSlice(slice),
-                    },
-                };
-            } else {
-                const gop = try map.getOrPut(allocator, slice);
-                if (gop.found_existing) |offset| {
-                    return .{
-                        .len = len,
-                        .data = .{
-                            .offset = offset,
-                        },
-                    };
-                }
-
-                const offset = backing.len;
-                gop.value_ptr.* = offset;
-                backing.appendSliceAssumeCapacity(slice);
-
-                return .{
-                    .len = len,
-                    .data = .{
-                        .offset = offset,
-                    },
-                };
-            }
-        }
-
-        fn toSlice(self: @This(), backing: BackingArrayLen, buffer: *EmbeddedArrayLen) []const T {
-            // Repeat the two return cases, first with two `comptime` checks,
-            // then with a runtime if/else
-
-            if (comptime embedded_len == max_len) {
-                return self.data.toArray(buffer)[0..self.len];
-            } else if (comptime embedded_len == 0) {
-                return backing.items[self.data.offset .. self.data.offset + self.len];
-            } else if (self.len <= embedded_len) {
-                return self.data.toArray(buffer)[0..self.len];
-            } else {
-                return backing.items[self.data.offset .. self.data.offset + self.len];
-            }
-        }
-    };
-}
-
-pub fn OffsetMap(comptime T: type, comptime Offset: type) type {
-    return std.HashMapUnmanaged([]const T, Offset, struct {
-        pub fn hash(self: @This(), s: []const T) u64 {
-            _ = self;
-            return std.hash_map.hashString(std.mem.sliceAsBytes(s));
-        }
-        pub fn eql(self: @This(), a: []const T, b: []const T) bool {
-            _ = self;
-            return std.mem.eql(T, a, b);
-        }
-    }, std.hash_map.default_max_load_percentage);
-}
+pub const default_config = UcdConfig{
+    .name = .{
+        .max_len = 88,
+        .max_offset = 1031607,
+        .embedded_len = 0,
+    },
+    .decomposition_mapping = .{
+        .max_len = 18,
+        .max_offset = 8739,
+        .embedded_len = 0,
+    },
+    .numeric_value_numeric = .{
+        .max_len = 13,
+        .max_offset = 2302,
+        .embedded_len = 0,
+    },
+    .unicode_1_name = .{
+        .max_len = 55,
+        .max_offset = 49956,
+        .embedded_len = 0,
+    },
+    .case_folding_full = .{
+        .max_len = 3,
+        .max_offset = 224,
+        .embedded_len = 0,
+    },
+};
 
 pub const GeneralCategory = enum(u5) {
     Lu, // Letter, uppercase
@@ -384,29 +237,27 @@ pub const NumericType = enum(u2) {
 };
 
 pub const UnicodeData = struct {
-    name: []const u8,
+    name: OffsetLen(u8, min_config.name),
     general_category: GeneralCategory,
     canonical_combining_class: u8,
     bidi_class: BidiClass,
     decomposition_type: DecompositionType,
-    decomposition_mapping: []const u21,
+    decomposition_mapping: OffsetLen(u21, min_config.decomposition_mapping),
     numeric_type: NumericType,
     numeric_value_decimal: ?u4,
     numeric_value_digit: ?u4,
-    numeric_value_numeric: []const u8,
+    numeric_value_numeric: OffsetLen(u8, min_config.numeric_value_numeric),
     bidi_mirrored: bool,
-    unicode_1_name: []const u8,
-    iso_comment: []const u8,
+    unicode_1_name: OffsetLen(u8, min_config.unicode_1_name),
     simple_uppercase_mapping: ?u21,
     simple_lowercase_mapping: ?u21,
     simple_titlecase_mapping: ?u21,
 };
 
 pub const CaseFolding = struct {
-    simple: u21 = 0,
-    turkish: ?u21 = null,
-    full: [3]u21 = .{ 0, 0, 0 },
-    full_len: u2 = 0,
+    case_folding_simple: u21,
+    case_folding_turkish: ?u21,
+    case_folding_full: OffsetLen(u21, min_config.case_folding_full),
 };
 
 pub const IndicConjunctBreak = enum(u2) {
@@ -473,3 +324,313 @@ pub const EmojiData = packed struct {
     emoji_component: bool = false,
     extended_pictographic: bool = false,
 };
+
+const full_fields = @typeInfo(FullData).@"struct".fields;
+
+pub const full_data_field_names = brk: {
+    var fields: [full_fields.len][]const u8 = undefined;
+    for (full_fields, 0..) |field, i| {
+        fields[i] = field.name;
+    }
+    break :brk fields;
+};
+
+const full_fields_map = std.static_string_map.StaticStringMap(std.builtin.Type.StructField).initComptime(blk: {
+    var kvs: [full_fields.len]struct { []const u8, std.builtin.Type.StructField } = undefined;
+    for (full_fields, 0..) |full_field, i| {
+        kvs[i] = .{ full_field.name, full_field };
+    }
+
+    break :blk kvs;
+});
+
+pub fn Data(comptime field_names: []const []const u8, comptime config: UcdConfig) type {
+    var fields: [field_names.len]std.builtin.Type.StructField = undefined;
+
+    for (field_names, 0..) |field_name, i| {
+        const field = full_fields_map.get(field_name) orelse {
+            @compileError("Field '" ++ field_name ++ "' not found in FullData");
+        };
+
+        const field_type = switch (@typeInfo(field.type)) {
+            .pointer => |pointer| OffsetLen(pointer.child, @field(config, field_name)),
+            .optional => |optional| PackedOptional(optional.child),
+            else => field.type,
+        };
+
+        fields[i] = .{
+            .name = field.name,
+            .type = field_type,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = 0, // Required for packed structs
+        };
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .@"packed",
+            .fields = &fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+
+pub fn SelectedDecls(comptime DataType: type, comptime decl_name: []const u8) type {
+    const fields = @typeInfo(DataType).@"struct".fields;
+
+    var decl_fields: [fields.len]std.builtin.Type.StructField = undefined;
+    var decl_fields_len: usize = 0;
+
+    inline for (fields) |field| {
+        switch (@typeInfo(field.type)) {
+            .@"struct" => {
+                if (@hasDecl(field.type, decl_name)) {
+                    const decl_type = @FieldType(field.type, decl_name);
+                    decl_fields[decl_fields_len] = .{
+                        .name = field.name,
+                        .type = decl_type,
+                        .default_value_ptr = null,
+                        .is_comptime = false,
+                        .alignment = @alignOf(decl_type),
+                    };
+                    decl_fields_len += 1;
+                }
+            },
+            else => {},
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = decl_fields[0..decl_fields_len],
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+
+pub fn ArrayLen(comptime T: type, comptime max_len_: comptime_int) type {
+    return struct {
+        items: [max_len]T,
+        len: Len,
+
+        pub const Len = std.math.IntFittingRange(0, max_len);
+        pub const max_len = max_len_;
+
+        fn appendSliceAssumeCapacity(self: *@This(), slice: []const T) void {
+            @memcpy(self.items[self.len..][0..slice.len], slice);
+            self.len += @intCast(slice.len);
+        }
+
+        fn toSlice(self: @This()) []T {
+            return self.items[0..self.len];
+        }
+    };
+}
+
+pub fn PackedArray(comptime T: type, comptime len: comptime_int) type {
+    const item_bits = @bitSizeOf(T);
+
+    return packed struct {
+        const Self = @This();
+
+        bits: Bits,
+
+        pub const Bits = std.meta.Int(.unsigned, item_bits * len);
+        pub const Array = ArrayLen(T, len);
+
+        pub fn fromSlice(slice: []const T) Self {
+            if (comptime len == 0) return .{ .bits = 0 };
+
+            std.debug.assert(slice.len <= len);
+            var bits: Bits = 0;
+            for (slice, 0..) |item, i| {
+                bits |= @as(Bits, item) << item_bits * i;
+            }
+            return .{ .bits = bits };
+        }
+
+        pub fn toArray(self: Self, array: *Array) void {
+            inline for (0..len) |i| {
+                array[i] = @as(T, @truncate(self.bits >> item_bits * i));
+            }
+        }
+    };
+}
+
+pub const OffsetLenConfig = struct {
+    max_len: usize = 0,
+    max_offset: usize = 0,
+    embedded_len: usize = 0,
+
+    pub fn merge(self: *OffsetLenConfig, other: OffsetLenConfig) OffsetLenConfig {
+        if (other.max_len != 0) {
+            self.max_len = other.max_len;
+        }
+        if (other.max_offset != 0) {
+            self.max_offset = other.max_offset;
+        }
+        if (other.embedded_len != 0) {
+            self.embedded_len = other.embedded_len;
+        }
+    }
+
+    pub fn eql(self: OffsetLenConfig, other: OffsetLenConfig) bool {
+        return self.max_len == other.max_len and
+            self.max_offset == other.max_offset and
+            self.embedded_len == other.embedded_len;
+    }
+};
+
+pub fn OffsetLen(
+    comptime T: type,
+    comptime config: OffsetLenConfig,
+) type {
+    if (config.max_len == 0) {
+        @compileError("OffsetLen with max_len == 0 is not supported due to Zig compiler bug");
+    }
+
+    return packed struct {
+        data: packed union {
+            embedded: EmbeddedArray,
+            offset: Offset,
+        },
+        len: Len,
+
+        const Self = @This();
+
+        pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
+
+        pub const Offset = std.math.IntFittingRange(0, config.max_offset);
+        pub const Len = std.math.IntFittingRange(0, config.max_len);
+        pub const EmbeddedArray = PackedArray(T, config.embedded_len);
+
+        pub const max_len = config.max_len;
+        pub const max_offset = config.max_offset;
+        pub const embedded_len = config.embedded_len;
+
+        pub const EmbeddedArrayLen = ArrayLen(T, embedded_len);
+        pub const BackingArrayLen = ArrayLen(T, max_offset);
+        pub const BackingOffsetMap = OffsetMap(T, Offset);
+        pub const BackingLenTracking: type = [config.max_len]Offset;
+
+        pub fn fromSlice(
+            allocator: std.mem.Allocator,
+            backing: *BackingArrayLen,
+            map: *BackingOffsetMap,
+            slice: []const T,
+        ) !Self {
+            const len: Len = @intCast(slice.len);
+
+            if ((comptime embedded_len == max_len) or slice.len <= embedded_len) {
+                return .{
+                    .len = len,
+                    .data = .{
+                        .embedded = EmbeddedArray.fromSlice(slice),
+                    },
+                };
+            } else {
+                std.debug.print("putting in map of size: {d}\n", .{map.size});
+                const gop = try map.getOrPut(allocator, slice);
+                if (gop.found_existing) {
+                    return .{
+                        .len = len,
+                        .data = .{
+                            .offset = gop.value_ptr.*,
+                        },
+                    };
+                }
+
+                const offset = backing.len;
+                gop.value_ptr.* = offset;
+                backing.appendSliceAssumeCapacity(slice);
+
+                return .{
+                    .len = len,
+                    .data = .{
+                        .offset = offset,
+                    },
+                };
+            }
+        }
+
+        pub fn fromSliceTracked(
+            allocator: std.mem.Allocator,
+            backing: *BackingArrayLen,
+            map: *BackingOffsetMap,
+            len_tracking: *BackingLenTracking,
+            slice: []const T,
+        ) !Self {
+            const offset = backing.len;
+            const result = try Self.fromSlice(allocator, backing, map, slice);
+            if (backing.len > offset) {
+                len_tracking[result.len] += 1;
+            }
+
+            return result;
+        }
+
+        pub fn toSlice(self: Self, backing: BackingArrayLen, buffer: *EmbeddedArrayLen) []const T {
+            // Repeat the two return cases, first with two `comptime` checks,
+            // then with a runtime if/else
+
+            if (comptime embedded_len == max_len) {
+                return self.data.embedded.toArray(buffer)[0..self.len];
+            } else if (comptime embedded_len == 0) {
+                return backing.items[self.data.offset .. self.data.offset + self.len];
+            } else if (self.len <= embedded_len) {
+                return self.data.embedded.toArray(buffer)[0..self.len];
+            } else {
+                return backing.items[self.data.offset .. self.data.offset + self.len];
+            }
+        }
+    };
+}
+
+pub fn OffsetMap(comptime T: type, comptime Offset: type) type {
+    return std.HashMapUnmanaged([]const T, Offset, struct {
+        pub fn hash(self: @This(), s: []const T) u64 {
+            _ = self;
+            var hasher = std.hash.Wyhash.init(123581298318);
+            std.hash.autoHashStrat(&hasher, s, .Deep);
+            return hasher.final();
+        }
+        pub fn eql(self: @This(), a: []const T, b: []const T) bool {
+            _ = self;
+            return std.mem.eql(T, a, b);
+        }
+    }, std.hash_map.default_max_load_percentage);
+}
+
+// Note: this can only be used for types where the max value isn't a valid
+// value, which is the case for all optional types in FullData.
+pub fn PackedOptional(comptime T: type) type {
+    const max = std.math.maxInt(T);
+
+    return packed struct {
+        data: T,
+
+        const Self = @This();
+
+        pub const @"null" = Self{ .data = max };
+
+        pub fn fromOptional(optional: ?T) Self {
+            if (optional) |value| {
+                return .{ .data = value };
+            } else {
+                return .null;
+            }
+        }
+
+        pub fn toOptional(self: Self) ?T {
+            if (self.data != max) {
+                return self.data;
+            } else {
+                return null;
+            }
+        }
+    };
+}

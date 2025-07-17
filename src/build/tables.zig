@@ -6,24 +6,6 @@ pub const std_options: std.Options = .{
     .log_level = .debug,
 };
 
-// Note: when updating the UCD, after first updating the capacities in
-// `src/build/Ucd.zig` (see Note there), run `zig build` and then update the
-// below `starting_config` with the printed log messages.
-pub const starting_config = types.UcdConfig{
-    .name_max_len = 88,
-    .name_max_offset = 1031607,
-    .decomposition_mapping_max_len = 18,
-    .decomposition_mapping_max_offset = 8739,
-    .numeric_value_numeric_max_len = 13,
-    .numeric_value_numeric_max_offset = 2302,
-    .unicode_1_name_max_len = 55,
-    .unicode_1_name_max_offset = 49956,
-    .iso_comment_max_len = 0,
-    .iso_comment_max_offset = 0,
-    .case_folding_full_max_len = 3,
-    .case_folding_full_max_offset = 224,
-};
-
 pub fn main() !void {
     const all_fields = @import("fields");
 
@@ -103,17 +85,16 @@ pub fn writeData(
     ucd: *const Ucd,
     writer: anytype,
 ) !void {
-    const Data = types.Data(field_names, starting_config);
+    const Data = types.Data(field_names, types.default_config);
 
-    const BackingArrays = types.Backing(Data, "BackingArrayLen");
-    const BackingMaps = types.Backing(Data, "BackingOffsetMap");
+    const BackingArrays = types.SelectedDecls(Data, "BackingArrayLen");
+    const BackingMaps = types.SelectedDecls(Data, "BackingOffsetMap");
     var backing = BackingArrays{};
     const maps: BackingMaps = blk: {
         var m: BackingMaps = undefined;
         inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
-            @field(m, field.name) = try @FieldType(m, field.name).init(allocator);
+            @field(m, field.name) = .empty;
         }
-
         break :blk m;
     };
     defer {
@@ -133,17 +114,26 @@ pub fn writeData(
     var cp: u21 = types.min_code_point;
     while (cp < types.code_point_range_end) : (cp += 1) {
         const unicode_data = ucd.unicode_data[cp - types.min_code_point];
-        const case_folding = ucd.case_folding.get(cp) orelse types.CaseFolding{};
+        const case_folding = ucd.case_folding.get(cp);
         const derived_core_properties = ucd.derived_core_properties.get(cp) orelse types.DerivedCoreProperties{};
         const east_asian_width = ucd.east_asian_width.get(cp) orelse types.EastAsianWidth.neutral;
         const grapheme_break = ucd.grapheme_break.get(cp) orelse types.GraphemeBreak.other;
         const emoji_data = ucd.emoji_data.get(cp) orelse types.EmojiData{};
 
-        var data = Data{};
+        var data: Data = undefined;
 
         // UnicodeData fields
         if (@hasField(Data, "name")) {
-            data.name = Data.name.fromSlice(allocator, &backing.name, maps.name, unicode_data.name);
+            var buffer: @FieldType(unicode_data.name, "EmbeddedArrayLen") = undefined;
+            data.name = try .fromSlice(
+                allocator,
+                &backing.name,
+                maps.name,
+                unicode_data.name.toSlice(
+                    ucd.backing.name,
+                    &buffer,
+                ),
+            );
         }
         if (@hasField(Data, "general_category")) {
             data.general_category = unicode_data.general_category;
@@ -158,51 +148,93 @@ pub fn writeData(
             data.decomposition_type = unicode_data.decomposition_type;
         }
         if (@hasField(Data, "decomposition_mapping")) {
-            data.decomposition_mapping = data.decomposition_mapping.fromSlice(allocator, &backing.decomposition_mapping, maps.decomposition_mapping, unicode_data.decomposition_mapping);
+            var buffer: @FieldType(unicode_data.decomposition_mapping, "EmbeddedArrayLen") = undefined;
+            data.decomposition_mapping = try .fromSlice(
+                allocator,
+                &backing.decomposition_mapping,
+                maps.decomposition_mapping,
+                unicode_data.decomposition_mapping.toSlice(
+                    ucd.backing.decomposition_mapping,
+                    &buffer,
+                ),
+            );
         }
         if (@hasField(Data, "numeric_type")) {
             data.numeric_type = unicode_data.numeric_type;
         }
         if (@hasField(Data, "numeric_value_decimal")) {
-            data.numeric_value_decimal = unicode_data.numeric_value_decimal;
+            data.numeric_value_decimal = .fromOptional(unicode_data.numeric_value_decimal);
         }
         if (@hasField(Data, "numeric_value_digit")) {
-            data.numeric_value_digit = unicode_data.numeric_value_digit;
+            data.numeric_value_digit = .fromOptional(unicode_data.numeric_value_digit);
         }
         if (@hasField(Data, "numeric_value_numeric")) {
-            data.numeric_value_numeric = Data.numeric_value_numeric.fromSlice(allocator, &backing.numeric_value_numeric, maps.numeric_value_numeric, unicode_data.numeric_value_numeric);
+            var buffer: @FieldType(unicode_data.numeric_value_numeric, "EmbeddedArrayLen") = undefined;
+            data.numeric_value_numeric = try .fromSlice(
+                allocator,
+                &backing.numeric_value_numeric,
+                maps.numeric_value_numeric,
+                unicode_data.numeric_value_numeric.toSlice(
+                    ucd.backing.numeric_value_numeric,
+                    &buffer,
+                ),
+            );
         }
         if (@hasField(Data, "bidi_mirrored")) {
             data.bidi_mirrored = unicode_data.bidi_mirrored;
         }
         if (@hasField(Data, "unicode_1_name")) {
-            data.unicode_1_name = Data.unicode_1_name.fromSlice(allocator, &backing.unicode_1_name, maps.unicode_1_name, unicode_data.unicode_1_name);
-        }
-        if (@hasField(Data, "iso_comment")) {
-            data.iso_comment = Data.iso_comment.fromSlice(allocator, &backing.iso_comment, maps.iso_comment, unicode_data.iso_comment);
+            var buffer: @FieldType(unicode_data.unicode_1_name, "EmbeddedArrayLen") = undefined;
+            data.unicode_1_name = try .fromSlice(
+                allocator,
+                &backing.unicode_1_name,
+                maps.unicode_1_name,
+                unicode_data.unicode_1_name.toSlice(
+                    ucd.backing.unicode_1_name,
+                    &buffer,
+                ),
+            );
         }
         if (@hasField(Data, "simple_uppercase_mapping")) {
-            data.simple_uppercase_mapping = unicode_data.simple_uppercase_mapping;
+            data.simple_uppercase_mapping = .fromOptional(unicode_data.simple_uppercase_mapping);
         }
         if (@hasField(Data, "simple_lowercase_mapping")) {
-            data.simple_lowercase_mapping = unicode_data.simple_lowercase_mapping;
+            data.simple_lowercase_mapping = .fromOptional(unicode_data.simple_lowercase_mapping);
         }
         if (@hasField(Data, "simple_titlecase_mapping")) {
-            data.simple_titlecase_mapping = unicode_data.simple_titlecase_mapping;
+            data.simple_titlecase_mapping = .fromOptional(unicode_data.simple_titlecase_mapping);
         }
 
         // CaseFolding fields
         if (@hasField(Data, "case_folding_simple")) {
-            data.case_folding_simple = case_folding.simple;
+            if (case_folding) |cf| {
+                data.case_folding_simple = .fromOptional(cf.case_folding_simple);
+            } else {
+                data.case_folding_simple = .null;
+            }
         }
         if (@hasField(Data, "case_folding_turkish")) {
-            data.case_folding_turkish = case_folding.turkish;
+            if (case_folding) |cf| {
+                data.case_folding_turkish = .fromOptional(cf.case_folding_turkish);
+            } else {
+                data.case_folding_turkish = .null;
+            }
         }
         if (@hasField(Data, "case_folding_full")) {
-            data.case_folding_full = case_folding.full;
-        }
-        if (@hasField(Data, "case_folding_full_len")) {
-            data.case_folding_full_len = case_folding.full_len;
+            if (case_folding) |cf| {
+                var buffer: @FieldType(case_folding.case_folding_full, "EmbeddedArrayLen") = undefined;
+                data.case_folding_full = try .fromSlice(
+                    allocator,
+                    &backing.case_folding_full,
+                    maps.case_folding_full,
+                    cf.case_folding_full.toSlice(
+                        ucd.backing.case_folding_full,
+                        &buffer,
+                    ),
+                );
+            } else {
+                data.case_folding_full = .empty;
+            }
         }
 
         // DerivedCoreProperties fields
@@ -320,7 +352,7 @@ pub fn writeData(
         try writer.print(
             \\    .{s} = {},
             \\
-        , .{ field.name, @field(starting_config, field.name) });
+        , .{ field.name, @field(types.default_config, field.name) });
     }
 
     try writer.print(
@@ -343,7 +375,7 @@ pub fn writeData(
 
     try writer.print(
         \\
-        \\pub const backing{}: types.Backing(Data{}, "BackingArrayLen") = .{{
+        \\pub const backing{}: types.SelectedDecls(Data{}, "BackingArrayLen") = .{{
         \\
     , .{ fields_index, fields_index });
 

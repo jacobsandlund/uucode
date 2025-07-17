@@ -22,7 +22,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const types = @import("types");
-const starting_config = @import("tables.zig").starting_config;
 
 const UnicodeData = types.UnicodeData;
 const CaseFolding = types.CaseFolding;
@@ -37,116 +36,210 @@ derived_core_properties: std.AutoHashMapUnmanaged(u21, DerivedCoreProperties),
 east_asian_width: std.AutoHashMapUnmanaged(u21, EastAsianWidth),
 grapheme_break: std.AutoHashMapUnmanaged(u21, GraphemeBreak),
 emoji_data: std.AutoHashMapUnmanaged(u21, EmojiData),
-string_pool: std.ArrayListUnmanaged(u8),
-code_point_pool: std.ArrayListUnmanaged(u21),
+backing: *BackingArrays,
 
 const Ucd = @This();
 
-// Note: when updating the UCD, give more capacity here and then run `zig
-// build` and then update the below constants with the printed log message.
-//const string_pool_capacity = 10_000_000;
-//const code_point_pool_capacity = 100_000;
-const string_pool_capacity = 1083865;
-const code_point_pool_capacity = 8739;
+const OffsetLenData = struct {
+    const name = @FieldType(UnicodeData, "name");
+    const decomposition_mapping = @FieldType(UnicodeData, "decomposition_mapping");
+    const numeric_value_numeric = @FieldType(UnicodeData, "numeric_value_numeric");
+    const unicode_1_name = @FieldType(UnicodeData, "unicode_1_name");
+    const case_folding_full = @FieldType(CaseFolding, "case_folding_full");
+};
+
+const BackingArrays = struct {
+    name: OffsetLenData.name.BackingArrayLen,
+    decomposition_mapping: OffsetLenData.decomposition_mapping.BackingArrayLen,
+    numeric_value_numeric: OffsetLenData.numeric_value_numeric.BackingArrayLen,
+    unicode_1_name: OffsetLenData.unicode_1_name.BackingArrayLen,
+    case_folding_full: OffsetLenData.case_folding_full.BackingArrayLen,
+};
+
+const BackingMaps = struct {
+    name: OffsetLenData.name.BackingOffsetMap,
+    decomposition_mapping: OffsetLenData.decomposition_mapping.BackingOffsetMap,
+    numeric_value_numeric: OffsetLenData.numeric_value_numeric.BackingOffsetMap,
+    unicode_1_name: OffsetLenData.unicode_1_name.BackingOffsetMap,
+    case_folding_full: OffsetLenData.case_folding_full.BackingOffsetMap,
+};
+
+const BackingLenTracking = struct {
+    name: OffsetLenData.name.BackingLenTracking,
+    decomposition_mapping: OffsetLenData.decomposition_mapping.BackingLenTracking,
+    numeric_value_numeric: OffsetLenData.numeric_value_numeric.BackingLenTracking,
+    unicode_1_name: OffsetLenData.unicode_1_name.BackingLenTracking,
+    case_folding_full: OffsetLenData.case_folding_full.BackingLenTracking,
+};
 
 pub fn init(allocator: std.mem.Allocator) !Ucd {
-    const unicode_data = try allocator.alloc(UnicodeData, types.num_code_points);
-    var config = types.UcdConfig{};
-
     var ucd = Ucd{
-        .unicode_data = unicode_data,
+        .unicode_data = undefined,
         .case_folding = .{},
         .derived_core_properties = .{},
         .east_asian_width = .{},
         .grapheme_break = .{},
         .emoji_data = .{},
-        .string_pool = try std.ArrayListUnmanaged(u8).initCapacity(allocator, string_pool_capacity),
-        .code_point_pool = try std.ArrayListUnmanaged(u21).initCapacity(allocator, code_point_pool_capacity),
+        .backing = undefined,
     };
 
-    try parseUnicodeData(allocator, ucd.unicode_data, &ucd.string_pool, &ucd.code_point_pool, &config);
-    try parseCaseFolding(allocator, &ucd.case_folding, &config);
+    ucd.unicode_data = try allocator.alloc(UnicodeData, types.num_code_points);
+    errdefer allocator.free(ucd.unicode_data);
+
+    ucd.backing = blk: {
+        const b: *BackingArrays = try allocator.create(BackingArrays);
+        b.* = std.mem.zeroInit(BackingArrays, .{});
+
+        break :blk b;
+    };
+    errdefer allocator.destroy(ucd.backing);
+
+    var maps = blk: {
+        var m: BackingMaps = undefined;
+        inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
+            @field(m, field.name) = .empty;
+        }
+        break :blk m;
+    };
+    defer {
+        inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
+            @field(maps, field.name).deinit(allocator);
+        }
+    }
+
+    var tracking = blk: {
+        var lt: BackingLenTracking = undefined;
+        inline for (@typeInfo(BackingLenTracking).@"struct".fields) |field| {
+            const field_info = @typeInfo(field.type);
+            @field(lt, field.name) = [_]@field(OffsetLenData, field.name).Offset{0} ** field_info.array.len;
+        }
+
+        break :blk lt;
+    };
+
+    var config = types.UcdConfig{};
+
+    try parseUnicodeData(allocator, &ucd, &maps, &tracking, &config);
+    try parseCaseFolding(allocator, &ucd, &maps, &tracking, &config);
     try parseDerivedCoreProperties(allocator, &ucd.derived_core_properties);
     try parseEastAsianWidth(allocator, &ucd.east_asian_width);
     try parseGraphemeBreakProperty(allocator, &ucd.grapheme_break);
     try parseEmojiData(allocator, &ucd.emoji_data);
 
-    var has_capacity_mismatch = false;
-    var has_config_mismatch = false;
+    var min_config_mismatch = false;
 
-    if (ucd.string_pool.items.len != ucd.string_pool.capacity or
-        ucd.code_point_pool.items.len != ucd.code_point_pool.capacity)
-    {
-        has_capacity_mismatch = true;
-        std.log.err(
-            \\Update the capacities in 'src/build/Ucd.zig' to match this:
-            \\
-            \\// Note: when updating the UCD, give more capacity here and then run `zig
-            \\// build` and then update the below constants with the printed log message.
-            \\//const string_pool_capacity = 10_000_000;
-            \\//const code_point_pool_capacity = 100_000;
-            \\const string_pool_capacity = {};
-            \\const code_point_pool_capacity = {};
-            \\
-            \\
-        , .{ ucd.string_pool.items.len, ucd.code_point_pool.items.len });
-    }
+    if (!types.min_config.eql(config)) {
+        min_config_mismatch = true;
 
-    if (starting_config.name_max_len != config.name_max_len or
-        starting_config.name_max_offset != config.name_max_offset or
-        starting_config.decomposition_mapping_max_len != config.decomposition_mapping_max_len or
-        starting_config.decomposition_mapping_max_offset != config.decomposition_mapping_max_offset or
-        starting_config.numeric_value_numeric_max_len != config.numeric_value_numeric_max_len or
-        starting_config.numeric_value_numeric_max_offset != config.numeric_value_numeric_max_offset or
-        starting_config.unicode_1_name_max_len != config.unicode_1_name_max_len or
-        starting_config.unicode_1_name_max_offset != config.unicode_1_name_max_offset or
-        starting_config.iso_comment_max_len != config.iso_comment_max_len or
-        starting_config.iso_comment_max_offset != config.iso_comment_max_offset or
-        starting_config.case_folding_full_max_len != config.case_folding_full_max_len or
-        starting_config.case_folding_full_max_offset != config.case_folding_full_max_offset)
-    {
-        has_config_mismatch = true;
+        std.log.err("min_config: {}, config: {}", .{ types.min_config, config });
 
         std.log.err(
-            \\Update the `starting_config` values in 'src/build/tables.zig' to match this:
-            \\
-            \\// Note: when updating the UCD, after first updating the capacities in
-            \\// `src/build/Ucd.zig` (see Note there), run `zig build` and then update the
-            \\// below `starting_config` with the printed log messages.
-            \\pub const starting_config = types.UcdConfig{{
-            \\    .name_max_len = {},
-            \\    .name_max_offset = {},
-            \\    .decomposition_mapping_max_len = {},
-            \\    .decomposition_mapping_max_offset = {},
-            \\    .numeric_value_numeric_max_len = {},
-            \\    .numeric_value_numeric_max_offset = {},
-            \\    .unicode_1_name_max_len = {},
-            \\    .unicode_1_name_max_offset = {},
-            \\    .iso_comment_max_len = {},
-            \\    .iso_comment_max_offset = {},
-            \\    .case_folding_full_max_len = {},
-            \\    .case_folding_full_max_offset = {},
+            \\pub const min_config = UcdConfig{{
+            \\    .name = .{{
+            \\        .max_len = {},
+            \\        .max_offset = {} + 100 * extra_space_when_updating_ucd,
+            \\        .embedded_len = {},
+            \\    }},
+            \\    .decomposition_mapping = .{{
+            \\        .max_len = {},
+            \\        .max_offset = {} + extra_space_when_updating_ucd,
+            \\        .embedded_len = {},
+            \\    }},
+            \\    .numeric_value_numeric = .{{
+            \\        .max_len = {},
+            \\        .max_offset = {} + extra_space_when_updating_ucd,
+            \\        .embedded_len = {},
+            \\    }},
+            \\    .unicode_1_name = .{{
+            \\        .max_len = {},
+            \\        .max_offset = {} + 5 * extra_space_when_updating_ucd,
+            \\        .embedded_len = {},
+            \\    }},
+            \\    .case_folding_full = .{{
+            \\        .max_len = {},
+            \\        .max_offset = {} + extra_space_when_updating_ucd,
+            \\        .embedded_len = {},
+            \\    }},
             \\}};
             \\
             \\
         , .{
-            config.name_max_len,
-            config.name_max_offset,
-            config.decomposition_mapping_max_len,
-            config.decomposition_mapping_max_offset,
-            config.numeric_value_numeric_max_len,
-            config.numeric_value_numeric_max_offset,
-            config.unicode_1_name_max_len,
-            config.unicode_1_name_max_offset,
-            config.iso_comment_max_len,
-            config.iso_comment_max_offset,
-            config.case_folding_full_max_len,
-            config.case_folding_full_max_offset,
+            config.name.max_len,
+            config.name.max_offset,
+            config.name.embedded_len,
+            config.decomposition_mapping.max_len,
+            config.decomposition_mapping.max_offset,
+            config.decomposition_mapping.embedded_len,
+            config.numeric_value_numeric.max_len,
+            config.numeric_value_numeric.max_offset,
+            config.numeric_value_numeric.embedded_len,
+            config.unicode_1_name.max_len,
+            config.unicode_1_name.max_offset,
+            config.unicode_1_name.embedded_len,
+            config.case_folding_full.max_len,
+            config.case_folding_full.max_offset,
+            config.case_folding_full.embedded_len,
         });
     }
 
-    if (has_capacity_mismatch or has_config_mismatch) {
-        @panic("Capacity and/or `max_len` mismatch - update as instructed above");
+    var default_config_mismatch = false;
+
+    if (!types.default_config.eql(config)) {
+        default_config_mismatch = true;
+
+        std.log.err("default_config: {}, config: {}", .{ types.default_config, config });
+
+        std.log.err(
+            \\pub const default_config = UcdConfig{{
+            \\    .name = .{{
+            \\        .max_len = {},
+            \\        .max_offset = {},
+            \\        .embedded_len = {},
+            \\    }},
+            \\    .decomposition_mapping = .{{
+            \\        .max_len = {},
+            \\        .max_offset = {},
+            \\        .embedded_len = {},
+            \\    }},
+            \\    .numeric_value_numeric = .{{
+            \\        .max_len = {},
+            \\        .max_offset = {},
+            \\        .embedded_len = {},
+            \\    }},
+            \\    .unicode_1_name = .{{
+            \\        .max_len = {},
+            \\        .max_offset = {},
+            \\        .embedded_len = {},
+            \\    }},
+            \\    .case_folding_full = .{{
+            \\        .max_len = {},
+            \\        .max_offset = {},
+            \\        .embedded_len = {},
+            \\    }},
+            \\}};
+            \\
+            \\
+        , .{
+            config.name.max_len,
+            config.name.max_offset,
+            config.name.embedded_len,
+            config.decomposition_mapping.max_len,
+            config.decomposition_mapping.max_offset,
+            config.decomposition_mapping.embedded_len,
+            config.numeric_value_numeric.max_len,
+            config.numeric_value_numeric.max_offset,
+            config.numeric_value_numeric.embedded_len,
+            config.unicode_1_name.max_len,
+            config.unicode_1_name.max_offset,
+            config.unicode_1_name.embedded_len,
+            config.case_folding_full.max_len,
+            config.case_folding_full.max_offset,
+            config.case_folding_full.embedded_len,
+        });
+    }
+
+    if (min_config_mismatch or default_config_mismatch) {
+        @panic("config mismatch - update as instructed above");
     }
 
     return ucd;
@@ -159,8 +252,7 @@ pub fn deinit(self: *Ucd, allocator: std.mem.Allocator) void {
     self.east_asian_width.deinit(allocator);
     self.grapheme_break.deinit(allocator);
     self.emoji_data.deinit(allocator);
-    self.string_pool.deinit(allocator);
-    self.code_point_pool.deinit(allocator);
+    allocator.destroy(self.backing);
 }
 
 fn parseCodePoint(str: []const u8) !u21 {
@@ -185,27 +277,11 @@ fn stripComment(line: []const u8) []const u8 {
     return std.mem.trim(u8, line, " \t");
 }
 
-fn copyStringToPool(pool: *std.ArrayListUnmanaged(u8), str: []const u8) []const u8 {
-    if (str.len == 0) return "";
-    std.debug.assert(str.len <= 255);
-    const start = pool.items.len;
-    pool.appendSliceAssumeCapacity(str);
-    return pool.items[start .. start + str.len];
-}
-
-fn copyCodePointsToPool(pool: *std.ArrayListUnmanaged(u21), code_points: []const u21) []const u21 {
-    if (code_points.len == 0) return &[_]u21{};
-    std.debug.assert(code_points.len <= 255);
-    const start = pool.items.len;
-    pool.appendSliceAssumeCapacity(code_points);
-    return pool.items[start .. start + code_points.len];
-}
-
 fn parseUnicodeData(
     allocator: std.mem.Allocator,
-    array: []UnicodeData,
-    pool: *std.ArrayListUnmanaged(u8),
-    code_point_pool: *std.ArrayListUnmanaged(u21),
+    ucd: *Ucd,
+    maps: *BackingMaps,
+    tracking: *BackingLenTracking,
     config: *types.UcdConfig,
 ) !void {
     const file_path = "data/ucd/UnicodeData.txt";
@@ -219,19 +295,18 @@ fn parseUnicodeData(
     var lines = std.mem.splitScalar(u8, content, '\n');
     var next_cp: u21 = types.min_code_point;
     const default_data = UnicodeData{
-        .name = "",
+        .name = .empty,
         .general_category = types.GeneralCategory.Cn, // Other, not assigned
         .canonical_combining_class = 0,
         .bidi_class = types.BidiClass.L,
         .decomposition_type = types.DecompositionType.default,
-        .decomposition_mapping = &[_]u21{},
+        .decomposition_mapping = .empty,
         .numeric_type = types.NumericType.none,
         .numeric_value_decimal = null,
         .numeric_value_digit = null,
-        .numeric_value_numeric = "",
+        .numeric_value_numeric = .empty,
         .bidi_mirrored = false,
-        .unicode_1_name = "",
-        .iso_comment = "",
+        .unicode_1_name = .empty,
         .simple_uppercase_mapping = null,
         .simple_lowercase_mapping = null,
         .simple_titlecase_mapping = null,
@@ -248,32 +323,32 @@ fn parseUnicodeData(
 
         while (cp > next_cp) : (next_cp += 1) {
             // Fill any gaps or ranges
-            array[next_cp - types.min_code_point] = range_data orelse default_data;
+            ucd.unicode_data[next_cp - types.min_code_point] = range_data orelse default_data;
         }
 
         if (range_data != null) {
             // We're in a range, so the next entry marks the last, with the same
             // information.
             std.debug.assert(std.mem.endsWith(u8, parts.next().?, "Last>"));
-            array[next_cp - types.min_code_point] = range_data.?;
+            ucd.unicode_data[next_cp - types.min_code_point] = range_data.?;
             range_data = null;
             continue;
         }
 
-        const name_str = parts.next().?;
-        const general_category_str = parts.next().?;
-        const canonical_combining_class = std.fmt.parseInt(u8, parts.next().?, 10) catch 0;
-        const bidi_class_str = parts.next().?;
-        const decomposition_str = parts.next().?; // Combined type and mapping
-        const numeric_decimal_str = parts.next().?; // Field 6: Numeric value for Decimal type
-        const numeric_digit_str = parts.next().?; // Field 7: Numeric value for Digit type
-        const numeric_numeric_str = parts.next().?; // Field 8: Numeric value for Numeric type
-        const bidi_mirrored = std.mem.eql(u8, parts.next().?, "Y");
-        const unicode_1_name = parts.next().?;
-        const iso_comment = parts.next().?;
-        const simple_uppercase_mapping_str = parts.next().?;
-        const simple_lowercase_mapping_str = parts.next().?;
-        const simple_titlecase_mapping_str = parts.next().?;
+        const name_str = parts.next().?; // Field 1
+        const general_category_str = parts.next().?; // Field 2
+        const canonical_combining_class = std.fmt.parseInt(u8, parts.next().?, 10) catch 0; // Field 3
+        const bidi_class_str = parts.next().?; // Field 4
+        const decomposition_str = parts.next().?; // Field 5: Combined type and mapping
+        const numeric_decimal_str = parts.next().?; // Field 6
+        const numeric_digit_str = parts.next().?; // Field 7
+        const numeric_numeric_str = parts.next().?; // Field 8
+        const bidi_mirrored = std.mem.eql(u8, parts.next().?, "Y"); // Field 9
+        const unicode_1_name = parts.next().?; // Field 10
+        _ = parts.next().?; // Field 11: Obsolete ISO_Comment
+        const simple_uppercase_mapping_str = parts.next().?; // Field 12
+        const simple_lowercase_mapping_str = parts.next().?; // Field 13
+        const simple_titlecase_mapping_str = parts.next().?; // Field 14
 
         const name = if (std.mem.endsWith(u8, name_str, "First>")) name_str["<".len..(name_str.len - ", First>".len)] else name_str;
         const general_category = std.meta.stringToEnum(types.GeneralCategory, general_category_str) orelse {
@@ -293,7 +368,7 @@ fn parseUnicodeData(
         // Parse decomposition type and mapping from single field
         // Default: character decomposes to itself (field 5 empty)
         var decomposition_type = types.DecompositionType.default;
-        var decomposition_mapping: []const u21 = &[_]u21{};
+        var decomposition_mapping: OffsetLenData.decomposition_mapping = .empty;
 
         if (decomposition_str.len > 0) {
             // Non-empty field means canonical unless explicit type is given
@@ -330,7 +405,7 @@ fn parseUnicodeData(
                     mapping_len += 1;
                 }
 
-                decomposition_mapping = copyCodePointsToPool(code_point_pool, temp_mapping[0..mapping_len]);
+                decomposition_mapping = try .fromSliceTracked(allocator, &ucd.backing.decomposition_mapping, &maps.decomposition_mapping, &tracking.decomposition_mapping, temp_mapping[0..mapping_len]);
             }
         }
 
@@ -338,7 +413,7 @@ fn parseUnicodeData(
         var numeric_type = types.NumericType.none;
         var numeric_value_decimal: ?u4 = null;
         var numeric_value_digit: ?u4 = null;
-        var numeric_value_numeric: []const u8 = "";
+        var numeric_value_numeric: OffsetLenData.numeric_value_numeric = .empty;
 
         if (numeric_decimal_str.len > 0) {
             numeric_type = types.NumericType.decimal;
@@ -354,14 +429,14 @@ fn parseUnicodeData(
             };
         } else if (numeric_numeric_str.len > 0) {
             numeric_type = types.NumericType.numeric;
-            numeric_value_numeric = copyStringToPool(pool, numeric_numeric_str);
-            if (numeric_value_numeric.len > config.numeric_value_numeric_max_len) {
-                config.numeric_value_numeric_max_len = numeric_value_numeric.len;
+            numeric_value_numeric = try .fromSliceTracked(allocator, &ucd.backing.numeric_value_numeric, &maps.numeric_value_numeric, &tracking.numeric_value_numeric, numeric_numeric_str);
+            if (numeric_value_numeric.len > config.numeric_value_numeric.max_len) {
+                config.numeric_value_numeric.max_len = numeric_value_numeric.len;
             }
         }
 
         const unicode_data = UnicodeData{
-            .name = copyStringToPool(pool, name),
+            .name = try .fromSliceTracked(allocator, &ucd.backing.name, &maps.name, &tracking.name, name),
             .general_category = general_category,
             .canonical_combining_class = canonical_combining_class,
             .bidi_class = bidi_class,
@@ -372,30 +447,25 @@ fn parseUnicodeData(
             .numeric_value_digit = numeric_value_digit,
             .numeric_value_numeric = numeric_value_numeric,
             .bidi_mirrored = bidi_mirrored,
-            .unicode_1_name = copyStringToPool(pool, unicode_1_name),
-            .iso_comment = copyStringToPool(pool, iso_comment),
+            .unicode_1_name = try .fromSliceTracked(allocator, &ucd.backing.unicode_1_name, &maps.unicode_1_name, &tracking.unicode_1_name, unicode_1_name),
             .simple_uppercase_mapping = simple_uppercase_mapping,
             .simple_lowercase_mapping = simple_lowercase_mapping,
             .simple_titlecase_mapping = simple_titlecase_mapping,
         };
 
-        config.name_max_offset += unicode_data.name.len;
-        config.decomposition_mapping_max_offset += unicode_data.decomposition_mapping.len;
-        config.numeric_value_numeric_max_offset += unicode_data.numeric_value_numeric.len;
-        config.unicode_1_name_max_offset += unicode_data.unicode_1_name.len;
-        config.iso_comment_max_offset += unicode_data.iso_comment.len;
+        config.name.max_offset += unicode_data.name.len;
+        config.decomposition_mapping.max_offset += unicode_data.decomposition_mapping.len;
+        config.numeric_value_numeric.max_offset += unicode_data.numeric_value_numeric.len;
+        config.unicode_1_name.max_offset += unicode_data.unicode_1_name.len;
 
-        if (unicode_data.name.len > config.name_max_len) {
-            config.name_max_len = unicode_data.name.len;
+        if (unicode_data.name.len > config.name.max_len) {
+            config.name.max_len = unicode_data.name.len;
         }
-        if (unicode_data.decomposition_mapping.len > config.decomposition_mapping_max_len) {
-            config.decomposition_mapping_max_len = unicode_data.decomposition_mapping.len;
+        if (unicode_data.decomposition_mapping.len > config.decomposition_mapping.max_len) {
+            config.decomposition_mapping.max_len = unicode_data.decomposition_mapping.len;
         }
-        if (unicode_data.unicode_1_name.len > config.unicode_1_name_max_len) {
-            config.unicode_1_name_max_len = unicode_data.unicode_1_name.len;
-        }
-        if (unicode_data.iso_comment.len > config.iso_comment_max_len) {
-            config.iso_comment_max_len = unicode_data.iso_comment.len;
+        if (unicode_data.unicode_1_name.len > config.unicode_1_name.max_len) {
+            config.unicode_1_name.max_len = unicode_data.unicode_1_name.len;
         }
 
         // Handle range entries with "First>" and "Last>"
@@ -403,18 +473,20 @@ fn parseUnicodeData(
             range_data = unicode_data;
         }
 
-        array[cp - types.min_code_point] = unicode_data;
+        ucd.unicode_data[cp - types.min_code_point] = unicode_data;
     }
 
     // Fill any remaining gaps at the end with default values
     while (next_cp < types.code_point_range_end) : (next_cp += 1) {
-        array[next_cp - types.min_code_point] = default_data;
+        ucd.unicode_data[next_cp - types.min_code_point] = default_data;
     }
 }
 
 fn parseCaseFolding(
     allocator: std.mem.Allocator,
-    map: *std.AutoHashMapUnmanaged(u21, CaseFolding),
+    ucd: *Ucd,
+    maps: *BackingMaps,
+    tracking: *BackingLenTracking,
     config: *types.UcdConfig,
 ) !void {
     const file_path = "data/ucd/CaseFolding.txt";
@@ -454,34 +526,32 @@ fn parseCaseFolding(
             mapping_len += 1;
         }
 
-        const result = try map.getOrPut(allocator, cp);
+        const result = try ucd.case_folding.getOrPut(allocator, cp);
         if (!result.found_existing) {
             result.value_ptr.* = CaseFolding{
-                .simple = undefined,
-                .full = undefined,
+                .case_folding_simple = undefined,
+                .case_folding_turkish = null,
+                .case_folding_full = undefined,
             };
         }
 
         switch (status) {
             'S', 'C' => {
                 std.debug.assert(mapping_len == 1);
-                result.value_ptr.simple = mapping[0];
+                result.value_ptr.case_folding_simple = mapping[0];
             },
             'F' => {
                 std.debug.assert(mapping_len > 1);
-                for (mapping[0..mapping_len], 0..) |mapped_cp, i| {
-                    result.value_ptr.full[i] = mapped_cp;
-                }
-                result.value_ptr.full_len = @intCast(mapping_len);
+                result.value_ptr.case_folding_full = try .fromSliceTracked(allocator, &ucd.backing.case_folding_full, &maps.case_folding_full, &tracking.case_folding_full, mapping[0..mapping_len]);
 
-                config.case_folding_full_max_offset += mapping_len;
-                if (mapping_len > config.case_folding_full_max_len) {
-                    config.case_folding_full_max_len = mapping_len;
+                config.case_folding_full.max_offset += mapping_len;
+                if (mapping_len > config.case_folding_full.max_len) {
+                    config.case_folding_full.max_len = mapping_len;
                 }
             },
             'T' => {
                 std.debug.assert(mapping_len == 1);
-                result.value_ptr.turkish = mapping[0];
+                result.value_ptr.case_folding_turkish = mapping[0];
             },
             else => unreachable,
         }
