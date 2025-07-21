@@ -131,8 +131,6 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
     if (!types.min_config.eql(config)) {
         min_config_mismatch = true;
 
-        std.log.err("min_config: {}, config: {}", .{ types.min_config, config });
-
         std.log.err(
             \\pub const min_config = UcdConfig{{
             \\    .name = .{{
@@ -186,8 +184,6 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
 
     if (!types.default_config.eql(config)) {
         default_config_mismatch = true;
-
-        std.log.err("default_config: {}, config: {}", .{ types.default_config, config });
 
         std.log.err(
             \\pub const default_config = UcdConfig{{

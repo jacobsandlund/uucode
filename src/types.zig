@@ -90,8 +90,8 @@ pub const UcdConfig = struct {
     }
 };
 
-const extra_space_when_updating_ucd = 1000;
-//const extra_space_when_updating_ucd = 0;
+//const extra_space_when_updating_ucd = 1000;
+const extra_space_when_updating_ucd = 0;
 
 pub const min_config = UcdConfig{
     .name = .{
@@ -533,7 +533,6 @@ pub fn OffsetLen(
                     },
                 };
             } else {
-                std.debug.print("putting in map of size: {d}\n", .{map.size});
                 const gop = try map.getOrPut(allocator, slice);
                 if (gop.found_existing) {
                     return .{
@@ -547,6 +546,7 @@ pub fn OffsetLen(
                 const offset = backing.len;
                 gop.value_ptr.* = offset;
                 backing.appendSliceAssumeCapacity(slice);
+                gop.key_ptr.* = backing.items[offset .. offset + slice.len];
 
                 return .{
                     .len = len,
@@ -567,7 +567,7 @@ pub fn OffsetLen(
             const offset = backing.len;
             const result = try Self.fromSlice(allocator, backing, map, slice);
             if (backing.len > offset) {
-                len_tracking[result.len] += 1;
+                len_tracking[result.len - 1] += 1;
             }
 
             return result;
@@ -594,7 +594,7 @@ pub fn OffsetMap(comptime T: type, comptime Offset: type) type {
     return std.HashMapUnmanaged([]const T, Offset, struct {
         pub fn hash(self: @This(), s: []const T) u64 {
             _ = self;
-            var hasher = std.hash.Wyhash.init(123581298318);
+            var hasher = std.hash.Wyhash.init(838501850);
             std.hash.autoHashStrat(&hasher, s, .Deep);
             return hasher.final();
         }
