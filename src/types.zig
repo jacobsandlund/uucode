@@ -90,33 +90,33 @@ pub const UcdConfig = struct {
     }
 };
 
-//const extra_space_when_updating_ucd = 1000;
-const extra_space_when_updating_ucd = 0;
+pub const updating_ucd = false;
+const ucd_config = if (updating_ucd) updating_ucd_config else default_config;
 
-pub const min_config = UcdConfig{
+pub const updating_ucd_config = UcdConfig{
     .name = .{
-        .max_len = 88,
-        .max_offset = 1031607 + 100 * extra_space_when_updating_ucd,
+        .max_len = 200,
+        .max_offset = 2_000_000,
         .embedded_len = 0,
     },
     .decomposition_mapping = .{
-        .max_len = 18,
-        .max_offset = 8739 + extra_space_when_updating_ucd,
+        .max_len = 40,
+        .max_offset = 16_000,
         .embedded_len = 0,
     },
     .numeric_value_numeric = .{
-        .max_len = 13,
-        .max_offset = 2302 + extra_space_when_updating_ucd,
+        .max_len = 30,
+        .max_offset = 4000,
         .embedded_len = 0,
     },
     .unicode_1_name = .{
-        .max_len = 55,
-        .max_offset = 49956 + 5 * extra_space_when_updating_ucd,
+        .max_len = 120,
+        .max_offset = 100_000,
         .embedded_len = 0,
     },
     .case_folding_full = .{
-        .max_len = 3,
-        .max_offset = 224 + extra_space_when_updating_ucd,
+        .max_len = 9,
+        .max_offset = 500,
         .embedded_len = 0,
     },
 };
@@ -124,27 +124,27 @@ pub const min_config = UcdConfig{
 pub const default_config = UcdConfig{
     .name = .{
         .max_len = 88,
-        .max_offset = 1031607,
-        .embedded_len = 0,
+        .max_offset = 1031029,
+        .embedded_len = 2,
     },
     .decomposition_mapping = .{
         .max_len = 18,
-        .max_offset = 8739,
+        .max_offset = 6454,
         .embedded_len = 0,
     },
     .numeric_value_numeric = .{
         .max_len = 13,
-        .max_offset = 2302,
-        .embedded_len = 0,
+        .max_offset = 503,
+        .embedded_len = 1,
     },
     .unicode_1_name = .{
         .max_len = 55,
         .max_offset = 49956,
-        .embedded_len = 0,
+        .embedded_len = 1,
     },
     .case_folding_full = .{
         .max_len = 3,
-        .max_offset = 224,
+        .max_offset = 160,
         .embedded_len = 0,
     },
 };
@@ -237,18 +237,18 @@ pub const NumericType = enum(u2) {
 };
 
 pub const UnicodeData = struct {
-    name: OffsetLen(u8, min_config.name),
+    name: OffsetLen(u8, ucd_config.name),
     general_category: GeneralCategory,
     canonical_combining_class: u8,
     bidi_class: BidiClass,
     decomposition_type: DecompositionType,
-    decomposition_mapping: OffsetLen(u21, min_config.decomposition_mapping),
+    decomposition_mapping: OffsetLen(u21, ucd_config.decomposition_mapping),
     numeric_type: NumericType,
     numeric_value_decimal: ?u4,
     numeric_value_digit: ?u4,
-    numeric_value_numeric: OffsetLen(u8, min_config.numeric_value_numeric),
+    numeric_value_numeric: OffsetLen(u8, ucd_config.numeric_value_numeric),
     bidi_mirrored: bool,
-    unicode_1_name: OffsetLen(u8, min_config.unicode_1_name),
+    unicode_1_name: OffsetLen(u8, ucd_config.unicode_1_name),
     simple_uppercase_mapping: ?u21,
     simple_lowercase_mapping: ?u21,
     simple_titlecase_mapping: ?u21,
@@ -257,7 +257,7 @@ pub const UnicodeData = struct {
 pub const CaseFolding = struct {
     case_folding_simple: u21,
     case_folding_turkish: ?u21,
-    case_folding_full: OffsetLen(u21, min_config.case_folding_full),
+    case_folding_full: OffsetLen(u21, ucd_config.case_folding_full),
 };
 
 pub const IndicConjunctBreak = enum(u2) {
@@ -441,14 +441,21 @@ pub fn PackedArray(comptime T: type, comptime len: comptime_int) type {
 
         pub const Bits = std.meta.Int(.unsigned, item_bits * len);
         pub const Array = ArrayLen(T, len);
+        const ShiftBits = std.math.Log2Int(Bits);
 
         pub fn fromSlice(slice: []const T) Self {
-            if (comptime len == 0) return .{ .bits = 0 };
+            if ((comptime len == 0) or slice.len == 0) return .{ .bits = 0 };
+
+            // This may make 1 length slices slightly faster, but it's
+            // primarily avoiding an issue where `item_bits` is actually too
+            // big to be a valid shift value, and zig can't tell that `i` would
+            // never be anything other than 0.
+            if (comptime len == 1) return .{ .bits = @as(Bits, slice[0]) };
 
             std.debug.assert(slice.len <= len);
             var bits: Bits = 0;
             for (slice, 0..) |item, i| {
-                bits |= @as(Bits, item) << item_bits * i;
+                bits |= @as(Bits, item) << item_bits * @as(ShiftBits, @intCast(i));
             }
             return .{ .bits = bits };
         }
@@ -586,6 +593,71 @@ pub fn OffsetLen(
             } else {
                 return backing.items[self.data.offset .. self.data.offset + self.len];
             }
+        }
+
+        pub fn tightConfig(
+            backing: *BackingArrayLen,
+        ) OffsetLenConfig {
+            return .{
+                .max_len = max_len,
+                .max_offset = backing.len,
+                .embedded_len = embedded_len,
+            };
+        }
+
+        pub fn minBitsConfig(
+            backing: *BackingArrayLen,
+            len_tracking: *BackingLenTracking,
+        ) OffsetLenConfig {
+            if (comptime embedded_len != 0) {
+                @compileError("embedded_len != 0 is not supported for minBitsConfig");
+            }
+
+            var i = max_len;
+            while (i != 0) {
+                i -= 1;
+                if (len_tracking[i] != 0) {
+                    break;
+                }
+            } else return .{
+                .max_len = 0,
+                .max_offset = 0,
+                .embedded_len = 0,
+            };
+
+            const actual_max_len = i + 1;
+            const item_bits = @bitSizeOf(T);
+            var best_embedded_len: usize = actual_max_len;
+            var best_max_offset: usize = 0;
+            var best_bits = best_embedded_len * item_bits;
+            var current_max_offset: usize = 0;
+
+            i += 1;
+            while (i != 0) {
+                i -= 1;
+                current_max_offset += (i + 1) * len_tracking[i];
+
+                const embedded_bits = i * item_bits;
+
+                // We do over-estimate the max offset a bit by taking the
+                // offset _after_ the last item, since we don't know what the
+                // last item will be.
+                const offset_bits = std.math.log2_int(usize, current_max_offset);
+                const bits = @max(offset_bits, embedded_bits);
+                if (bits < best_bits) {
+                    best_embedded_len = i;
+                    best_max_offset = current_max_offset;
+                    best_bits = bits;
+                }
+            }
+
+            std.debug.assert(current_max_offset == backing.len);
+
+            return .{
+                .max_len = actual_max_len,
+                .max_offset = best_max_offset,
+                .embedded_len = best_embedded_len,
+            };
         }
     };
 }

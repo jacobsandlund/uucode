@@ -117,125 +117,74 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
         break :blk lt;
     };
 
-    var config = types.UcdConfig{};
-
-    try parseUnicodeData(allocator, &ucd, &maps, &tracking, &config);
-    try parseCaseFolding(allocator, &ucd, &maps, &tracking, &config);
+    try parseUnicodeData(allocator, &ucd, &maps, &tracking);
+    try parseCaseFolding(allocator, &ucd, &maps, &tracking);
     try parseDerivedCoreProperties(allocator, &ucd.derived_core_properties);
     try parseEastAsianWidth(allocator, &ucd.east_asian_width);
     try parseGraphemeBreakProperty(allocator, &ucd.grapheme_break);
     try parseEmojiData(allocator, &ucd.emoji_data);
 
-    var min_config_mismatch = false;
+    if (types.updating_ucd) {
+        const expected_default_config: types.UcdConfig = .{
+            .name = OffsetLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name),
+            .decomposition_mapping = OffsetLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping),
+            .numeric_value_numeric = OffsetLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric),
+            .unicode_1_name = OffsetLenData.unicode_1_name.minBitsConfig(&ucd.backing.unicode_1_name, &tracking.unicode_1_name),
+            .case_folding_full = OffsetLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full),
+        };
 
-    if (!types.min_config.eql(config)) {
-        min_config_mismatch = true;
+        if (!expected_default_config.eql(types.default_config)) {
+            std.log.err(
+                \\
+                \\pub const default_config = UcdConfig{{
+                \\    .name = .{{
+                \\        .max_len = {},
+                \\        .max_offset = {},
+                \\        .embedded_len = {},
+                \\    }},
+                \\    .decomposition_mapping = .{{
+                \\        .max_len = {},
+                \\        .max_offset = {},
+                \\        .embedded_len = {},
+                \\    }},
+                \\    .numeric_value_numeric = .{{
+                \\        .max_len = {},
+                \\        .max_offset = {},
+                \\        .embedded_len = {},
+                \\    }},
+                \\    .unicode_1_name = .{{
+                \\        .max_len = {},
+                \\        .max_offset = {},
+                \\        .embedded_len = {},
+                \\    }},
+                \\    .case_folding_full = .{{
+                \\        .max_len = {},
+                \\        .max_offset = {},
+                \\        .embedded_len = {},
+                \\    }},
+                \\}};
+                \\
+                \\
+            , .{
+                expected_default_config.name.max_len,
+                expected_default_config.name.max_offset,
+                expected_default_config.name.embedded_len,
+                expected_default_config.decomposition_mapping.max_len,
+                expected_default_config.decomposition_mapping.max_offset,
+                expected_default_config.decomposition_mapping.embedded_len,
+                expected_default_config.numeric_value_numeric.max_len,
+                expected_default_config.numeric_value_numeric.max_offset,
+                expected_default_config.numeric_value_numeric.embedded_len,
+                expected_default_config.unicode_1_name.max_len,
+                expected_default_config.unicode_1_name.max_offset,
+                expected_default_config.unicode_1_name.embedded_len,
+                expected_default_config.case_folding_full.max_len,
+                expected_default_config.case_folding_full.max_offset,
+                expected_default_config.case_folding_full.embedded_len,
+            });
 
-        std.log.err(
-            \\pub const min_config = UcdConfig{{
-            \\    .name = .{{
-            \\        .max_len = {},
-            \\        .max_offset = {} + 100 * extra_space_when_updating_ucd,
-            \\        .embedded_len = {},
-            \\    }},
-            \\    .decomposition_mapping = .{{
-            \\        .max_len = {},
-            \\        .max_offset = {} + extra_space_when_updating_ucd,
-            \\        .embedded_len = {},
-            \\    }},
-            \\    .numeric_value_numeric = .{{
-            \\        .max_len = {},
-            \\        .max_offset = {} + extra_space_when_updating_ucd,
-            \\        .embedded_len = {},
-            \\    }},
-            \\    .unicode_1_name = .{{
-            \\        .max_len = {},
-            \\        .max_offset = {} + 5 * extra_space_when_updating_ucd,
-            \\        .embedded_len = {},
-            \\    }},
-            \\    .case_folding_full = .{{
-            \\        .max_len = {},
-            \\        .max_offset = {} + extra_space_when_updating_ucd,
-            \\        .embedded_len = {},
-            \\    }},
-            \\}};
-            \\
-            \\
-        , .{
-            config.name.max_len,
-            config.name.max_offset,
-            config.name.embedded_len,
-            config.decomposition_mapping.max_len,
-            config.decomposition_mapping.max_offset,
-            config.decomposition_mapping.embedded_len,
-            config.numeric_value_numeric.max_len,
-            config.numeric_value_numeric.max_offset,
-            config.numeric_value_numeric.embedded_len,
-            config.unicode_1_name.max_len,
-            config.unicode_1_name.max_offset,
-            config.unicode_1_name.embedded_len,
-            config.case_folding_full.max_len,
-            config.case_folding_full.max_offset,
-            config.case_folding_full.embedded_len,
-        });
-    }
-
-    var default_config_mismatch = false;
-
-    if (!types.default_config.eql(config)) {
-        default_config_mismatch = true;
-
-        std.log.err(
-            \\pub const default_config = UcdConfig{{
-            \\    .name = .{{
-            \\        .max_len = {},
-            \\        .max_offset = {},
-            \\        .embedded_len = {},
-            \\    }},
-            \\    .decomposition_mapping = .{{
-            \\        .max_len = {},
-            \\        .max_offset = {},
-            \\        .embedded_len = {},
-            \\    }},
-            \\    .numeric_value_numeric = .{{
-            \\        .max_len = {},
-            \\        .max_offset = {},
-            \\        .embedded_len = {},
-            \\    }},
-            \\    .unicode_1_name = .{{
-            \\        .max_len = {},
-            \\        .max_offset = {},
-            \\        .embedded_len = {},
-            \\    }},
-            \\    .case_folding_full = .{{
-            \\        .max_len = {},
-            \\        .max_offset = {},
-            \\        .embedded_len = {},
-            \\    }},
-            \\}};
-            \\
-            \\
-        , .{
-            config.name.max_len,
-            config.name.max_offset,
-            config.name.embedded_len,
-            config.decomposition_mapping.max_len,
-            config.decomposition_mapping.max_offset,
-            config.decomposition_mapping.embedded_len,
-            config.numeric_value_numeric.max_len,
-            config.numeric_value_numeric.max_offset,
-            config.numeric_value_numeric.embedded_len,
-            config.unicode_1_name.max_len,
-            config.unicode_1_name.max_offset,
-            config.unicode_1_name.embedded_len,
-            config.case_folding_full.max_len,
-            config.case_folding_full.max_offset,
-            config.case_folding_full.embedded_len,
-        });
-    }
-
-    if (min_config_mismatch or default_config_mismatch) {
-        @panic("config mismatch - update as instructed above");
+            @panic("`default_config` mismatch - update as instructed above");
+        }
     }
 
     return ucd;
@@ -278,7 +227,6 @@ fn parseUnicodeData(
     ucd: *Ucd,
     maps: *BackingMaps,
     tracking: *BackingLenTracking,
-    config: *types.UcdConfig,
 ) !void {
     const file_path = "data/ucd/UnicodeData.txt";
 
@@ -426,9 +374,6 @@ fn parseUnicodeData(
         } else if (numeric_numeric_str.len > 0) {
             numeric_type = types.NumericType.numeric;
             numeric_value_numeric = try .fromSliceTracked(allocator, &ucd.backing.numeric_value_numeric, &maps.numeric_value_numeric, &tracking.numeric_value_numeric, numeric_numeric_str);
-            if (numeric_value_numeric.len > config.numeric_value_numeric.max_len) {
-                config.numeric_value_numeric.max_len = numeric_value_numeric.len;
-            }
         }
 
         const unicode_data = UnicodeData{
@@ -449,21 +394,6 @@ fn parseUnicodeData(
             .simple_titlecase_mapping = simple_titlecase_mapping,
         };
 
-        config.name.max_offset += unicode_data.name.len;
-        config.decomposition_mapping.max_offset += unicode_data.decomposition_mapping.len;
-        config.numeric_value_numeric.max_offset += unicode_data.numeric_value_numeric.len;
-        config.unicode_1_name.max_offset += unicode_data.unicode_1_name.len;
-
-        if (unicode_data.name.len > config.name.max_len) {
-            config.name.max_len = unicode_data.name.len;
-        }
-        if (unicode_data.decomposition_mapping.len > config.decomposition_mapping.max_len) {
-            config.decomposition_mapping.max_len = unicode_data.decomposition_mapping.len;
-        }
-        if (unicode_data.unicode_1_name.len > config.unicode_1_name.max_len) {
-            config.unicode_1_name.max_len = unicode_data.unicode_1_name.len;
-        }
-
         // Handle range entries with "First>" and "Last>"
         if (std.mem.endsWith(u8, name, "First>")) {
             range_data = unicode_data;
@@ -483,7 +413,6 @@ fn parseCaseFolding(
     ucd: *Ucd,
     maps: *BackingMaps,
     tracking: *BackingLenTracking,
-    config: *types.UcdConfig,
 ) !void {
     const file_path = "data/ucd/CaseFolding.txt";
 
@@ -539,11 +468,6 @@ fn parseCaseFolding(
             'F' => {
                 std.debug.assert(mapping_len > 1);
                 result.value_ptr.case_folding_full = try .fromSliceTracked(allocator, &ucd.backing.case_folding_full, &maps.case_folding_full, &tracking.case_folding_full, mapping[0..mapping_len]);
-
-                config.case_folding_full.max_offset += mapping_len;
-                if (mapping_len > config.case_folding_full.max_len) {
-                    config.case_folding_full.max_len = mapping_len;
-                }
             },
             'T' => {
                 std.debug.assert(mapping_len == 1);
