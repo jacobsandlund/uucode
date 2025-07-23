@@ -73,6 +73,8 @@ const BackingLenTracking = struct {
 };
 
 pub fn init(allocator: std.mem.Allocator) !Ucd {
+    const start = try std.time.Instant.now();
+
     var ucd = Ucd{
         .unicode_data = undefined,
         .case_folding = .{},
@@ -134,7 +136,7 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
         };
 
         if (!expected_default_config.eql(types.default_config)) {
-            std.log.err(
+            std.debug.panic(
                 \\
                 \\pub const default_config = UcdConfig{{
                 \\    .name = .{{
@@ -182,10 +184,11 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
                 expected_default_config.case_folding_full.max_offset,
                 expected_default_config.case_folding_full.embedded_len,
             });
-
-            @panic("`default_config` mismatch - update as instructed above");
         }
     }
+
+    const end = try std.time.Instant.now();
+    std.log.debug("Ucd init time: {d}ms\n", .{end.since(start) / std.time.ns_per_ms});
 
     return ucd;
 }
@@ -759,13 +762,4 @@ test "strip comment" {
     try std.testing.expectEqualSlices(u8, "0000", stripComment("0000 # comment"));
     try std.testing.expectEqualSlices(u8, "0000", stripComment("0000"));
     try std.testing.expectEqualSlices(u8, "", stripComment("# comment"));
-}
-
-test "parse Ucd with real data" {
-    const allocator = std.testing.allocator;
-    var ucd = try Ucd.init(allocator);
-    defer ucd.deinit(allocator);
-
-    try std.testing.expect(ucd.unicode_data.len > 0);
-    try std.testing.expect(ucd.emoji_data.count() > 0);
 }

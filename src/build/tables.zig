@@ -6,26 +6,33 @@ pub const std_options: std.Options = .{
     .log_level = .debug,
 };
 
+// Needs about 81 MB normally but 87 MB when `updating_ucd`
+const buffer_size = 100_000_000;
+
 pub fn main() !void {
+    const total_start = try std.time.Instant.now();
     const all_fields = @import("fields");
 
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+    const buffer = try std.heap.page_allocator.alloc(u8, buffer_size);
+    defer std.heap.page_allocator.free(buffer);
+    var fba = std.heap.FixedBufferAllocator.init(buffer);
+    const allocator = fba.allocator();
+
+    var ucd = try Ucd.init(allocator);
+    defer ucd.deinit(allocator);
 
     var args_iter = try std.process.argsWithAllocator(allocator);
     defer args_iter.deinit();
     _ = args_iter.skip(); // Skip program name
 
     // Get output path (only argument now)
-    const output_path = args_iter.next() orelse @panic("No output file arg!");
+    const output_path = args_iter.next() orelse std.debug.panic("No output file arg!", .{});
+
+    std.log.debug("fba end_index: {d}\n", .{fba.end_index});
 
     var out_file = try std.fs.cwd().createFile(output_path, .{});
     defer out_file.close();
     const writer = out_file.writer();
-
-    var ucd = try Ucd.init(allocator);
-    defer ucd.deinit(allocator);
 
     try writer.writeAll(
         \\//! This file is auto-generated. Do not edit.
@@ -35,15 +42,30 @@ pub fn main() !void {
         \\
     );
 
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const arena_alloc = arena.allocator();
+
     inline for (all_fields.fields, 0..) |fields, i| {
+        const start = try std.time.Instant.now();
+
         try writeData(
             fields,
             i,
-            allocator,
+            arena_alloc,
             &ucd,
             writer,
         );
+
+        std.log.debug("Arena end capacity: {d}\n", .{arena.queryCapacity()});
+        _ = arena.reset(.retain_capacity);
+
+        const end = try std.time.Instant.now();
+        std.log.debug("`writeData` for fields {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
     }
+
+    const total_end = try std.time.Instant.now();
+    std.log.debug("Total time: {d}ms\n", .{total_end.since(total_start) / std.time.ns_per_ms});
 }
 
 fn DataMap(comptime Data: type) type {
@@ -110,6 +132,8 @@ pub fn writeData(
 
     var offsets = try std.ArrayList(u24).initCapacity(allocator, types.num_code_points);
     defer offsets.deinit();
+
+    const build_data_start = try std.time.Instant.now();
 
     var cp: u21 = types.min_code_point;
     while (cp < types.code_point_range_end) : (cp += 1) {
@@ -332,6 +356,9 @@ pub fn writeData(
         const offset = try getDataOffset(Data, allocator, &data_map, &data_array, data);
         try offsets.append(offset);
     }
+
+    const build_data_end = try std.time.Instant.now();
+    std.log.debug("Building data time: {d}ms\n", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
 
     const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
 
