@@ -49,7 +49,7 @@ pub fn main() !void {
     inline for (all_fields.fields, 0..) |fields, i| {
         const start = try std.time.Instant.now();
 
-        try writeData(
+        try writeTable(
             fields,
             i,
             arena_alloc,
@@ -61,7 +61,7 @@ pub fn main() !void {
         _ = arena.reset(.retain_capacity);
 
         const end = try std.time.Instant.now();
-        std.log.debug("`writeData` for fields {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
+        std.log.debug("`writeTable` for fields {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
     }
 
     const total_end = try std.time.Instant.now();
@@ -100,18 +100,43 @@ fn getDataOffset(
     return offset;
 }
 
-pub fn writeData(
+pub fn writeTable(
     comptime field_names: []const []const u8,
     fields_index: usize,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
     writer: anytype,
 ) !void {
-    const Data = types.Data(field_names, types.default_config);
-
-    const BackingArrays = types.SelectedDecls(Data, "BackingArrayLen");
-    const BackingMaps = types.SelectedDecls(Data, "BackingOffsetMap");
+    const TableData = types.TableData(0, field_names, types.default_config);
+    const Data = @typeInfo(@FieldType(TableData, "data")).array.child;
+    const BackingArrays = @FieldType(TableData, "backing");
+    const backing_fields = @typeInfo(BackingArrays).@"struct".fields;
     var backing = BackingArrays{};
+
+    const BackingMaps = comptime blk: {
+        var backing_map_fields: [backing_fields.len]std.builtin.Type.StructField = undefined;
+
+        for (backing_fields, 0..) |field, i| {
+            const BackingOffsetMap = @FieldType(Data, field.name).BackingOffsetMap;
+            backing_map_fields[i] = .{
+                .name = field.name,
+                .type = BackingOffsetMap,
+                .default_value_ptr = null,
+                .is_comptime = false,
+                .alignment = @alignOf(BackingOffsetMap),
+            };
+        }
+
+        break :blk @Type(.{
+            .@"struct" = .{
+                .layout = .auto,
+                .fields = &backing_map_fields,
+                .decls = &[_]std.builtin.Type.Declaration{},
+                .is_tuple = false,
+            },
+        });
+    };
+
     const maps: BackingMaps = blk: {
         var m: BackingMaps = undefined;
         inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
@@ -152,7 +177,7 @@ pub fn writeData(
             data.name = try .fromSlice(
                 allocator,
                 &backing.name,
-                maps.name,
+                &maps.name,
                 unicode_data.name.toSlice(
                     ucd.backing.name,
                     &buffer,
@@ -176,7 +201,7 @@ pub fn writeData(
             data.decomposition_mapping = try .fromSlice(
                 allocator,
                 &backing.decomposition_mapping,
-                maps.decomposition_mapping,
+                &maps.decomposition_mapping,
                 unicode_data.decomposition_mapping.toSlice(
                     ucd.backing.decomposition_mapping,
                     &buffer,
@@ -197,7 +222,7 @@ pub fn writeData(
             data.numeric_value_numeric = try .fromSlice(
                 allocator,
                 &backing.numeric_value_numeric,
-                maps.numeric_value_numeric,
+                &maps.numeric_value_numeric,
                 unicode_data.numeric_value_numeric.toSlice(
                     ucd.backing.numeric_value_numeric,
                     &buffer,
@@ -212,7 +237,7 @@ pub fn writeData(
             data.unicode_1_name = try .fromSlice(
                 allocator,
                 &backing.unicode_1_name,
-                maps.unicode_1_name,
+                &maps.unicode_1_name,
                 unicode_data.unicode_1_name.toSlice(
                     ucd.backing.unicode_1_name,
                     &buffer,
@@ -250,7 +275,7 @@ pub fn writeData(
                 data.case_folding_full = try .fromSlice(
                     allocator,
                     &backing.case_folding_full,
-                    maps.case_folding_full,
+                    &maps.case_folding_full,
                     cf.case_folding_full.toSlice(
                         ucd.backing.case_folding_full,
                         &buffer,
@@ -363,9 +388,9 @@ pub fn writeData(
     const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
 
     try writer.print(
-        \\pub const Data{} = types.Data(&.{{
+        \\pub const TableData{} = types.TableData({}, &.{{
         \\
-    , .{fields_index});
+    , .{ fields_index, data_array.items.len });
 
     inline for (field_names) |field_name| {
         try writer.print("\"{s}\",", .{field_name});
@@ -385,9 +410,10 @@ pub fn writeData(
     try writer.print(
         \\}});
         \\
-        \\pub const data{}: [{}]Data{} = @bitCast([{}]{s}{{
+        \\pub const data{}: TableData{} = .{{
+        \\    .data = @bitCast([{}]{s}{{
         \\
-    , .{ fields_index, data_array.items.len, fields_index, data_array.items.len, @typeName(IntEquivalent) });
+    , .{ fields_index, fields_index, data_array.items.len, @typeName(IntEquivalent) });
 
     for (data_array.items) |item| {
         const as_int: IntEquivalent = @bitCast(item);
@@ -396,20 +422,15 @@ pub fn writeData(
 
     try writer.writeAll(
         \\
-        \\});
+        \\    }),
+        \\    .backing = .{
         \\
     );
 
-    try writer.print(
-        \\
-        \\pub const backing{}: types.SelectedDecls(Data{}, "BackingArrayLen") = .{{
-        \\
-    , .{ fields_index, fields_index });
-
-    inline for (@typeInfo(BackingArrays).@"struct".fields) |field| {
+    inline for (backing_fields) |field| {
         try writer.print(
-            \\    .{s} = .{{
-            \\        .items = .{{
+            \\        .{s} = .{{
+            \\            .items = .{{
         , .{field.name});
 
         for (@field(backing, field.name).items) |item| {
@@ -419,24 +440,26 @@ pub fn writeData(
         try writer.print(
             \\
             \\}},
-            \\        .len = {},
-            \\    }},
+            \\            .len = {},
+            \\        }},
             \\
         , .{@field(backing, field.name).len});
     }
 
-    try writer.print(
-        \\}};
+    try writer.writeAll(
+        \\    },
         \\
-        \\pub const table{}: [{}]u24 = .{{
+        \\    .offsets = .{
         \\
-    , .{ fields_index, types.num_code_points });
+    );
 
     for (offsets.items) |offset| {
         try writer.print("{},", .{offset});
     }
 
     try writer.writeAll(
+        \\
+        \\    },
         \\
         \\};
         \\

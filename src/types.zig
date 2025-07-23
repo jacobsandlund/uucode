@@ -344,8 +344,10 @@ const full_fields_map = std.static_string_map.StaticStringMap(std.builtin.Type.S
     break :blk kvs;
 });
 
-pub fn Data(comptime field_names: []const []const u8, comptime config: UcdConfig) type {
-    var fields: [field_names.len]std.builtin.Type.StructField = undefined;
+pub fn TableData(comptime data_len: usize, comptime field_names: []const []const u8, comptime config: UcdConfig) type {
+    var data_fields: [field_names.len]std.builtin.Type.StructField = undefined;
+    var backing_arrays: [field_names.len]std.builtin.Type.StructField = undefined;
+    var backing_len: usize = 0;
 
     for (field_names, 0..) |field_name, i| {
         const field = full_fields_map.get(field_name) orelse {
@@ -353,12 +355,25 @@ pub fn Data(comptime field_names: []const []const u8, comptime config: UcdConfig
         };
 
         const field_type = switch (@typeInfo(field.type)) {
-            .pointer => |pointer| OffsetLen(pointer.child, @field(config, field_name)),
+            .pointer => |pointer| blk: {
+                const OL = OffsetLen(pointer.child, @field(config, field_name));
+
+                backing_arrays[i] = .{
+                    .name = field.name,
+                    .type = OL.BackingArrayLen,
+                    .default_value_ptr = null,
+                    .is_comptime = false,
+                    .alignment = @alignOf(OL.BackingArrayLen),
+                };
+                backing_len += 1;
+
+                break :blk OL;
+            },
             .optional => |optional| PackedOptional(optional.child),
             else => field.type,
         };
 
-        fields[i] = .{
+        data_fields[i] = .{
             .name = field.name,
             .type = field_type,
             .default_value_ptr = null,
@@ -367,45 +382,67 @@ pub fn Data(comptime field_names: []const []const u8, comptime config: UcdConfig
         };
     }
 
-    return @Type(.{
+    const Data = @Type(.{
         .@"struct" = .{
             .layout = .@"packed",
-            .fields = &fields,
+            .fields = &data_fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },
     });
-}
 
-pub fn SelectedDecls(comptime DataType: type, comptime decl_name: []const u8) type {
-    const fields = @typeInfo(DataType).@"struct".fields;
+    const DataArray = @Type(.{
+        .array = .{
+            .len = data_len,
+            .child = Data,
+            .sentinel_ptr = null,
+        },
+    });
 
-    var decl_fields: [fields.len]std.builtin.Type.StructField = undefined;
-    var decl_fields_len: usize = 0;
+    const Offset = std.math.IntFittingRange(0, data_len);
+    const Offsets = @Type(.{
+        .array = .{
+            .len = code_point_range_end,
+            .child = Offset,
+            .sentinel_ptr = null,
+        },
+    });
 
-    inline for (fields) |field| {
-        switch (@typeInfo(field.type)) {
-            .@"struct" => {
-                if (@hasDecl(field.type, decl_name)) {
-                    const decl_type = @FieldType(field.type, decl_name);
-                    decl_fields[decl_fields_len] = .{
-                        .name = field.name,
-                        .type = decl_type,
-                        .default_value_ptr = null,
-                        .is_comptime = false,
-                        .alignment = @alignOf(decl_type),
-                    };
-                    decl_fields_len += 1;
-                }
-            },
-            else => {},
-        }
-    }
+    const BackingArrays = @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = backing_arrays[0..backing_len],
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
 
     return @Type(.{
         .@"struct" = .{
             .layout = .auto,
-            .fields = decl_fields[0..decl_fields_len],
+            .fields = &.{
+                .{
+                    .name = "data",
+                    .type = DataArray,
+                    .default_value_ptr = null,
+                    .is_comptime = false,
+                    .alignment = @alignOf(Data),
+                },
+                .{
+                    .name = "offsets",
+                    .type = Offsets,
+                    .default_value_ptr = null,
+                    .is_comptime = false,
+                    .alignment = @alignOf(Offsets),
+                },
+                .{
+                    .name = "backing",
+                    .type = BackingArrays,
+                    .default_value_ptr = null,
+                    .is_comptime = false,
+                    .alignment = @alignOf(BackingArrays),
+                },
+            },
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },
