@@ -39,6 +39,7 @@ pub fn main() !void {
         \\
         \\const types = @import("types");
         \\
+        \\pub const tables = .{
         \\
     );
 
@@ -49,9 +50,8 @@ pub fn main() !void {
     inline for (all_fields.fields, 0..) |fields, i| {
         const start = try std.time.Instant.now();
 
-        try writeTable(
+        try writeTableData(
             fields,
-            i,
             arena_alloc,
             &ucd,
             writer,
@@ -61,8 +61,14 @@ pub fn main() !void {
         _ = arena.reset(.retain_capacity);
 
         const end = try std.time.Instant.now();
-        std.log.debug("`writeTable` for fields {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
+        std.log.debug("`writeTableData` for fields {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
     }
+
+    try writer.writeAll(
+        \\
+        \\};
+        \\
+    );
 
     const total_end = try std.time.Instant.now();
     std.log.debug("Total time: {d}ms\n", .{total_end.since(total_start) / std.time.ns_per_ms});
@@ -100,9 +106,8 @@ fn getDataOffset(
     return offset;
 }
 
-pub fn writeTable(
+pub fn writeTableData(
     comptime field_names: []const []const u8,
-    fields_index: usize,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
     writer: anytype,
@@ -388,32 +393,30 @@ pub fn writeTable(
     const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
 
     try writer.print(
-        \\pub const TableData{} = types.TableData({}, &.{{
+        \\    types.TableData({}, &.{{
         \\
-    , .{ fields_index, data_array.items.len });
+    , .{data_array.items.len});
 
     inline for (field_names) |field_name| {
         try writer.print("\"{s}\",", .{field_name});
     }
     try writer.writeAll(
         \\
-        \\}, .{
+        \\    }, .{
         \\
     );
     inline for (@typeInfo(types.UcdConfig).@"struct".fields) |field| {
         try writer.print(
-            \\    .{s} = {},
+            \\        .{s} = {},
             \\
         , .{ field.name, @field(types.default_config, field.name) });
     }
 
     try writer.print(
-        \\}});
+        \\    }}){{
+        \\        .data = @bitCast([{}]{s}{{
         \\
-        \\pub const data{}: TableData{} = .{{
-        \\    .data = @bitCast([{}]{s}{{
-        \\
-    , .{ fields_index, fields_index, data_array.items.len, @typeName(IntEquivalent) });
+    , .{ data_array.items.len, @typeName(IntEquivalent) });
 
     for (data_array.items) |item| {
         const as_int: IntEquivalent = @bitCast(item);
@@ -422,15 +425,15 @@ pub fn writeTable(
 
     try writer.writeAll(
         \\
-        \\    }),
-        \\    .backing = .{
+        \\        }),
+        \\        .backing = .{
         \\
     );
 
     inline for (backing_fields) |field| {
         try writer.print(
-            \\        .{s} = .{{
-            \\            .items = .{{
+            \\            .{s} = .{{
+            \\                .items = .{{
         , .{field.name});
 
         for (@field(backing, field.name).items) |item| {
@@ -439,17 +442,17 @@ pub fn writeTable(
 
         try writer.print(
             \\
-            \\}},
-            \\            .len = {},
-            \\        }},
+            \\                }},
+            \\                .len = {},
+            \\            }},
             \\
         , .{@field(backing, field.name).len});
     }
 
     try writer.writeAll(
-        \\    },
+        \\        },
         \\
-        \\    .offsets = .{
+        \\        .offsets = .{
         \\
     );
 
@@ -459,14 +462,13 @@ pub fn writeTable(
 
     try writer.writeAll(
         \\
+        \\        },
         \\    },
-        \\
-        \\};
         \\
     );
 }
 
 test {
-    @import("std").testing.refAllDeclsRecursive(@This());
-    @import("std").testing.refAllDeclsRecursive(Ucd);
+    std.testing.refAllDeclsRecursive(@This());
+    std.testing.refAllDeclsRecursive(Ucd);
 }

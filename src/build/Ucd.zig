@@ -231,7 +231,7 @@ fn parseUnicodeData(
     maps: *BackingMaps,
     tracking: *BackingLenTracking,
 ) !void {
-    const file_path = "data/ucd/UnicodeData.txt";
+    const file_path = "ucd/UnicodeData.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
@@ -417,7 +417,7 @@ fn parseCaseFolding(
     maps: *BackingMaps,
     tracking: *BackingLenTracking,
 ) !void {
-    const file_path = "data/ucd/CaseFolding.txt";
+    const file_path = "ucd/CaseFolding.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
@@ -482,7 +482,7 @@ fn parseCaseFolding(
 }
 
 fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, DerivedCoreProperties)) !void {
-    const file_path = "data/ucd/DerivedCoreProperties.txt";
+    const file_path = "ucd/DerivedCoreProperties.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
@@ -567,7 +567,7 @@ fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMa
 }
 
 fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, EastAsianWidth)) !void {
-    const file_path = "data/ucd/extracted/DerivedEastAsianWidth.txt";
+    const file_path = "ucd/extracted/DerivedEastAsianWidth.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
@@ -641,7 +641,7 @@ fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmana
 }
 
 fn parseGraphemeBreakProperty(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, GraphemeBreak)) !void {
-    const file_path = "data/ucd/auxiliary/GraphemeBreakProperty.txt";
+    const file_path = "ucd/auxiliary/GraphemeBreakProperty.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
@@ -697,7 +697,7 @@ fn parseGraphemeBreakProperty(allocator: std.mem.Allocator, map: *std.AutoHashMa
 }
 
 fn parseEmojiData(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, EmojiData)) !void {
-    const file_path = "data/ucd/emoji/emoji-data.txt";
+    const file_path = "ucd/emoji/emoji-data.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
