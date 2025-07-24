@@ -6,36 +6,41 @@ const testing = std.testing;
 const tables = @import("tables").tables;
 const types = @import("types");
 
-fn TableDataFor(comptime field_name: []const u8) type {
+fn DataFor(comptime table: anytype) type {
+    const DataArray = @FieldType(@TypeOf(table), "data");
+    return @typeInfo(DataArray).array.child;
+}
+
+fn TableDataFor(comptime field: []const u8) type {
     for (tables) |table| {
-        const DataArray = @FieldType(@TypeOf(table), "data");
-        const Data = @typeInfo(DataArray).array.child;
-        if (@hasField(Data, field_name)) {
+        if (@hasField(DataFor(table), field)) {
             return @TypeOf(table);
         }
     }
-    @compileError("Table not found for field: " ++ field_name);
+    @compileError("Table not found for field: " ++ field);
 }
 
-fn tableFor(comptime field_name: []const u8) TableDataFor(field_name) {
+fn tableFor(comptime field: []const u8) TableDataFor(field) {
     inline for (tables) |table| {
-        const DataArray = @FieldType(@TypeOf(table), "data");
-        const Data = @typeInfo(DataArray).array.child;
-        if (@hasField(Data, field_name)) {
+        if (@hasField(DataFor(table), field)) {
             return table;
         }
     }
     unreachable;
 }
 
+fn getData(comptime table: anytype, cp: u21) DataFor(table) {
+    return table.data[table.offsets[cp]];
+}
+
 fn alphabetic(cp: u21) bool {
-    const table = tableFor("alphabetic");
-    return table.data[table.offsets[cp]].alphabetic;
+    const table = comptime tableFor("alphabetic");
+    return getData(table, cp).alphabetic;
 }
 
 fn generalCategory(cp: u21) types.GeneralCategory {
-    const table = tableFor("general_category");
-    return table.data[table.offsets[cp]].general_category;
+    const table = comptime tableFor("general_category");
+    return getData(table, cp).general_category;
 }
 
 pub export fn add(a: i32, b: i32) i32 {
