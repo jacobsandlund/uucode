@@ -140,7 +140,7 @@ pub const default_config = UcdConfig{
     .unicode_1_name = .{
         .max_len = 55,
         .max_offset = 49956,
-        .embedded_len = 1,
+        .embedded_len = 0,
     },
     .case_folding_full = .{
         .max_len = 3,
@@ -681,7 +681,8 @@ pub fn OffsetLen(
                 // last item will be.
                 const offset_bits = std.math.log2_int(usize, current_max_offset);
                 const bits = @max(offset_bits, embedded_bits);
-                if (bits < best_bits) {
+
+                if (bits < best_bits or (bits == best_bits and current_max_offset <= best_max_offset)) {
                     best_embedded_len = i;
                     best_max_offset = current_max_offset;
                     best_bits = bits;
