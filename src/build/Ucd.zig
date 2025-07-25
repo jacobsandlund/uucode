@@ -127,18 +127,21 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
     try parseEmojiData(allocator, &ucd.emoji_data);
 
     if (types.updating_ucd) {
-        const expected_default_config: types.UcdConfig = .{
+        // `data_len` is checked in `tables.zig`
+        const expected_default_config: types.TableConfig = .override(&types.default_config, .{
             .name = OffsetLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name),
             .decomposition_mapping = OffsetLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping),
             .numeric_value_numeric = OffsetLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric),
             .unicode_1_name = OffsetLenData.unicode_1_name.minBitsConfig(&ucd.backing.unicode_1_name, &tracking.unicode_1_name),
             .case_folding_full = OffsetLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full),
-        };
+        });
 
-        if (!expected_default_config.eql(types.default_config)) {
+        if (!expected_default_config.eql(&types.default_config)) {
             std.debug.panic(
                 \\
-                \\pub const default_config = UcdConfig{{
+                \\pub const default_config = TableConfig{{
+                \\    .fields = &full_data_field_names,
+                \\    .data_len = {},
                 \\    .name = .{{
                 \\        .max_len = {},
                 \\        .max_offset = {},
@@ -168,6 +171,7 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
                 \\
                 \\
             , .{
+                expected_default_config.data_len,
                 expected_default_config.name.max_len,
                 expected_default_config.name.max_offset,
                 expected_default_config.name.embedded_len,

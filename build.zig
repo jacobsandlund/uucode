@@ -27,21 +27,28 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // Create fields file
-    const fields_step = b.addWriteFiles();
-    const fields_file = fields_step.add("fields.zig",
-        \\pub const fields = [_][]const []const u8{
-        \\    &[_][]const u8{"case_folding_simple"},
-        \\    &[_][]const u8{"alphabetic","lowercase","uppercase"},
+    // Create config file
+    const config_step = b.addWriteFiles();
+    const config_file = config_step.add("config.zig",
+        \\const types = @import("types");
+        \\
+        \\pub const configs = [_]types.TableConfig{
+        \\    .override(&types.default_config, .{
+        \\        .fields = .{"case_folding_simple"},
+        \\    }),
+        \\    .override(&types.default_config, .{
+        \\        .fields = .{"alphabetic","lowercase","uppercase"},
+        \\    }),
         \\};
+        \\
     );
-    const fields_mod = b.createModule(.{
-        .root_source_file = fields_file,
+    const config_mod = b.createModule(.{
+        .root_source_file = config_file,
         .target = target,
         .optimize = optimize,
     });
 
-    // Generate tables.zig with selected fields
+    // Generate tables.zig with config
     const tables_exe = b.addExecutable(.{
         .name = "tables",
         .root_source_file = b.path("src/build/tables.zig"),
@@ -49,7 +56,7 @@ pub fn build(b: *std.Build) void {
         .optimize = tables_optimize,
     });
     tables_exe.root_module.addImport("types", types_mod);
-    tables_exe.root_module.addImport("fields", fields_mod);
+    tables_exe.root_module.addImport("config", config_mod);
     const run_tables_exe = b.addRunArtifact(tables_exe);
     run_tables_exe.stdio = .inherit;
     const tables_out = run_tables_exe.addOutputFileArg("tables.zig");

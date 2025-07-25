@@ -11,7 +11,7 @@ const buffer_size = 100_000_000;
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
-    const all_fields = @import("fields");
+    const configs: []const types.TableConfig = if (types.updating_ucd) &.{types.default_config} else @import("config").configs;
 
     const buffer = try std.heap.page_allocator.alloc(u8, buffer_size);
     defer std.heap.page_allocator.free(buffer);
@@ -47,11 +47,11 @@ pub fn main() !void {
     defer arena.deinit();
     const arena_alloc = arena.allocator();
 
-    inline for (all_fields.fields, 0..) |fields, i| {
+    inline for (configs, 0..) |config, i| {
         const start = try std.time.Instant.now();
 
         try writeTableData(
-            fields,
+            config,
             arena_alloc,
             &ucd,
             writer,
@@ -61,7 +61,7 @@ pub fn main() !void {
         _ = arena.reset(.retain_capacity);
 
         const end = try std.time.Instant.now();
-        std.log.debug("`writeTableData` for fields {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
+        std.log.debug("`writeTableData` for config {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
     }
 
     try writer.writeAll(
@@ -75,11 +75,18 @@ pub fn main() !void {
 }
 
 fn DataMap(comptime Data: type) type {
-    return std.HashMapUnmanaged(Data, u24, struct {
-        pub fn hash(self: @This(), s: Data) u64 {
+    return std.HashMapUnmanaged(Data, u21, struct {
+        pub fn hash(self: @This(), data: Data) u64 {
             _ = self;
-            var hasher = std.hash.Wyhash.init(0);
-            std.hash.autoHash(&hasher, s);
+            var hasher = std.hash.Wyhash.init(128572459);
+            inline for (@typeInfo(Data).@"struct".fields) |field| {
+                if (comptime hasAutoHash(field.type)) {
+                    const fd = @field(data, field.name);
+                    fd.autoHash(&hasher);
+                } else {
+                    std.hash.autoHash(&hasher, @field(data, field.name));
+                }
+            }
             return hasher.final();
         }
         pub fn eql(self: @This(), a: Data, b: Data) bool {
@@ -89,34 +96,47 @@ fn DataMap(comptime Data: type) type {
     }, std.hash_map.default_max_load_percentage);
 }
 
+fn hasAutoHash(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .@"struct", .@"union", .@"enum" => @hasDecl(T, "autoHash"),
+        else => false,
+    };
+}
+
 fn getDataOffset(
     comptime Data: type,
     allocator: std.mem.Allocator,
     data_map: *DataMap(Data),
     data_array: *std.ArrayList(Data),
     item: Data,
-) !u24 {
-    if (data_map.get(item)) |offset| {
-        return offset;
+) !u21 {
+    const gop = try data_map.getOrPut(allocator, item);
+    if (gop.found_existing) {
+        return gop.value_ptr.*;
     }
 
-    const offset: u24 = @intCast(data_array.items.len);
+    gop.value_ptr.* = @intCast(data_array.items.len);
     try data_array.append(item);
-    try data_map.put(allocator, item, offset);
-    return offset;
+    return gop.value_ptr.*;
 }
 
 pub fn writeTableData(
-    comptime field_names: []const []const u8,
+    comptime config: types.TableConfig,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
     writer: anytype,
 ) !void {
-    const TableData = types.TableData(0, field_names, types.default_config);
+    const TableData = types.TableData(config);
     const Data = @typeInfo(@FieldType(TableData, "data")).array.child;
     const BackingArrays = @FieldType(TableData, "backing");
     const backing_fields = @typeInfo(BackingArrays).@"struct".fields;
-    var backing = BackingArrays{};
+    var backing: BackingArrays = blk: {
+        var b: BackingArrays = undefined;
+        inline for (@typeInfo(BackingArrays).@"struct".fields) |field| {
+            @field(b, field.name) = .{ .len = 0, .items = undefined };
+        }
+        break :blk b;
+    };
 
     const BackingMaps = comptime blk: {
         var backing_map_fields: [backing_fields.len]std.builtin.Type.StructField = undefined;
@@ -142,7 +162,7 @@ pub fn writeTableData(
         });
     };
 
-    const maps: BackingMaps = blk: {
+    var maps: BackingMaps = blk: {
         var m: BackingMaps = undefined;
         inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
             @field(m, field.name) = .empty;
@@ -150,8 +170,9 @@ pub fn writeTableData(
         break :blk m;
     };
     defer {
+        @setEvalBranchQuota(2_000);
         inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
-            @field(BackingMaps, field.name).deinit(allocator);
+            @field(maps, field.name).deinit(allocator);
         }
     }
 
@@ -167,6 +188,9 @@ pub fn writeTableData(
 
     var cp: u21 = types.min_code_point;
     while (cp < types.code_point_range_end) : (cp += 1) {
+        if (cp % 0x1000 == 0) {
+            std.log.debug("Building data for {x:0>6}...", .{cp});
+        }
         const unicode_data = ucd.unicode_data[cp - types.min_code_point];
         const case_folding = ucd.case_folding.get(cp);
         const derived_core_properties = ucd.derived_core_properties.get(cp) orelse types.DerivedCoreProperties{};
@@ -178,13 +202,13 @@ pub fn writeTableData(
 
         // UnicodeData fields
         if (@hasField(Data, "name")) {
-            var buffer: @FieldType(unicode_data.name, "EmbeddedArrayLen") = undefined;
+            var buffer: @TypeOf(unicode_data.name).EmbeddedArrayLen = undefined;
             data.name = try .fromSlice(
                 allocator,
                 &backing.name,
                 &maps.name,
                 unicode_data.name.toSlice(
-                    ucd.backing.name,
+                    &ucd.backing.name,
                     &buffer,
                 ),
             );
@@ -202,13 +226,13 @@ pub fn writeTableData(
             data.decomposition_type = unicode_data.decomposition_type;
         }
         if (@hasField(Data, "decomposition_mapping")) {
-            var buffer: @FieldType(unicode_data.decomposition_mapping, "EmbeddedArrayLen") = undefined;
+            var buffer: @TypeOf(unicode_data.decomposition_mapping).EmbeddedArrayLen = undefined;
             data.decomposition_mapping = try .fromSlice(
                 allocator,
                 &backing.decomposition_mapping,
                 &maps.decomposition_mapping,
                 unicode_data.decomposition_mapping.toSlice(
-                    ucd.backing.decomposition_mapping,
+                    &ucd.backing.decomposition_mapping,
                     &buffer,
                 ),
             );
@@ -223,13 +247,13 @@ pub fn writeTableData(
             data.numeric_value_digit = .fromOptional(unicode_data.numeric_value_digit);
         }
         if (@hasField(Data, "numeric_value_numeric")) {
-            var buffer: @FieldType(unicode_data.numeric_value_numeric, "EmbeddedArrayLen") = undefined;
+            var buffer: @TypeOf(unicode_data.numeric_value_numeric).EmbeddedArrayLen = undefined;
             data.numeric_value_numeric = try .fromSlice(
                 allocator,
                 &backing.numeric_value_numeric,
                 &maps.numeric_value_numeric,
                 unicode_data.numeric_value_numeric.toSlice(
-                    ucd.backing.numeric_value_numeric,
+                    &ucd.backing.numeric_value_numeric,
                     &buffer,
                 ),
             );
@@ -238,13 +262,13 @@ pub fn writeTableData(
             data.bidi_mirrored = unicode_data.bidi_mirrored;
         }
         if (@hasField(Data, "unicode_1_name")) {
-            var buffer: @FieldType(unicode_data.unicode_1_name, "EmbeddedArrayLen") = undefined;
+            var buffer: @TypeOf(unicode_data.unicode_1_name).EmbeddedArrayLen = undefined;
             data.unicode_1_name = try .fromSlice(
                 allocator,
                 &backing.unicode_1_name,
                 &maps.unicode_1_name,
                 unicode_data.unicode_1_name.toSlice(
-                    ucd.backing.unicode_1_name,
+                    &ucd.backing.unicode_1_name,
                     &buffer,
                 ),
             );
@@ -276,13 +300,13 @@ pub fn writeTableData(
         }
         if (@hasField(Data, "case_folding_full")) {
             if (case_folding) |cf| {
-                var buffer: @FieldType(case_folding.case_folding_full, "EmbeddedArrayLen") = undefined;
+                var buffer: @TypeOf(cf.case_folding_full).EmbeddedArrayLen = undefined;
                 data.case_folding_full = try .fromSlice(
                     allocator,
                     &backing.case_folding_full,
                     &maps.case_folding_full,
                     cf.case_folding_full.toSlice(
-                        ucd.backing.case_folding_full,
+                        &ucd.backing.case_folding_full,
                         &buffer,
                     ),
                 );
@@ -392,24 +416,88 @@ pub fn writeTableData(
 
     const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
 
+    if (types.updating_ucd) {
+        const expected_default_config: types.TableConfig = .override(&types.default_config, .{
+            .data_len = data_array.items.len,
+        });
+
+        if (!expected_default_config.eql(&types.default_config)) {
+            std.debug.panic(
+                \\
+                \\pub const default_config = TableConfig{{
+                \\    .fields = &full_data_field_names,
+                \\    .data_len = {},
+                \\    .name = .{{
+                \\        .max_len = {},
+                \\        .max_offset = {},
+                \\        .embedded_len = {},
+                \\    }},
+                \\    .decomposition_mapping = .{{
+                \\        .max_len = {},
+                \\        .max_offset = {},
+                \\        .embedded_len = {},
+                \\    }},
+                \\    .numeric_value_numeric = .{{
+                \\        .max_len = {},
+                \\        .max_offset = {},
+                \\        .embedded_len = {},
+                \\    }},
+                \\    .unicode_1_name = .{{
+                \\        .max_len = {},
+                \\        .max_offset = {},
+                \\        .embedded_len = {},
+                \\    }},
+                \\    .case_folding_full = .{{
+                \\        .max_len = {},
+                \\        .max_offset = {},
+                \\        .embedded_len = {},
+                \\    }},
+                \\}};
+                \\
+                \\
+            , .{
+                expected_default_config.data_len,
+                expected_default_config.name.max_len,
+                expected_default_config.name.max_offset,
+                expected_default_config.name.embedded_len,
+                expected_default_config.decomposition_mapping.max_len,
+                expected_default_config.decomposition_mapping.max_offset,
+                expected_default_config.decomposition_mapping.embedded_len,
+                expected_default_config.numeric_value_numeric.max_len,
+                expected_default_config.numeric_value_numeric.max_offset,
+                expected_default_config.numeric_value_numeric.embedded_len,
+                expected_default_config.unicode_1_name.max_len,
+                expected_default_config.unicode_1_name.max_offset,
+                expected_default_config.unicode_1_name.embedded_len,
+                expected_default_config.case_folding_full.max_len,
+                expected_default_config.case_folding_full.max_offset,
+                expected_default_config.case_folding_full.embedded_len,
+            });
+        }
+    }
+
     try writer.print(
-        \\    types.TableData({}, &.{{
+        \\    types.TableData(.override(&types.default_config, .{{
+        \\        .data_len = {},
+        \\        .fields = .{{
         \\
     , .{data_array.items.len});
 
-    inline for (field_names) |field_name| {
+    inline for (config.fields) |field_name| {
         try writer.print("\"{s}\",", .{field_name});
     }
     try writer.writeAll(
         \\
-        \\    }, .{
+        \\        },
         \\
     );
-    inline for (@typeInfo(types.UcdConfig).@"struct".fields) |field| {
-        try writer.print(
-            \\        .{s} = {},
-            \\
-        , .{ field.name, @field(types.default_config, field.name) });
+    inline for (types.TableConfig.offset_len_fields) |field| {
+        if (!@field(config, field).eql(@field(types.default_config, field))) {
+            try writer.print(
+                \\        .{s} = {},
+                \\
+            , .{ field, @field(config, field) });
+        }
     }
 
     try writer.print(

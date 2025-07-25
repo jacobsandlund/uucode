@@ -67,33 +67,71 @@ pub const FullData = struct {
     extended_pictographic: bool,
 };
 
-pub const UcdConfig = struct {
-    name: OffsetLenConfig = .{},
-    decomposition_mapping: OffsetLenConfig = .{},
-    numeric_value_numeric: OffsetLenConfig = .{},
-    unicode_1_name: OffsetLenConfig = .{},
-    case_folding_full: OffsetLenConfig = .{},
+const full_fields = @typeInfo(FullData).@"struct".fields;
 
-    pub fn merge(self: *UcdConfig, other: UcdConfig) UcdConfig {
-        inline for (@typeInfo(UcdConfig).@"struct".fields) |field| {
-            @field(self, field.name).merge(@field(other, field.name));
+const full_data_field_names = brk: {
+    var fields: [full_fields.len][]const u8 = undefined;
+    for (full_fields, 0..) |field, i| {
+        fields[i] = field.name;
+    }
+    break :brk fields;
+};
+
+pub const TableConfig = struct {
+    fields: []const []const u8,
+    data_len: usize,
+    name: OffsetLenConfig,
+    decomposition_mapping: OffsetLenConfig,
+    numeric_value_numeric: OffsetLenConfig,
+    unicode_1_name: OffsetLenConfig,
+    case_folding_full: OffsetLenConfig,
+
+    pub const offset_len_fields = .{ "name", "decomposition_mapping", "numeric_value_numeric", "unicode_1_name", "case_folding_full" };
+
+    pub fn override(self: *const TableConfig, other: anytype) TableConfig {
+        var result = self.*;
+        if (@hasField(@TypeOf(other), "fields")) {
+            result.fields = other.fields;
         }
+        if (@hasField(@TypeOf(other), "data_len")) {
+            result.data_len = other.data_len;
+        }
+        inline for (offset_len_fields) |field| {
+            if (@hasField(@TypeOf(other), field)) {
+                @field(result, field) = @field(self, field).override(@field(other, field));
+            }
+        }
+
+        return result;
     }
 
-    pub fn eql(self: UcdConfig, other: UcdConfig) bool {
-        inline for (@typeInfo(UcdConfig).@"struct".fields) |field| {
-            if (!@field(self, field.name).eql(@field(other, field.name))) {
+    pub fn eql(self: *const TableConfig, other: *const TableConfig) bool {
+        if (self.data_len != other.data_len or self.fields.len != other.fields.len) {
+            return false;
+        }
+
+        for (self.fields, other.fields) |a, b| {
+            if (!std.mem.eql(u8, a, b)) {
                 return false;
             }
         }
+
+        inline for (offset_len_fields) |field| {
+            if (!@field(self, field).eql(@field(other, field))) {
+                return false;
+            }
+        }
+
         return true;
     }
 };
 
-pub const updating_ucd = false;
+pub const updating_ucd = true;
 const ucd_config = if (updating_ucd) updating_ucd_config else default_config;
 
-pub const updating_ucd_config = UcdConfig{
+const updating_ucd_config = TableConfig{
+    .fields = &full_data_field_names,
+    .data_len = 0,
     .name = .{
         .max_len = 200,
         .max_offset = 2_000_000,
@@ -121,7 +159,9 @@ pub const updating_ucd_config = UcdConfig{
     },
 };
 
-pub const default_config = UcdConfig{
+pub const default_config = TableConfig{
+    .fields = &full_data_field_names,
+    .data_len = 0,
     .name = .{
         .max_len = 88,
         .max_offset = 1031029,
@@ -325,16 +365,6 @@ pub const EmojiData = packed struct {
     extended_pictographic: bool = false,
 };
 
-const full_fields = @typeInfo(FullData).@"struct".fields;
-
-pub const full_data_field_names = brk: {
-    var fields: [full_fields.len][]const u8 = undefined;
-    for (full_fields, 0..) |field, i| {
-        fields[i] = field.name;
-    }
-    break :brk fields;
-};
-
 const full_fields_map = std.static_string_map.StaticStringMap(std.builtin.Type.StructField).initComptime(blk: {
     var kvs: [full_fields.len]struct { []const u8, std.builtin.Type.StructField } = undefined;
     for (full_fields, 0..) |full_field, i| {
@@ -344,12 +374,12 @@ const full_fields_map = std.static_string_map.StaticStringMap(std.builtin.Type.S
     break :blk kvs;
 });
 
-pub fn TableData(comptime data_len: usize, comptime field_names: []const []const u8, comptime config: UcdConfig) type {
-    var data_fields: [field_names.len]std.builtin.Type.StructField = undefined;
-    var backing_arrays: [field_names.len]std.builtin.Type.StructField = undefined;
+pub fn TableData(comptime config: TableConfig) type {
+    var data_fields: [config.fields.len]std.builtin.Type.StructField = undefined;
+    var backing_arrays: [config.fields.len]std.builtin.Type.StructField = undefined;
     var backing_len: usize = 0;
 
-    for (field_names, 0..) |field_name, i| {
+    for (config.fields, 0..) |field_name, i| {
         const field = full_fields_map.get(field_name) orelse {
             @compileError("Field '" ++ field_name ++ "' not found in FullData");
         };
@@ -358,7 +388,7 @@ pub fn TableData(comptime data_len: usize, comptime field_names: []const []const
             .pointer => |pointer| blk: {
                 const OL = OffsetLen(pointer.child, @field(config, field_name));
 
-                backing_arrays[i] = .{
+                backing_arrays[backing_len] = .{
                     .name = field.name,
                     .type = OL.BackingArrayLen,
                     .default_value_ptr = null,
@@ -393,13 +423,13 @@ pub fn TableData(comptime data_len: usize, comptime field_names: []const []const
 
     const DataArray = @Type(.{
         .array = .{
-            .len = data_len,
+            .len = config.data_len,
             .child = Data,
             .sentinel_ptr = null,
         },
     });
 
-    const Offset = std.math.IntFittingRange(0, data_len);
+    const Offset = std.math.IntFittingRange(0, config.data_len);
     const Offsets = @Type(.{
         .array = .{
             .len = code_point_range_end,
@@ -510,16 +540,13 @@ pub const OffsetLenConfig = struct {
     max_offset: usize = 0,
     embedded_len: usize = 0,
 
-    pub fn merge(self: *OffsetLenConfig, other: OffsetLenConfig) OffsetLenConfig {
-        if (other.max_len != 0) {
-            self.max_len = other.max_len;
+    pub fn override(self: OffsetLenConfig, other: anytype) OffsetLenConfig {
+        var result = self;
+        inline for (@typeInfo(@TypeOf(other)).@"struct".fields) |field| {
+            @field(result, field.name) = @field(other, field.name);
         }
-        if (other.max_offset != 0) {
-            self.max_offset = other.max_offset;
-        }
-        if (other.embedded_len != 0) {
-            self.embedded_len = other.embedded_len;
-        }
+
+        return result;
     }
 
     pub fn eql(self: OffsetLenConfig, other: OffsetLenConfig) bool {
@@ -617,10 +644,13 @@ pub fn OffsetLen(
             return result;
         }
 
-        pub fn toSlice(self: Self, backing: BackingArrayLen, buffer: *EmbeddedArrayLen) []const T {
+        pub fn toSlice(
+            self: *const Self,
+            backing: *const BackingArrayLen,
+            buffer: *EmbeddedArrayLen,
+        ) []const T {
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
-
             if (comptime embedded_len == max_len) {
                 return self.data.embedded.toArray(buffer)[0..self.len];
             } else if (comptime embedded_len == 0) {
@@ -629,6 +659,21 @@ pub fn OffsetLen(
                 return self.data.embedded.toArray(buffer)[0..self.len];
             } else {
                 return backing.items[self.data.offset .. self.data.offset + self.len];
+            }
+        }
+
+        pub fn autoHash(self: Self, hasher: anytype) void {
+            // Repeat the two return cases, first with two `comptime` checks,
+            // then with a runtime if/else
+            std.hash.autoHash(hasher, self.len);
+            if (comptime embedded_len == max_len) {
+                return std.hash.autoHash(hasher, self.data.embedded);
+            } else if (comptime embedded_len == 0) {
+                return std.hash.autoHash(hasher, self.data.offset);
+            } else if (self.len <= embedded_len) {
+                return std.hash.autoHash(hasher, self.data.embedded);
+            } else {
+                return std.hash.autoHash(hasher, self.data.offset);
             }
         }
 
@@ -678,7 +723,8 @@ pub fn OffsetLen(
 
                 // We do over-estimate the max offset a bit by taking the
                 // offset _after_ the last item, since we don't know what the
-                // last item will be.
+                // last item will be. This simplifies creating backing arrays
+                // of length `max_offset`.
                 const offset_bits = std.math.log2_int(usize, current_max_offset);
                 const bits = @max(offset_bits, embedded_bits);
 
@@ -704,9 +750,10 @@ pub fn OffsetMap(comptime T: type, comptime Offset: type) type {
     return std.HashMapUnmanaged([]const T, Offset, struct {
         pub fn hash(self: @This(), s: []const T) u64 {
             _ = self;
-            var hasher = std.hash.Wyhash.init(838501850);
+            var hasher = std.hash.Wyhash.init(718259503);
             std.hash.autoHashStrat(&hasher, s, .Deep);
-            return hasher.final();
+            const result = hasher.final();
+            return result;
         }
         pub fn eql(self: @This(), a: []const T, b: []const T) bool {
             _ = self;
@@ -729,6 +776,7 @@ pub fn PackedOptional(comptime T: type) type {
 
         pub fn fromOptional(optional: ?T) Self {
             if (optional) |value| {
+                std.debug.assert(value != max);
                 return .{ .data = value };
             } else {
                 return .null;
