@@ -419,12 +419,17 @@ pub fn ArrayLen(comptime T: type, comptime max_len_: comptime_int) type {
         pub const Len = std.math.IntFittingRange(0, max_len);
         pub const max_len = max_len_;
 
-        fn appendSliceAssumeCapacity(self: *@This(), slice: []const T) void {
+        pub fn appendAssumeCapacity(self: *@This(), item: T) void {
+            self.items[self.len] = item;
+            self.len += 1;
+        }
+
+        pub fn appendSliceAssumeCapacity(self: *@This(), slice: []const T) void {
             @memcpy(self.items[self.len..][0..slice.len], slice);
             self.len += @intCast(slice.len);
         }
 
-        fn toSlice(self: @This()) []T {
+        pub fn toSlice(self: @This()) []const T {
             return self.items[0..self.len];
         }
     };

@@ -108,17 +108,18 @@ fn getDataOffset(
     comptime Data: type,
     allocator: std.mem.Allocator,
     data_map: *DataMap(Data),
-    data_array: *std.ArrayList(Data),
-    item: Data,
+    data_array: *std.ArrayListUnmanaged(Data),
+    item: *const Data,
 ) !u21 {
-    const gop = try data_map.getOrPut(allocator, item);
+    const gop = try data_map.getOrPut(allocator, item.*);
     if (gop.found_existing) {
         return gop.value_ptr.*;
     }
 
-    gop.value_ptr.* = @intCast(data_array.items.len);
-    try data_array.append(item);
-    return gop.value_ptr.*;
+    const offset: u21 = @intCast(data_array.items.len);
+    gop.value_ptr.* = offset;
+    try data_array.append(allocator, gop.key_ptr.*);
+    return offset;
 }
 
 pub fn writeTableData(
@@ -132,18 +133,31 @@ pub fn writeTableData(
 
     var data_map = DataMap(Data){};
     defer data_map.deinit(allocator);
-    var data_array = std.ArrayList(Data).init(allocator);
-    defer data_array.deinit();
+    var data_array: std.ArrayListUnmanaged(Data) = .empty;
+    defer data_array.deinit(allocator);
 
-    var offsets = try std.ArrayList(u24).initCapacity(allocator, types.num_code_points);
+    var offsets = try std.ArrayList(u21).initCapacity(allocator, types.num_code_points);
     defer offsets.deinit();
 
     const build_data_start = try std.time.Instant.now();
 
+    var lookup_time: u64 = 0;
+    var set_data_time: u64 = 0;
+    var get_offset_time: u64 = 0;
+    var append_offset_time: u64 = 0;
+
     var cp: u21 = types.min_code_point;
     while (cp < types.code_point_range_end) : (cp += 1) {
+        const lookup_start = try std.time.Instant.now();
+
         if (cp % 0x1000 == 0) {
-            std.log.debug("Building data for code point {x}", .{cp});
+            std.log.debug("Building data for code point {x}: lookup: {d}, set_data: {d}, get_offset: {d}, append_offset: {d}", .{
+                cp,
+                lookup_time / std.time.ns_per_ms,
+                set_data_time / std.time.ns_per_ms,
+                get_offset_time / std.time.ns_per_ms,
+                append_offset_time / std.time.ns_per_ms,
+            });
         }
 
         const unicode_data = ucd.unicode_data[cp - types.min_code_point];
@@ -152,6 +166,9 @@ pub fn writeTableData(
         const east_asian_width = ucd.east_asian_width.get(cp) orelse types.EastAsianWidth.neutral;
         const grapheme_break = ucd.grapheme_break.get(cp) orelse types.GraphemeBreak.other;
         const emoji_data = ucd.emoji_data.get(cp) orelse types.EmojiData{};
+
+        const lookup_end = try std.time.Instant.now();
+        lookup_time += lookup_end.since(lookup_start);
 
         var data: Data = undefined;
 
@@ -317,8 +334,15 @@ pub fn writeTableData(
             data.extended_pictographic = emoji_data.extended_pictographic;
         }
 
-        const offset = try getDataOffset(Data, allocator, &data_map, &data_array, data);
+        const set_data_end = try std.time.Instant.now();
+        set_data_time += set_data_end.since(lookup_end);
+
+        const offset = try getDataOffset(Data, allocator, &data_map, &data_array, &data);
+        const get_offset_end = try std.time.Instant.now();
+        get_offset_time += get_offset_end.since(set_data_end);
         try offsets.append(offset);
+        const append_offset_end = try std.time.Instant.now();
+        append_offset_time += append_offset_end.since(get_offset_end);
     }
 
     const build_data_end = try std.time.Instant.now();
