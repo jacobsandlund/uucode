@@ -92,14 +92,17 @@ fn DataMap(comptime Data: type) type {
             const result = hasher.final();
             const hash_end = std.time.Instant.now() catch unreachable;
             hash_time += hash_end.since(hash_start);
+            hash_count += 1;
             return result;
         }
+
         pub fn eql(self: @This(), a: Data, b: Data) bool {
             _ = self;
             const eql_start = std.time.Instant.now() catch unreachable;
             const result = std.mem.eql(u8, std.mem.asBytes(&a), std.mem.asBytes(&b));
             const eql_end = std.time.Instant.now() catch unreachable;
             eql_time += eql_end.since(eql_start);
+            eql_count += 1;
             return result;
         }
     }, std.hash_map.default_max_load_percentage);
@@ -131,7 +134,9 @@ fn getDataOffset(
 }
 
 var hash_time: u64 = 0;
+var hash_count: u64 = 0;
 var eql_time: u64 = 0;
+var eql_count: u64 = 0;
 
 pub fn writeTableData(
     comptime config: types.TableConfig,
@@ -141,6 +146,7 @@ pub fn writeTableData(
 ) !void {
     const TableData = types.TableData(config);
     const Data = @typeInfo(@FieldType(TableData, "data")).array.child;
+    const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
 
     var data_map = DataMap(Data){};
     defer data_map.deinit(allocator);
@@ -162,12 +168,14 @@ pub fn writeTableData(
         const lookup_start = try std.time.Instant.now();
 
         if (cp % 0x1000 == 0) {
-            std.log.debug("Building data for code point {x}: lookup: {d}, set_data: {d}, hash: {d}, eql: {d}, get_offset: {d}, append_offset: {d}", .{
+            std.log.debug("Building data for code point {x}: lookup: {d}, set_data: {d}, hash: {d}, hash count: {x}, eql: {d}, eql count: {x}, get_offset: {d}, append_offset: {d}", .{
                 cp,
                 lookup_time / std.time.ns_per_ms,
                 set_data_time / std.time.ns_per_ms,
                 hash_time / std.time.ns_per_ms,
+                hash_count,
                 eql_time / std.time.ns_per_ms,
+                eql_count,
                 get_offset_time / std.time.ns_per_ms,
                 append_offset_time / std.time.ns_per_ms,
             });
@@ -183,7 +191,7 @@ pub fn writeTableData(
         const lookup_end = try std.time.Instant.now();
         lookup_time += lookup_end.since(lookup_start);
 
-        var data: Data = undefined;
+        var data: Data = @bitCast(@as(IntEquivalent, 0));
 
         // UnicodeData fields
         if (@hasField(Data, "name")) {
@@ -360,8 +368,6 @@ pub fn writeTableData(
 
     const build_data_end = try std.time.Instant.now();
     std.log.debug("Building data time: {d}ms\n", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
-
-    const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
 
     if (configpkg.updating_ucd) {
         const expected_default_config: types.TableConfig = .override(&configpkg.default, .{
