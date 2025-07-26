@@ -78,6 +78,7 @@ pub fn main() !void {
 fn DataMap(comptime Data: type) type {
     return std.HashMapUnmanaged(Data, u21, struct {
         pub fn hash(self: @This(), data: Data) u64 {
+            const hash_start = std.time.Instant.now() catch unreachable;
             _ = self;
             var hasher = std.hash.Wyhash.init(128572459);
             inline for (@typeInfo(Data).@"struct".fields) |field| {
@@ -88,11 +89,18 @@ fn DataMap(comptime Data: type) type {
                     std.hash.autoHash(&hasher, @field(data, field.name));
                 }
             }
-            return hasher.final();
+            const result = hasher.final();
+            const hash_end = std.time.Instant.now() catch unreachable;
+            hash_time += hash_end.since(hash_start);
+            return result;
         }
         pub fn eql(self: @This(), a: Data, b: Data) bool {
             _ = self;
-            return std.mem.eql(u8, std.mem.asBytes(&a), std.mem.asBytes(&b));
+            const eql_start = std.time.Instant.now() catch unreachable;
+            const result = std.mem.eql(u8, std.mem.asBytes(&a), std.mem.asBytes(&b));
+            const eql_end = std.time.Instant.now() catch unreachable;
+            eql_time += eql_end.since(eql_start);
+            return result;
         }
     }, std.hash_map.default_max_load_percentage);
 }
@@ -121,6 +129,9 @@ fn getDataOffset(
     try data_array.append(allocator, gop.key_ptr.*);
     return offset;
 }
+
+var hash_time: u64 = 0;
+var eql_time: u64 = 0;
 
 pub fn writeTableData(
     comptime config: types.TableConfig,
@@ -151,10 +162,12 @@ pub fn writeTableData(
         const lookup_start = try std.time.Instant.now();
 
         if (cp % 0x1000 == 0) {
-            std.log.debug("Building data for code point {x}: lookup: {d}, set_data: {d}, get_offset: {d}, append_offset: {d}", .{
+            std.log.debug("Building data for code point {x}: lookup: {d}, set_data: {d}, hash: {d}, eql: {d}, get_offset: {d}, append_offset: {d}", .{
                 cp,
                 lookup_time / std.time.ns_per_ms,
                 set_data_time / std.time.ns_per_ms,
+                hash_time / std.time.ns_per_ms,
+                eql_time / std.time.ns_per_ms,
                 get_offset_time / std.time.ns_per_ms,
                 append_offset_time / std.time.ns_per_ms,
             });
