@@ -22,23 +22,53 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const types = @import("types");
+const configpkg = @import("config");
 
-const UnicodeData = types.UnicodeData;
-const CaseFolding = types.CaseFolding;
-const DerivedCoreProperties = types.DerivedCoreProperties;
-const EastAsianWidth = types.EastAsianWidth;
-const GraphemeBreak = types.GraphemeBreak;
-const EmojiData = types.EmojiData;
+const table_configs = @import("table_configs").configs;
+const config = blk: {
+    if (configpkg.updating_ucd) {
+        break :blk configpkg.updating_ucd_config;
+    }
+
+    var combined_fields: []const []const u8 = &[_][]const u8{};
+    var c: types.TableConfig = configpkg.default;
+
+    for (table_configs) |tc| {
+        combined_fields = combined_fields ++ tc.fields;
+
+        for (types.TableConfig.offset_len_fields) |field| {
+            if (!@field(tc, field).eql(@field(configpkg.default, field))) {
+                if (for (tc.fields) |field_name| {
+                    if (std.mem.eql(u8, field_name, field)) break false;
+                } else true) {
+                    @compileError("Field '" ++ field ++ "' is not part of the TableConfig `fields`, even though it differs from the default");
+                }
+
+                @field(c, field) = @field(tc, field);
+            }
+        }
+    }
+
+    c.fields = combined_fields;
+
+    break :blk c;
+};
+
+// TODO: use
+const config_fields_map = std.static_string_map.StaticStringMap(void).initComptime(config.fields);
+
+const UnicodeData = types.UnicodeData(config);
+const CaseFolding = types.CaseFolding(config);
 
 unicode_data: []UnicodeData,
 case_folding: std.AutoHashMapUnmanaged(u21, CaseFolding),
-derived_core_properties: std.AutoHashMapUnmanaged(u21, DerivedCoreProperties),
-east_asian_width: std.AutoHashMapUnmanaged(u21, EastAsianWidth),
-grapheme_break: std.AutoHashMapUnmanaged(u21, GraphemeBreak),
-emoji_data: std.AutoHashMapUnmanaged(u21, EmojiData),
+derived_core_properties: std.AutoHashMapUnmanaged(u21, types.DerivedCoreProperties),
+east_asian_width: std.AutoHashMapUnmanaged(u21, types.EastAsianWidth),
+grapheme_break: std.AutoHashMapUnmanaged(u21, types.GraphemeBreak),
+emoji_data: std.AutoHashMapUnmanaged(u21, types.EmojiData),
 backing: *BackingArrays,
 
-const Ucd = @This();
+const Self = @This();
 
 const OffsetLenData = struct {
     const name = @FieldType(UnicodeData, "name");
@@ -72,10 +102,10 @@ const BackingLenTracking = struct {
     case_folding_full: OffsetLenData.case_folding_full.BackingLenTracking,
 };
 
-pub fn init(allocator: std.mem.Allocator) !Ucd {
+pub fn init(allocator: std.mem.Allocator) !Self {
     const start = try std.time.Instant.now();
 
-    var ucd = Ucd{
+    var ucd = Self{
         .unicode_data = undefined,
         .case_folding = .{},
         .derived_core_properties = .{},
@@ -126,9 +156,10 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
     try parseGraphemeBreakProperty(allocator, &ucd.grapheme_break);
     try parseEmojiData(allocator, &ucd.emoji_data);
 
-    if (types.updating_ucd) {
+    if (configpkg.updating_ucd) {
+
         // `data_len` is checked in `tables.zig`
-        const expected_default_config: types.TableConfig = .override(&types.default_config, .{
+        const expected_default_config: types.TableConfig = .override(&configpkg.default, .{
             .name = OffsetLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name),
             .decomposition_mapping = OffsetLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping),
             .numeric_value_numeric = OffsetLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric),
@@ -136,11 +167,14 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
             .case_folding_full = OffsetLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full),
         });
 
-        if (!expected_default_config.eql(&types.default_config)) {
+        if (!expected_default_config.eql(&configpkg.default)) {
             std.debug.panic(
                 \\
-                \\pub const default_config = TableConfig{{
-                \\    .fields = &full_data_field_names,
+                \\ Update default config in `config.zig` with the following:
+                \\
+                \\
+                \\pub const default = TableConfig{{
+                \\    .fields = &[_][]const u8{{}},
                 \\    .data_len = {},
                 \\    .name = .{{
                 \\        .max_len = {},
@@ -197,7 +231,7 @@ pub fn init(allocator: std.mem.Allocator) !Ucd {
     return ucd;
 }
 
-pub fn deinit(self: *Ucd, allocator: std.mem.Allocator) void {
+pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
     allocator.free(self.unicode_data);
     self.case_folding.deinit(allocator);
     self.derived_core_properties.deinit(allocator);
@@ -231,7 +265,7 @@ fn stripComment(line: []const u8) []const u8 {
 
 fn parseUnicodeData(
     allocator: std.mem.Allocator,
-    ucd: *Ucd,
+    ucd: *Self,
     maps: *BackingMaps,
     tracking: *BackingLenTracking,
 ) !void {
@@ -253,14 +287,14 @@ fn parseUnicodeData(
         .decomposition_type = types.DecompositionType.default,
         .decomposition_mapping = .empty,
         .numeric_type = types.NumericType.none,
-        .numeric_value_decimal = null,
-        .numeric_value_digit = null,
+        .numeric_value_decimal = .null,
+        .numeric_value_digit = .null,
         .numeric_value_numeric = .empty,
         .bidi_mirrored = false,
         .unicode_1_name = .empty,
-        .simple_uppercase_mapping = null,
-        .simple_lowercase_mapping = null,
-        .simple_titlecase_mapping = null,
+        .simple_uppercase_mapping = .null,
+        .simple_lowercase_mapping = .null,
+        .simple_titlecase_mapping = .null,
     };
     var range_data: ?UnicodeData = null;
 
@@ -391,14 +425,14 @@ fn parseUnicodeData(
             .decomposition_type = decomposition_type,
             .decomposition_mapping = decomposition_mapping,
             .numeric_type = numeric_type,
-            .numeric_value_decimal = numeric_value_decimal,
-            .numeric_value_digit = numeric_value_digit,
+            .numeric_value_decimal = .fromOptional(numeric_value_decimal),
+            .numeric_value_digit = .fromOptional(numeric_value_digit),
             .numeric_value_numeric = numeric_value_numeric,
             .bidi_mirrored = bidi_mirrored,
             .unicode_1_name = try .fromSliceTracked(allocator, &ucd.backing.unicode_1_name, &maps.unicode_1_name, &tracking.unicode_1_name, unicode_1_name),
-            .simple_uppercase_mapping = simple_uppercase_mapping,
-            .simple_lowercase_mapping = simple_lowercase_mapping,
-            .simple_titlecase_mapping = simple_titlecase_mapping,
+            .simple_uppercase_mapping = .fromOptional(simple_uppercase_mapping),
+            .simple_lowercase_mapping = .fromOptional(simple_lowercase_mapping),
+            .simple_titlecase_mapping = .fromOptional(simple_titlecase_mapping),
         };
 
         // Handle range entries with "First>" and "Last>"
@@ -417,7 +451,7 @@ fn parseUnicodeData(
 
 fn parseCaseFolding(
     allocator: std.mem.Allocator,
-    ucd: *Ucd,
+    ucd: *Self,
     maps: *BackingMaps,
     tracking: *BackingLenTracking,
 ) !void {
@@ -461,8 +495,8 @@ fn parseCaseFolding(
         const result = try ucd.case_folding.getOrPut(allocator, cp);
         if (!result.found_existing) {
             result.value_ptr.* = CaseFolding{
-                .case_folding_simple = undefined,
-                .case_folding_turkish = null,
+                .case_folding_simple = .null,
+                .case_folding_turkish = .null,
                 .case_folding_full = undefined,
             };
         }
@@ -470,7 +504,7 @@ fn parseCaseFolding(
         switch (status) {
             'S', 'C' => {
                 std.debug.assert(mapping_len == 1);
-                result.value_ptr.case_folding_simple = mapping[0];
+                result.value_ptr.case_folding_simple = .{ .data = mapping[0] };
             },
             'F' => {
                 std.debug.assert(mapping_len > 1);
@@ -478,14 +512,17 @@ fn parseCaseFolding(
             },
             'T' => {
                 std.debug.assert(mapping_len == 1);
-                result.value_ptr.case_folding_turkish = mapping[0];
+                result.value_ptr.case_folding_turkish = .{ .data = mapping[0] };
             },
             else => unreachable,
         }
     }
 }
 
-fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, DerivedCoreProperties)) !void {
+fn parseDerivedCoreProperties(
+    allocator: std.mem.Allocator,
+    map: *std.AutoHashMapUnmanaged(u21, types.DerivedCoreProperties),
+) !void {
     const file_path = "ucd/DerivedCoreProperties.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -510,7 +547,7 @@ fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMa
         while (cp <= range.end) : (cp += 1) {
             const result = try map.getOrPut(allocator, cp);
             if (!result.found_existing) {
-                result.value_ptr.* = DerivedCoreProperties{};
+                result.value_ptr.* = types.DerivedCoreProperties{};
             }
 
             if (std.mem.eql(u8, property, "Math")) {
@@ -570,7 +607,10 @@ fn parseDerivedCoreProperties(allocator: std.mem.Allocator, map: *std.AutoHashMa
     }
 }
 
-fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, EastAsianWidth)) !void {
+fn parseEastAsianWidth(
+    allocator: std.mem.Allocator,
+    map: *std.AutoHashMapUnmanaged(u21, types.EastAsianWidth),
+) !void {
     const file_path = "ucd/extracted/DerivedEastAsianWidth.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -621,17 +661,17 @@ fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmana
         const range = try parseCodePointRange(cp_str);
 
         const width = if (std.mem.eql(u8, width_str, "F"))
-            EastAsianWidth.fullwidth
+            types.EastAsianWidth.fullwidth
         else if (std.mem.eql(u8, width_str, "H"))
-            EastAsianWidth.halfwidth
+            types.EastAsianWidth.halfwidth
         else if (std.mem.eql(u8, width_str, "W"))
-            EastAsianWidth.wide
+            types.EastAsianWidth.wide
         else if (std.mem.eql(u8, width_str, "Na"))
-            EastAsianWidth.narrow
+            types.EastAsianWidth.narrow
         else if (std.mem.eql(u8, width_str, "A"))
-            EastAsianWidth.ambiguous
+            types.EastAsianWidth.ambiguous
         else if (std.mem.eql(u8, width_str, "N"))
-            EastAsianWidth.neutral
+            types.EastAsianWidth.neutral
         else {
             std.log.err("Unknown EastAsianWidth value: {s}", .{width_str});
             unreachable;
@@ -644,7 +684,10 @@ fn parseEastAsianWidth(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmana
     }
 }
 
-fn parseGraphemeBreakProperty(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, GraphemeBreak)) !void {
+fn parseGraphemeBreakProperty(
+    allocator: std.mem.Allocator,
+    map: *std.AutoHashMapUnmanaged(u21, types.GraphemeBreak),
+) !void {
     const file_path = "ucd/auxiliary/GraphemeBreakProperty.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -665,33 +708,33 @@ fn parseGraphemeBreakProperty(allocator: std.mem.Allocator, map: *std.AutoHashMa
         const range = try parseCodePointRange(cp_str);
 
         const prop = if (std.mem.eql(u8, prop_str, "Prepend"))
-            GraphemeBreak.prepend
+            types.GraphemeBreak.prepend
         else if (std.mem.eql(u8, prop_str, "CR"))
-            GraphemeBreak.cr
+            types.GraphemeBreak.cr
         else if (std.mem.eql(u8, prop_str, "LF"))
-            GraphemeBreak.lf
+            types.GraphemeBreak.lf
         else if (std.mem.eql(u8, prop_str, "Control"))
-            GraphemeBreak.control
+            types.GraphemeBreak.control
         else if (std.mem.eql(u8, prop_str, "Extend"))
-            GraphemeBreak.extend
+            types.GraphemeBreak.extend
         else if (std.mem.eql(u8, prop_str, "Regional_Indicator"))
-            GraphemeBreak.regional_indicator
+            types.GraphemeBreak.regional_indicator
         else if (std.mem.eql(u8, prop_str, "SpacingMark"))
-            GraphemeBreak.spacingmark
+            types.GraphemeBreak.spacingmark
         else if (std.mem.eql(u8, prop_str, "L"))
-            GraphemeBreak.l
+            types.GraphemeBreak.l
         else if (std.mem.eql(u8, prop_str, "V"))
-            GraphemeBreak.v
+            types.GraphemeBreak.v
         else if (std.mem.eql(u8, prop_str, "T"))
-            GraphemeBreak.t
+            types.GraphemeBreak.t
         else if (std.mem.eql(u8, prop_str, "LV"))
-            GraphemeBreak.lv
+            types.GraphemeBreak.lv
         else if (std.mem.eql(u8, prop_str, "LVT"))
-            GraphemeBreak.lvt
+            types.GraphemeBreak.lvt
         else if (std.mem.eql(u8, prop_str, "ZWJ"))
-            GraphemeBreak.zwj
+            types.GraphemeBreak.zwj
         else
-            GraphemeBreak.other;
+            types.GraphemeBreak.other;
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
@@ -700,7 +743,10 @@ fn parseGraphemeBreakProperty(allocator: std.mem.Allocator, map: *std.AutoHashMa
     }
 }
 
-fn parseEmojiData(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u21, EmojiData)) !void {
+fn parseEmojiData(
+    allocator: std.mem.Allocator,
+    map: *std.AutoHashMapUnmanaged(u21, types.EmojiData),
+) !void {
     const file_path = "ucd/emoji/emoji-data.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -724,7 +770,7 @@ fn parseEmojiData(allocator: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u
         while (cp <= range.end) : (cp += 1) {
             const result = try map.getOrPut(allocator, cp);
             if (!result.found_existing) {
-                result.value_ptr.* = EmojiData{};
+                result.value_ptr.* = types.EmojiData{};
             }
 
             if (std.mem.eql(u8, prop_str, "Emoji")) {

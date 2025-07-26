@@ -27,26 +27,36 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // Create config file
-    const config_step = b.addWriteFiles();
-    const config_file = config_step.add("config.zig",
+    const config_mod = b.createModule(.{
+        .root_source_file = b.path("src/config.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    config_mod.addImport("types", types_mod);
+
+    // Create table_configs file
+    const table_configs_step = b.addWriteFiles();
+    const table_configs_file = table_configs_step.add("table_configs.zig",
         \\const types = @import("types");
+        \\const config = @import("config");
         \\
         \\pub const configs = [_]types.TableConfig{
-        \\    .override(&types.default_config, .{
-        \\        .fields = .{"case_folding_simple"},
+        \\    .override(&config.default, .{
+        \\        .fields = &.{"case_folding_simple"},
         \\    }),
-        \\    .override(&types.default_config, .{
-        \\        .fields = .{"alphabetic","lowercase","uppercase"},
+        \\    .override(&config.default, .{
+        \\        .fields = &.{"alphabetic","lowercase","uppercase"},
         \\    }),
         \\};
         \\
     );
-    const config_mod = b.createModule(.{
-        .root_source_file = config_file,
+    const table_configs_mod = b.createModule(.{
+        .root_source_file = table_configs_file,
         .target = target,
         .optimize = optimize,
     });
+    table_configs_mod.addImport("types", types_mod);
+    table_configs_mod.addImport("config", config_mod);
 
     // Generate tables.zig with config
     const tables_exe = b.addExecutable(.{
@@ -55,8 +65,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = tables_optimize,
     });
-    tables_exe.root_module.addImport("types", types_mod);
     tables_exe.root_module.addImport("config", config_mod);
+    tables_exe.root_module.addImport("table_configs", table_configs_mod);
+    tables_exe.root_module.addImport("types", types_mod);
     const run_tables_exe = b.addRunArtifact(tables_exe);
     run_tables_exe.stdio = .inherit;
     const tables_out = run_tables_exe.addOutputFileArg("tables.zig");
@@ -68,6 +79,7 @@ pub fn build(b: *std.Build) void {
     });
     tables_mod.addImport("types", types_mod);
 
+    lib_mod.addImport("config", config_mod);
     lib_mod.addImport("tables", tables_mod);
     lib_mod.addImport("types", types_mod);
     tables_out.addStepDependencies(&lib.step);

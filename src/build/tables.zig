@@ -1,6 +1,7 @@
 const std = @import("std");
 const Ucd = @import("Ucd.zig");
 const types = @import("types");
+const configpkg = @import("config");
 
 pub const std_options: std.Options = .{
     .log_level = .debug,
@@ -11,7 +12,7 @@ const buffer_size = 100_000_000;
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
-    const configs: []const types.TableConfig = if (types.updating_ucd) &.{types.default_config} else @import("config").configs;
+    const table_configs: []const types.TableConfig = if (configpkg.updating_ucd) &.{configpkg.updating_ucd_config} else @import("table_configs").configs;
 
     const buffer = try std.heap.page_allocator.alloc(u8, buffer_size);
     defer std.heap.page_allocator.free(buffer);
@@ -47,7 +48,7 @@ pub fn main() !void {
     defer arena.deinit();
     const arena_alloc = arena.allocator();
 
-    inline for (configs, 0..) |config, i| {
+    inline for (table_configs, 0..) |config, i| {
         const start = try std.time.Instant.now();
 
         try writeTableData(
@@ -128,53 +129,6 @@ pub fn writeTableData(
 ) !void {
     const TableData = types.TableData(config);
     const Data = @typeInfo(@FieldType(TableData, "data")).array.child;
-    const BackingArrays = @FieldType(TableData, "backing");
-    const backing_fields = @typeInfo(BackingArrays).@"struct".fields;
-    var backing: BackingArrays = blk: {
-        var b: BackingArrays = undefined;
-        inline for (@typeInfo(BackingArrays).@"struct".fields) |field| {
-            @field(b, field.name) = .{ .len = 0, .items = undefined };
-        }
-        break :blk b;
-    };
-
-    const BackingMaps = comptime blk: {
-        var backing_map_fields: [backing_fields.len]std.builtin.Type.StructField = undefined;
-
-        for (backing_fields, 0..) |field, i| {
-            const BackingOffsetMap = @FieldType(Data, field.name).BackingOffsetMap;
-            backing_map_fields[i] = .{
-                .name = field.name,
-                .type = BackingOffsetMap,
-                .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = @alignOf(BackingOffsetMap),
-            };
-        }
-
-        break :blk @Type(.{
-            .@"struct" = .{
-                .layout = .auto,
-                .fields = &backing_map_fields,
-                .decls = &[_]std.builtin.Type.Declaration{},
-                .is_tuple = false,
-            },
-        });
-    };
-
-    var maps: BackingMaps = blk: {
-        var m: BackingMaps = undefined;
-        inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
-            @field(m, field.name) = .empty;
-        }
-        break :blk m;
-    };
-    defer {
-        @setEvalBranchQuota(2_000);
-        inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
-            @field(maps, field.name).deinit(allocator);
-        }
-    }
 
     var data_map = DataMap(Data){};
     defer data_map.deinit(allocator);
@@ -189,8 +143,9 @@ pub fn writeTableData(
     var cp: u21 = types.min_code_point;
     while (cp < types.code_point_range_end) : (cp += 1) {
         if (cp % 0x1000 == 0) {
-            std.log.debug("Building data for {x:0>6}...", .{cp});
+            std.log.debug("Building data for code point {x}", .{cp});
         }
+
         const unicode_data = ucd.unicode_data[cp - types.min_code_point];
         const case_folding = ucd.case_folding.get(cp);
         const derived_core_properties = ucd.derived_core_properties.get(cp) orelse types.DerivedCoreProperties{};
@@ -202,16 +157,7 @@ pub fn writeTableData(
 
         // UnicodeData fields
         if (@hasField(Data, "name")) {
-            var buffer: @TypeOf(unicode_data.name).EmbeddedArrayLen = undefined;
-            data.name = try .fromSlice(
-                allocator,
-                &backing.name,
-                &maps.name,
-                unicode_data.name.toSlice(
-                    &ucd.backing.name,
-                    &buffer,
-                ),
-            );
+            data.name = unicode_data.name;
         }
         if (@hasField(Data, "general_category")) {
             data.general_category = unicode_data.general_category;
@@ -226,90 +172,54 @@ pub fn writeTableData(
             data.decomposition_type = unicode_data.decomposition_type;
         }
         if (@hasField(Data, "decomposition_mapping")) {
-            var buffer: @TypeOf(unicode_data.decomposition_mapping).EmbeddedArrayLen = undefined;
-            data.decomposition_mapping = try .fromSlice(
-                allocator,
-                &backing.decomposition_mapping,
-                &maps.decomposition_mapping,
-                unicode_data.decomposition_mapping.toSlice(
-                    &ucd.backing.decomposition_mapping,
-                    &buffer,
-                ),
-            );
+            data.decomposition_mapping = unicode_data.decomposition_mapping;
         }
         if (@hasField(Data, "numeric_type")) {
             data.numeric_type = unicode_data.numeric_type;
         }
         if (@hasField(Data, "numeric_value_decimal")) {
-            data.numeric_value_decimal = .fromOptional(unicode_data.numeric_value_decimal);
+            data.numeric_value_decimal = unicode_data.numeric_value_decimal;
         }
         if (@hasField(Data, "numeric_value_digit")) {
-            data.numeric_value_digit = .fromOptional(unicode_data.numeric_value_digit);
+            data.numeric_value_digit = unicode_data.numeric_value_digit;
         }
         if (@hasField(Data, "numeric_value_numeric")) {
-            var buffer: @TypeOf(unicode_data.numeric_value_numeric).EmbeddedArrayLen = undefined;
-            data.numeric_value_numeric = try .fromSlice(
-                allocator,
-                &backing.numeric_value_numeric,
-                &maps.numeric_value_numeric,
-                unicode_data.numeric_value_numeric.toSlice(
-                    &ucd.backing.numeric_value_numeric,
-                    &buffer,
-                ),
-            );
+            data.numeric_value_numeric = unicode_data.numeric_value_numeric;
         }
         if (@hasField(Data, "bidi_mirrored")) {
             data.bidi_mirrored = unicode_data.bidi_mirrored;
         }
         if (@hasField(Data, "unicode_1_name")) {
-            var buffer: @TypeOf(unicode_data.unicode_1_name).EmbeddedArrayLen = undefined;
-            data.unicode_1_name = try .fromSlice(
-                allocator,
-                &backing.unicode_1_name,
-                &maps.unicode_1_name,
-                unicode_data.unicode_1_name.toSlice(
-                    &ucd.backing.unicode_1_name,
-                    &buffer,
-                ),
-            );
+            data.unicode_1_name = unicode_data.unicode_1_name;
         }
         if (@hasField(Data, "simple_uppercase_mapping")) {
-            data.simple_uppercase_mapping = .fromOptional(unicode_data.simple_uppercase_mapping);
+            data.simple_uppercase_mapping = unicode_data.simple_uppercase_mapping;
         }
         if (@hasField(Data, "simple_lowercase_mapping")) {
-            data.simple_lowercase_mapping = .fromOptional(unicode_data.simple_lowercase_mapping);
+            data.simple_lowercase_mapping = unicode_data.simple_lowercase_mapping;
         }
         if (@hasField(Data, "simple_titlecase_mapping")) {
-            data.simple_titlecase_mapping = .fromOptional(unicode_data.simple_titlecase_mapping);
+            data.simple_titlecase_mapping = unicode_data.simple_titlecase_mapping;
         }
 
         // CaseFolding fields
         if (@hasField(Data, "case_folding_simple")) {
             if (case_folding) |cf| {
-                data.case_folding_simple = .fromOptional(cf.case_folding_simple);
+                data.case_folding_simple = cf.case_folding_simple;
             } else {
                 data.case_folding_simple = .null;
             }
         }
         if (@hasField(Data, "case_folding_turkish")) {
             if (case_folding) |cf| {
-                data.case_folding_turkish = .fromOptional(cf.case_folding_turkish);
+                data.case_folding_turkish = cf.case_folding_turkish;
             } else {
                 data.case_folding_turkish = .null;
             }
         }
         if (@hasField(Data, "case_folding_full")) {
             if (case_folding) |cf| {
-                var buffer: @TypeOf(cf.case_folding_full).EmbeddedArrayLen = undefined;
-                data.case_folding_full = try .fromSlice(
-                    allocator,
-                    &backing.case_folding_full,
-                    &maps.case_folding_full,
-                    cf.case_folding_full.toSlice(
-                        &ucd.backing.case_folding_full,
-                        &buffer,
-                    ),
-                );
+                data.case_folding_full = cf.case_folding_full;
             } else {
                 data.case_folding_full = .empty;
             }
@@ -416,16 +326,19 @@ pub fn writeTableData(
 
     const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
 
-    if (types.updating_ucd) {
-        const expected_default_config: types.TableConfig = .override(&types.default_config, .{
+    if (configpkg.updating_ucd) {
+        const expected_default_config: types.TableConfig = .override(&configpkg.default, .{
             .data_len = data_array.items.len,
         });
 
-        if (!expected_default_config.eql(&types.default_config)) {
+        if (!expected_default_config.eql(&configpkg.default)) {
             std.debug.panic(
                 \\
-                \\pub const default_config = TableConfig{{
-                \\    .fields = &full_data_field_names,
+                \\ Update default config in `config.zig` with the following:
+                \\
+                \\
+                \\pub const default = TableConfig{{
+                \\    .fields = &[_][]const u8{{}},
                 \\    .data_len = {},
                 \\    .name = .{{
                 \\        .max_len = {},
@@ -492,7 +405,7 @@ pub fn writeTableData(
         \\
     );
     inline for (types.TableConfig.offset_len_fields) |field| {
-        if (!@field(config, field).eql(@field(types.default_config, field))) {
+        if (!@field(config, field).eql(@field(configpkg.default, field))) {
             try writer.print(
                 \\        .{s} = {},
                 \\
@@ -518,13 +431,13 @@ pub fn writeTableData(
         \\
     );
 
-    inline for (backing_fields) |field| {
+    inline for (@typeInfo(@FieldType(TableData, "backing")).@"struct".fields) |field| {
         try writer.print(
             \\            .{s} = .{{
             \\                .items = .{{
         , .{field.name});
 
-        for (@field(backing, field.name).items) |item| {
+        for (@field(ucd.backing, field.name).items) |item| {
             try writer.print("{},", .{item});
         }
 
@@ -534,7 +447,7 @@ pub fn writeTableData(
             \\                .len = {},
             \\            }},
             \\
-        , .{@field(backing, field.name).len});
+        , .{@field(ucd.backing, field.name).len});
     }
 
     try writer.writeAll(

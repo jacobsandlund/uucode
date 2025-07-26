@@ -67,16 +67,6 @@ pub const FullData = struct {
     extended_pictographic: bool,
 };
 
-const full_fields = @typeInfo(FullData).@"struct".fields;
-
-const full_data_field_names = brk: {
-    var fields: [full_fields.len][]const u8 = undefined;
-    for (full_fields, 0..) |field, i| {
-        fields[i] = field.name;
-    }
-    break :brk fields;
-};
-
 pub const TableConfig = struct {
     fields: []const []const u8,
     data_len: usize,
@@ -124,69 +114,6 @@ pub const TableConfig = struct {
 
         return true;
     }
-};
-
-pub const updating_ucd = true;
-const ucd_config = if (updating_ucd) updating_ucd_config else default_config;
-
-const updating_ucd_config = TableConfig{
-    .fields = &full_data_field_names,
-    .data_len = 0,
-    .name = .{
-        .max_len = 200,
-        .max_offset = 2_000_000,
-        .embedded_len = 0,
-    },
-    .decomposition_mapping = .{
-        .max_len = 40,
-        .max_offset = 16_000,
-        .embedded_len = 0,
-    },
-    .numeric_value_numeric = .{
-        .max_len = 30,
-        .max_offset = 4000,
-        .embedded_len = 0,
-    },
-    .unicode_1_name = .{
-        .max_len = 120,
-        .max_offset = 100_000,
-        .embedded_len = 0,
-    },
-    .case_folding_full = .{
-        .max_len = 9,
-        .max_offset = 500,
-        .embedded_len = 0,
-    },
-};
-
-pub const default_config = TableConfig{
-    .fields = &full_data_field_names,
-    .data_len = 0,
-    .name = .{
-        .max_len = 88,
-        .max_offset = 1031029,
-        .embedded_len = 2,
-    },
-    .decomposition_mapping = .{
-        .max_len = 18,
-        .max_offset = 6454,
-        .embedded_len = 0,
-    },
-    .numeric_value_numeric = .{
-        .max_len = 13,
-        .max_offset = 503,
-        .embedded_len = 1,
-    },
-    .unicode_1_name = .{
-        .max_len = 55,
-        .max_offset = 49956,
-        .embedded_len = 0,
-    },
-    .case_folding_full = .{
-        .max_len = 3,
-        .max_offset = 160,
-        .embedded_len = 0,
-    },
 };
 
 pub const GeneralCategory = enum(u5) {
@@ -276,29 +203,33 @@ pub const NumericType = enum(u2) {
     numeric,
 };
 
-pub const UnicodeData = struct {
-    name: OffsetLen(u8, ucd_config.name),
-    general_category: GeneralCategory,
-    canonical_combining_class: u8,
-    bidi_class: BidiClass,
-    decomposition_type: DecompositionType,
-    decomposition_mapping: OffsetLen(u21, ucd_config.decomposition_mapping),
-    numeric_type: NumericType,
-    numeric_value_decimal: ?u4,
-    numeric_value_digit: ?u4,
-    numeric_value_numeric: OffsetLen(u8, ucd_config.numeric_value_numeric),
-    bidi_mirrored: bool,
-    unicode_1_name: OffsetLen(u8, ucd_config.unicode_1_name),
-    simple_uppercase_mapping: ?u21,
-    simple_lowercase_mapping: ?u21,
-    simple_titlecase_mapping: ?u21,
-};
+pub fn UnicodeData(comptime config: TableConfig) type {
+    return struct {
+        name: OffsetLen(u8, config.name),
+        general_category: GeneralCategory,
+        canonical_combining_class: u8,
+        bidi_class: BidiClass,
+        decomposition_type: DecompositionType,
+        decomposition_mapping: OffsetLen(u21, config.decomposition_mapping),
+        numeric_type: NumericType,
+        numeric_value_decimal: PackedOptional(u4),
+        numeric_value_digit: PackedOptional(u4),
+        numeric_value_numeric: OffsetLen(u8, config.numeric_value_numeric),
+        bidi_mirrored: bool,
+        unicode_1_name: OffsetLen(u8, config.unicode_1_name),
+        simple_uppercase_mapping: PackedOptional(u21),
+        simple_lowercase_mapping: PackedOptional(u21),
+        simple_titlecase_mapping: PackedOptional(u21),
+    };
+}
 
-pub const CaseFolding = struct {
-    case_folding_simple: u21,
-    case_folding_turkish: ?u21,
-    case_folding_full: OffsetLen(u21, ucd_config.case_folding_full),
-};
+pub fn CaseFolding(comptime config: TableConfig) type {
+    return struct {
+        case_folding_simple: PackedOptional(u21),
+        case_folding_turkish: PackedOptional(u21),
+        case_folding_full: OffsetLen(u21, config.case_folding_full),
+    };
+}
 
 pub const IndicConjunctBreak = enum(u2) {
     none,
@@ -365,16 +296,17 @@ pub const EmojiData = packed struct {
     extended_pictographic: bool = false,
 };
 
-const full_fields_map = std.static_string_map.StaticStringMap(std.builtin.Type.StructField).initComptime(blk: {
-    var kvs: [full_fields.len]struct { []const u8, std.builtin.Type.StructField } = undefined;
-    for (full_fields, 0..) |full_field, i| {
-        kvs[i] = .{ full_field.name, full_field };
-    }
-
-    break :blk kvs;
-});
-
 pub fn TableData(comptime config: TableConfig) type {
+    const full_fields_map = comptime std.static_string_map.StaticStringMap(std.builtin.Type.StructField).initComptime(blk: {
+        const full_fields = @typeInfo(FullData).@"struct".fields;
+        var kvs: [full_fields.len]struct { []const u8, std.builtin.Type.StructField } = undefined;
+        for (full_fields, 0..) |full_field, i| {
+            kvs[i] = .{ full_field.name, full_field };
+        }
+
+        break :blk kvs;
+    });
+
     var data_fields: [config.fields.len]std.builtin.Type.StructField = undefined;
     var backing_arrays: [config.fields.len]std.builtin.Type.StructField = undefined;
     var backing_len: usize = 0;
@@ -588,10 +520,11 @@ pub fn OffsetLen(
         pub const BackingOffsetMap = OffsetMap(T, Offset);
         pub const BackingLenTracking: type = [config.max_len]Offset;
 
-        pub fn fromSlice(
+        pub fn fromSliceTracked(
             allocator: std.mem.Allocator,
             backing: *BackingArrayLen,
             map: *BackingOffsetMap,
+            len_tracking: *BackingLenTracking,
             slice: []const T,
         ) !Self {
             const len: Len = @intCast(slice.len);
@@ -618,6 +551,7 @@ pub fn OffsetLen(
                 gop.value_ptr.* = offset;
                 backing.appendSliceAssumeCapacity(slice);
                 gop.key_ptr.* = backing.items[offset .. offset + slice.len];
+                len_tracking[slice.len - 1] += 1;
 
                 return .{
                     .len = len,
@@ -626,22 +560,6 @@ pub fn OffsetLen(
                     },
                 };
             }
-        }
-
-        pub fn fromSliceTracked(
-            allocator: std.mem.Allocator,
-            backing: *BackingArrayLen,
-            map: *BackingOffsetMap,
-            len_tracking: *BackingLenTracking,
-            slice: []const T,
-        ) !Self {
-            const offset = backing.len;
-            const result = try Self.fromSlice(allocator, backing, map, slice);
-            if (backing.len > offset) {
-                len_tracking[result.len - 1] += 1;
-            }
-
-            return result;
         }
 
         pub fn toSlice(
