@@ -374,14 +374,23 @@ pub fn TableData(comptime config: TableConfig) type {
         },
     });
 
-    const Offset = std.math.IntFittingRange(0, config.data_len);
-    const Offsets = @Type(.{
+    // 3-tier structure constants
+    const block_size = 256;
+    const stage1_size = (code_point_range_end + block_size - 1) / block_size;
+
+    const data_offset_bits = std.math.log2_int_ceil(usize, @max(config.data_len, 1));
+    const DataOffset = std.meta.Int(.unsigned, data_offset_bits);
+    const BlockOffset = std.math.IntFittingRange(0, stage1_size * block_size); // upper bound for stage2 size
+
+    const Stage1 = @Type(.{
         .array = .{
-            .len = code_point_range_end,
-            .child = Offset,
+            .len = stage1_size,
+            .child = BlockOffset,
             .sentinel_ptr = null,
         },
     });
+
+    const Stage2 = []const DataOffset; // Will be sized dynamically during generation
 
     const BackingArrays = @Type(.{
         .@"struct" = .{
@@ -404,11 +413,18 @@ pub fn TableData(comptime config: TableConfig) type {
                     .alignment = @alignOf(Data),
                 },
                 .{
-                    .name = "offsets",
-                    .type = Offsets,
+                    .name = "stage1",
+                    .type = Stage1,
                     .default_value_ptr = null,
                     .is_comptime = false,
-                    .alignment = @alignOf(Offsets),
+                    .alignment = @alignOf(Stage1),
+                },
+                .{
+                    .name = "stage2",
+                    .type = Stage2,
+                    .default_value_ptr = null,
+                    .is_comptime = false,
+                    .alignment = @alignOf(DataOffset),
                 },
                 .{
                     .name = "backing",

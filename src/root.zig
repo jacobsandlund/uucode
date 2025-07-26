@@ -30,7 +30,11 @@ fn tableFor(comptime field: []const u8) TableDataFor(field) {
 }
 
 fn getData(comptime table: anytype, cp: u21) DataFor(table) {
-    return table.data[table.offsets[cp]];
+    const stage1_idx = cp >> 8; // Top bits select block
+    const stage2_idx = cp & 0xFF; // Bottom 8 bits select within block
+    const block_start = table.stage1[stage1_idx];
+    const data_idx = table.stage2[block_start + stage2_idx];
+    return table.data[data_idx];
 }
 
 fn alphabetic(cp: u21) bool {
@@ -56,17 +60,17 @@ test "basic add functionality" {
 }
 
 test "tables has correct number of entries" {
-    try testing.expect(tables.@"0".offsets.len == types.code_point_range_end);
-    try testing.expect(tables.@"1".offsets.len == types.code_point_range_end);
+    const block_size = 256;
+    const expected_stage1_size = (types.code_point_range_end + block_size - 1) / block_size;
+    try testing.expect(tables.@"0".stage1.len == expected_stage1_size);
+    try testing.expect(tables.@"1".stage1.len == expected_stage1_size);
 }
 
 test "ASCII 'A' has correct properties" {
-    const a_offset0 = tables.@"0".offsets[65]; // ASCII 'A'
-    const a_data0 = tables.@"0".data[a_offset0];
+    const a_data0 = getData(tables.@"0", 65); // ASCII 'A'
     try testing.expect(a_data0.case_folding_simple.toOptional() == 97); // 'a'
 
-    const a_offset1 = tables.@"1".offsets[65]; // ASCII 'A'
-    const a_data1 = tables.@"1".data[a_offset1];
+    const a_data1 = getData(tables.@"1", 65); // ASCII 'A'
     try testing.expect(a_data1.alphabetic == true);
     try testing.expect(a_data1.uppercase == true);
     try testing.expect(a_data1.lowercase == false);

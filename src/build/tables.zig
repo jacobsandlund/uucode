@@ -98,6 +98,23 @@ fn DataMap(comptime Data: type) type {
     }, std.hash_map.default_max_load_percentage);
 }
 
+fn BlockMap(comptime DataOffset: type) type {
+    const Block = [256]DataOffset;
+    return std.HashMapUnmanaged(Block, u21, struct {
+        pub fn hash(self: @This(), block: Block) u64 {
+            _ = self;
+            var hasher = std.hash.Wyhash.init(915296157);
+            std.hash.autoHash(&hasher, block);
+            return hasher.final();
+        }
+
+        pub fn eql(self: @This(), a: Block, b: Block) bool {
+            _ = self;
+            return std.mem.eql(DataOffset, &a, &b);
+        }
+    }, std.hash_map.default_max_load_percentage);
+}
+
 fn hasAutoHash(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .@"struct", .@"union", .@"enum" => @hasDecl(T, "autoHash"),
@@ -131,6 +148,7 @@ pub fn writeTableData(
 ) !void {
     const TableData = types.TableData(config);
     const Data = @typeInfo(@FieldType(TableData, "data")).array.child;
+    const block_size = 256;
 
     var data_map = DataMap(Data){};
     defer data_map.deinit(allocator);
@@ -330,13 +348,52 @@ pub fn writeTableData(
         set_data_time += set_data_end.since(lookup_end);
 
         const offset = try getDataOffset(Data, allocator, &data_map, &data_array, &data);
-        _ = try getDataOffset(Data, allocator, &data_map, &data_array, &data);
 
         const get_offset_end = try std.time.Instant.now();
         get_offset_time += get_offset_end.since(set_data_end);
         try offsets.append(offset);
         const append_offset_end = try std.time.Instant.now();
         append_offset_time += append_offset_end.since(get_offset_end);
+    }
+
+    // Build 3-tier structure
+    const actual_data_len = data_array.items.len;
+
+    var block_map = BlockMap(u21){};
+    defer block_map.deinit(allocator);
+    var stage2_array: std.ArrayListUnmanaged(u21) = .empty;
+    defer stage2_array.deinit(allocator);
+
+    const stage1_size = (types.code_point_range_end + block_size - 1) / block_size;
+    var stage1 = try std.ArrayList(u21).initCapacity(allocator, stage1_size);
+    defer stage1.deinit();
+
+    var block_idx: u21 = 0;
+    while (block_idx < stage1_size) : (block_idx += 1) {
+        var block: [block_size]u21 = undefined;
+
+        const block_start = block_idx * block_size;
+        const block_end = @min(block_start + block_size, types.code_point_range_end);
+
+        var i: usize = 0;
+        while (i < block_size) : (i += 1) {
+            const cp_idx = block_start + i;
+            if (cp_idx < block_end) {
+                block[i] = offsets.items[cp_idx];
+            } else {
+                block[i] = 0; // Default for out-of-range code points
+            }
+        }
+
+        const gop = try block_map.getOrPut(allocator, block);
+        if (gop.found_existing) {
+            try stage1.append(gop.value_ptr.*);
+        } else {
+            const stage2_offset: u21 = @intCast(stage2_array.items.len);
+            gop.value_ptr.* = stage2_offset;
+            try stage2_array.appendSlice(allocator, &block);
+            try stage1.append(stage2_offset);
+        }
     }
 
     const build_data_end = try std.time.Instant.now();
@@ -347,7 +404,7 @@ pub fn writeTableData(
         \\        .data_len = {},
         \\        .fields = &.{{
         \\
-    , .{data_array.items.len});
+    , .{actual_data_len});
 
     inline for (config.fields) |field_name| {
         try writer.print("\"{s}\",", .{field_name});
@@ -372,7 +429,7 @@ pub fn writeTableData(
         \\    }})){{
         \\        .data = @bitCast([{}]{s}{{
         \\
-    , .{ data_array.items.len, @typeName(IntEquivalent) });
+    , .{ actual_data_len, @typeName(IntEquivalent) });
 
     for (data_array.items) |item| {
         const as_int: IntEquivalent = @bitCast(item);
@@ -408,11 +465,23 @@ pub fn writeTableData(
     try writer.writeAll(
         \\        },
         \\
-        \\        .offsets = .{
+        \\        .stage1 = .{
         \\
     );
 
-    for (offsets.items) |offset| {
+    for (stage1.items) |offset| {
+        try writer.print("{},", .{offset});
+    }
+
+    const data_offset_bits = std.math.log2_int_ceil(usize, @max(actual_data_len, 1));
+    try writer.print(
+        \\
+        \\        }},
+        \\        .stage2 = &[_]u{d}{{
+        \\
+    , .{data_offset_bits});
+
+    for (stage2_array.items) |offset| {
         try writer.print("{},", .{offset});
     }
 
