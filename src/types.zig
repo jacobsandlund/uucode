@@ -67,12 +67,16 @@ pub const FullData = struct {
 
 pub const TableConfig = struct {
     fields: []const []const u8,
-    data_len: usize,
     name: OffsetLenConfig,
     decomposition_mapping: OffsetLenConfig,
     numeric_value_numeric: OffsetLenConfig,
     unicode_1_name: OffsetLenConfig,
     case_folding_full: OffsetLenConfig,
+
+    // Used only once tables are built
+    stage1_len: usize = 0,
+    stage2_len: usize = 0,
+    data_len: usize = 0,
 
     pub const offset_len_fields = .{ "name", "decomposition_mapping", "numeric_value_numeric", "unicode_1_name", "case_folding_full" };
 
@@ -80,6 +84,12 @@ pub const TableConfig = struct {
         var result = self.*;
         if (@hasField(@TypeOf(other), "fields")) {
             result.fields = other.fields;
+        }
+        if (@hasField(@TypeOf(other), "stage1_len")) {
+            result.stage1_len = other.stage1_len;
+        }
+        if (@hasField(@TypeOf(other), "stage2_len")) {
+            result.stage2_len = other.stage2_len;
         }
         if (@hasField(@TypeOf(other), "data_len")) {
             result.data_len = other.data_len;
@@ -94,7 +104,7 @@ pub const TableConfig = struct {
     }
 
     pub fn eql(self: *const TableConfig, other: *const TableConfig) bool {
-        if (self.data_len != other.data_len or self.fields.len != other.fields.len) {
+        if (self.fields.len != other.fields.len or self.data_len != other.data_len or self.stage1_len != other.stage1_len or self.stage2_len != other.stage2_len) {
             return false;
         }
 
@@ -374,24 +384,6 @@ pub fn TableData(comptime config: TableConfig) type {
         },
     });
 
-    // 3-tier structure constants
-    const block_size = 256;
-    const stage1_size = (code_point_range_end + block_size - 1) / block_size;
-
-    const data_offset_bits = std.math.log2_int_ceil(usize, @max(config.data_len, 1));
-    const DataOffset = std.meta.Int(.unsigned, data_offset_bits);
-    const BlockOffset = std.math.IntFittingRange(0, stage1_size * block_size); // upper bound for stage2 size
-
-    const Stage1 = @Type(.{
-        .array = .{
-            .len = stage1_size,
-            .child = BlockOffset,
-            .sentinel_ptr = null,
-        },
-    });
-
-    const Stage2 = []const DataOffset; // Will be sized dynamically during generation
-
     const BackingArrays = @Type(.{
         .@"struct" = .{
             .layout = .auto,
@@ -401,39 +393,75 @@ pub fn TableData(comptime config: TableConfig) type {
         },
     });
 
+    var table_fields: [4]std.builtin.Type.StructField = .{
+        .{
+            .name = "backing",
+            .type = BackingArrays,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(BackingArrays),
+        },
+        .{
+            .name = "data",
+            .type = DataArray,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(Data),
+        },
+        undefined,
+        undefined,
+    };
+    var table_fields_len: usize = 2;
+
+    if (config.stage2_len > 0) {
+        const DataOffset = std.math.IntFittingRange(0, config.data_len);
+
+        const Stage2 = @Type(.{
+            .array = .{
+                .len = config.stage2_len,
+                .child = DataOffset,
+                .sentinel_ptr = null,
+            },
+        });
+
+        table_fields[table_fields_len] = .{
+            .name = "stage2",
+            .type = Stage2,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(DataOffset),
+        };
+        table_fields_len += 1;
+    }
+
+    if (config.stage1_len > 0) {
+        const next_stage_len = if (config.stage2_len > 0) config.stage2_len else config.data_len;
+        const block_size = 256;
+        const blocks_len = std.math.divCeil(usize, next_stage_len, block_size);
+        const BlockOffset = std.math.IntFittingRange(0, blocks_len);
+
+        const Stage1 = @Type(.{
+            .array = .{
+                .len = config.stage2_len,
+                .child = BlockOffset,
+                .sentinel_ptr = null,
+            },
+        });
+
+        table_fields[table_fields_len] = .{
+            .name = "stage1",
+            .type = Stage1,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(BlockOffset),
+        };
+        table_fields_len += 1;
+    }
+
     return @Type(.{
         .@"struct" = .{
             .layout = .auto,
-            .fields = &.{
-                .{
-                    .name = "data",
-                    .type = DataArray,
-                    .default_value_ptr = null,
-                    .is_comptime = false,
-                    .alignment = @alignOf(Data),
-                },
-                .{
-                    .name = "stage1",
-                    .type = Stage1,
-                    .default_value_ptr = null,
-                    .is_comptime = false,
-                    .alignment = @alignOf(Stage1),
-                },
-                .{
-                    .name = "stage2",
-                    .type = Stage2,
-                    .default_value_ptr = null,
-                    .is_comptime = false,
-                    .alignment = @alignOf(DataOffset),
-                },
-                .{
-                    .name = "backing",
-                    .type = BackingArrays,
-                    .default_value_ptr = null,
-                    .is_comptime = false,
-                    .alignment = @alignOf(BackingArrays),
-                },
-            },
+            .fields = table_fields[0..table_fields_len],
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },

@@ -77,7 +77,7 @@ pub fn main() !void {
 }
 
 fn DataMap(comptime Data: type) type {
-    return std.HashMapUnmanaged(Data, u21, struct {
+    return std.HashMapUnmanaged(Data, u24, struct {
         pub fn hash(self: @This(), data: Data) u64 {
             _ = self;
             var hasher = std.hash.Wyhash.init(128572459);
@@ -98,23 +98,6 @@ fn DataMap(comptime Data: type) type {
     }, std.hash_map.default_max_load_percentage);
 }
 
-fn BlockMap(comptime DataOffset: type) type {
-    const Block = [256]DataOffset;
-    return std.HashMapUnmanaged(Block, u21, struct {
-        pub fn hash(self: @This(), block: Block) u64 {
-            _ = self;
-            var hasher = std.hash.Wyhash.init(915296157);
-            std.hash.autoHash(&hasher, block);
-            return hasher.final();
-        }
-
-        pub fn eql(self: @This(), a: Block, b: Block) bool {
-            _ = self;
-            return std.mem.eql(DataOffset, &a, &b);
-        }
-    }, std.hash_map.default_max_load_percentage);
-}
-
 fn hasAutoHash(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .@"struct", .@"union", .@"enum" => @hasDecl(T, "autoHash"),
@@ -122,23 +105,22 @@ fn hasAutoHash(comptime T: type) bool {
     };
 }
 
-fn getDataOffset(
-    comptime Data: type,
-    allocator: std.mem.Allocator,
-    data_map: *DataMap(Data),
-    data_array: *std.ArrayListUnmanaged(Data),
-    item: *const Data,
-) !u21 {
-    const gop = try data_map.getOrPut(allocator, item.*);
-    if (gop.found_existing) {
-        return gop.value_ptr.*;
+const block_size = 256;
+const Block = [block_size]u24;
+
+const BlockMap = std.HashMapUnmanaged(Block, u16, struct {
+    pub fn hash(self: @This(), block: Block) u64 {
+        _ = self;
+        var hasher = std.hash.Wyhash.init(915296157);
+        std.hash.autoHash(&hasher, block);
+        return hasher.final();
     }
 
-    const offset: u21 = @intCast(data_array.items.len);
-    gop.value_ptr.* = offset;
-    try data_array.append(allocator, gop.key_ptr.*);
-    return offset;
-}
+    pub fn eql(self: @This(), a: Block, b: Block) bool {
+        _ = self;
+        return std.mem.eql(u24, &a, &b);
+    }
+}, std.hash_map.default_max_load_percentage);
 
 pub fn writeTableData(
     comptime config: types.TableConfig,
@@ -148,36 +130,31 @@ pub fn writeTableData(
 ) !void {
     const TableData = types.TableData(config);
     const Data = @typeInfo(@FieldType(TableData, "data")).array.child;
-    const block_size = 256;
 
-    var data_map = DataMap(Data){};
+    var data_map: DataMap(Data) = .empty;
     defer data_map.deinit(allocator);
     var data_array: std.ArrayListUnmanaged(Data) = .empty;
     defer data_array.deinit(allocator);
+    var block_map: BlockMap = .empty;
+    defer block_map.deinit(allocator);
+    var stage2: std.ArrayListUnmanaged(u24) = .empty;
+    defer stage2.deinit(allocator);
+    var stage1: std.ArrayListUnmanaged(u16) = .empty;
+    defer stage1.deinit(allocator);
 
-    var offsets = try std.ArrayList(u21).initCapacity(allocator, types.num_code_points);
-    defer offsets.deinit();
+    var block: Block = undefined;
+    var block_len: usize = 0;
 
     const build_data_start = try std.time.Instant.now();
 
-    var lookup_time: u64 = 0;
-    var set_data_time: u64 = 0;
-    var get_offset_time: u64 = 0;
-    var append_offset_time: u64 = 0;
-
     var cp: u21 = types.min_code_point;
     while (cp < types.code_point_range_end) : (cp += 1) {
-        const lookup_start = try std.time.Instant.now();
-
         const unicode_data = ucd.unicode_data[cp - types.min_code_point];
         const case_folding = ucd.case_folding.get(cp);
         const derived_core_properties = ucd.derived_core_properties.get(cp) orelse types.DerivedCoreProperties{};
         const east_asian_width = ucd.east_asian_width.get(cp) orelse types.EastAsianWidth.neutral;
         const grapheme_break = ucd.grapheme_break.get(cp) orelse types.GraphemeBreak.other;
         const emoji_data = ucd.emoji_data.get(cp) orelse types.EmojiData{};
-
-        const lookup_end = try std.time.Instant.now();
-        lookup_time += lookup_end.since(lookup_start);
 
         var data: Data = undefined;
         data._padding = 0;
@@ -344,55 +321,33 @@ pub fn writeTableData(
             data.extended_pictographic = emoji_data.extended_pictographic;
         }
 
-        const set_data_end = try std.time.Instant.now();
-        set_data_time += set_data_end.since(lookup_end);
-
-        const offset = try getDataOffset(Data, allocator, &data_map, &data_array, &data);
-
-        const get_offset_end = try std.time.Instant.now();
-        get_offset_time += get_offset_end.since(set_data_end);
-        try offsets.append(offset);
-        const append_offset_end = try std.time.Instant.now();
-        append_offset_time += append_offset_end.since(get_offset_end);
-    }
-
-    // Build 3-tier structure
-    const actual_data_len = data_array.items.len;
-
-    var block_map = BlockMap(u21){};
-    defer block_map.deinit(allocator);
-    var stage2_array: std.ArrayListUnmanaged(u21) = .empty;
-    defer stage2_array.deinit(allocator);
-
-    const stage1_size = (types.code_point_range_end + block_size - 1) / block_size;
-    var stage1 = try std.ArrayList(u21).initCapacity(allocator, stage1_size);
-    defer stage1.deinit();
-
-    var block_idx: u21 = 0;
-    while (block_idx < stage1_size) : (block_idx += 1) {
-        var block: [block_size]u21 = undefined;
-
-        const block_start = block_idx * block_size;
-        const block_end = @min(block_start + block_size, types.code_point_range_end);
-
-        var i: usize = 0;
-        while (i < block_size) : (i += 1) {
-            const cp_idx = block_start + i;
-            if (cp_idx < block_end) {
-                block[i] = offsets.items[cp_idx];
-            } else {
-                block[i] = 0; // Default for out-of-range code points
-            }
+        const gop = try data_map.getOrPut(allocator, data);
+        var data_index: u24 = undefined;
+        if (gop.found_existing) {
+            data_index = gop.value_ptr.*;
+        } else {
+            data_index = @intCast(data_array.items.len);
+            gop.value_ptr.* = data_index;
+            try data_array.append(allocator, data);
         }
 
-        const gop = try block_map.getOrPut(allocator, block);
-        if (gop.found_existing) {
-            try stage1.append(gop.value_ptr.*);
-        } else {
-            const stage2_offset: u21 = @intCast(stage2_array.items.len);
-            gop.value_ptr.* = stage2_offset;
-            try stage2_array.appendSlice(allocator, &block);
-            try stage1.append(stage2_offset);
+        block[block_len] = data_index;
+        block_len += 1;
+
+        if (block_len == block_size or cp == types.code_point_range_end - 1) {
+            if (block_len < block_size) @memset(block[block_len..block_size], 0);
+            const gop_block = try block_map.getOrPut(allocator, block);
+            var block_index: u16 = undefined;
+            if (gop_block.found_existing) {
+                block_index = gop_block.value_ptr.*;
+            } else {
+                block_index = @intCast(stage2.items.len / block_size);
+                gop_block.value_ptr.* = block_index;
+                try stage2.appendSlice(allocator, block[0..block_len]);
+            }
+
+            try stage1.append(allocator, block_index);
+            block_len = 0;
         }
     }
 
@@ -401,10 +356,12 @@ pub fn writeTableData(
 
     try writer.print(
         \\    types.TableData(.override(&config.default, .{{
+        \\        .stage1_len = {},
+        \\        .stage2_len = {},
         \\        .data_len = {},
         \\        .fields = &.{{
         \\
-    , .{actual_data_len});
+    , .{ stage1.items.len, stage2.items.len, data_array.items.len });
 
     inline for (config.fields) |field_name| {
         try writer.print("\"{s}\",", .{field_name});
@@ -423,22 +380,9 @@ pub fn writeTableData(
         }
     }
 
-    const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
-
-    try writer.print(
-        \\    }})){{
-        \\        .data = @bitCast([{}]{s}{{
-        \\
-    , .{ actual_data_len, @typeName(IntEquivalent) });
-
-    for (data_array.items) |item| {
-        const as_int: IntEquivalent = @bitCast(item);
-        try writer.print("{},", .{as_int});
-    }
-
     try writer.writeAll(
         \\
-        \\        }),
+        \\    })){
         \\        .backing = .{
         \\
     );
@@ -462,27 +406,40 @@ pub fn writeTableData(
         , .{@field(ucd.backing, field.name).len});
     }
 
-    try writer.writeAll(
-        \\        },
+    const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
+
+    try writer.print(
         \\
+        \\        }},
+        \\        .data = @bitCast([{}]{s}{{
+        \\
+    , .{ data_array.items.len, @typeName(IntEquivalent) });
+
+    for (data_array.items) |item| {
+        const as_int: IntEquivalent = @bitCast(item);
+        try writer.print("{},", .{as_int});
+    }
+
+    try writer.writeAll(
+        \\
+        \\        }),
+        \\        .stage2 = .{
+        \\
+    );
+
+    for (stage2.items) |item| {
+        try writer.print("{},", .{item});
+    }
+
+    try writer.writeAll(
+        \\
+        \\        },
         \\        .stage1 = .{
         \\
     );
 
-    for (stage1.items) |offset| {
-        try writer.print("{},", .{offset});
-    }
-
-    const data_offset_bits = std.math.log2_int_ceil(usize, @max(actual_data_len, 1));
-    try writer.print(
-        \\
-        \\        }},
-        \\        .stage2 = &[_]u{d}{{
-        \\
-    , .{data_offset_bits});
-
-    for (stage2_array.items) |offset| {
-        try writer.print("{},", .{offset});
+    for (stage1.items) |item| {
+        try writer.print("{},", .{item});
     }
 
     try writer.writeAll(
