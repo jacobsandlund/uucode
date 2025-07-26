@@ -78,6 +78,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     tables_mod.addImport("types", types_mod);
+    tables_mod.addImport("config", config_mod);
 
     lib_mod.addImport("config", config_mod);
     lib_mod.addImport("tables", tables_mod);

@@ -1,6 +1,6 @@
 const types = @import("types");
 
-pub const updating_ucd = true;
+pub const updating_ucd = false;
 
 pub const all_fields = brk: {
     const full_fields = @typeInfo(types.FullData).@"struct".fields;

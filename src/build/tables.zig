@@ -12,7 +12,7 @@ const buffer_size = 100_000_000;
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
-    const table_configs: []const types.TableConfig = if (configpkg.updating_ucd) &.{configpkg.updating_ucd_config} else @import("table_configs").configs;
+    const table_configs: []const types.TableConfig = if (configpkg.updating_ucd) &.{configpkg.updating_ucd_config} else &@import("table_configs").configs;
 
     const buffer = try std.heap.page_allocator.alloc(u8, buffer_size);
     defer std.heap.page_allocator.free(buffer);
@@ -39,6 +39,7 @@ pub fn main() !void {
         \\//! This file is auto-generated. Do not edit.
         \\
         \\const types = @import("types");
+        \\const config = @import("config");
         \\
         \\pub const tables = .{
         \\
@@ -78,32 +79,21 @@ pub fn main() !void {
 fn DataMap(comptime Data: type) type {
     return std.HashMapUnmanaged(Data, u21, struct {
         pub fn hash(self: @This(), data: Data) u64 {
-            const hash_start = std.time.Instant.now() catch unreachable;
             _ = self;
             var hasher = std.hash.Wyhash.init(128572459);
             inline for (@typeInfo(Data).@"struct".fields) |field| {
                 if (comptime hasAutoHash(field.type)) {
-                    const fd = @field(data, field.name);
-                    fd.autoHash(&hasher);
+                    @field(data, field.name).autoHash(&hasher);
                 } else {
                     std.hash.autoHash(&hasher, @field(data, field.name));
                 }
             }
-            const result = hasher.final();
-            const hash_end = std.time.Instant.now() catch unreachable;
-            hash_time += hash_end.since(hash_start);
-            hash_count += 1;
-            return result;
+            return hasher.final();
         }
 
         pub fn eql(self: @This(), a: Data, b: Data) bool {
             _ = self;
-            const eql_start = std.time.Instant.now() catch unreachable;
-            const result = std.mem.eql(u8, std.mem.asBytes(&a), std.mem.asBytes(&b));
-            const eql_end = std.time.Instant.now() catch unreachable;
-            eql_time += eql_end.since(eql_start);
-            eql_count += 1;
-            return result;
+            return a == b;
         }
     }, std.hash_map.default_max_load_percentage);
 }
@@ -133,11 +123,6 @@ fn getDataOffset(
     return offset;
 }
 
-var hash_time: u64 = 0;
-var hash_count: u64 = 0;
-var eql_time: u64 = 0;
-var eql_count: u64 = 0;
-
 pub fn writeTableData(
     comptime config: types.TableConfig,
     allocator: std.mem.Allocator,
@@ -146,7 +131,6 @@ pub fn writeTableData(
 ) !void {
     const TableData = types.TableData(config);
     const Data = @typeInfo(@FieldType(TableData, "data")).array.child;
-    const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
 
     var data_map = DataMap(Data){};
     defer data_map.deinit(allocator);
@@ -167,20 +151,6 @@ pub fn writeTableData(
     while (cp < types.code_point_range_end) : (cp += 1) {
         const lookup_start = try std.time.Instant.now();
 
-        if (cp % 0x1000 == 0) {
-            std.log.debug("Building data for code point {x}: lookup: {d}, set_data: {d}, hash: {d}, hash count: {x}, eql: {d}, eql count: {x}, get_offset: {d}, append_offset: {d}", .{
-                cp,
-                lookup_time / std.time.ns_per_ms,
-                set_data_time / std.time.ns_per_ms,
-                hash_time / std.time.ns_per_ms,
-                hash_count,
-                eql_time / std.time.ns_per_ms,
-                eql_count,
-                get_offset_time / std.time.ns_per_ms,
-                append_offset_time / std.time.ns_per_ms,
-            });
-        }
-
         const unicode_data = ucd.unicode_data[cp - types.min_code_point];
         const case_folding = ucd.case_folding.get(cp);
         const derived_core_properties = ucd.derived_core_properties.get(cp) orelse types.DerivedCoreProperties{};
@@ -191,7 +161,8 @@ pub fn writeTableData(
         const lookup_end = try std.time.Instant.now();
         lookup_time += lookup_end.since(lookup_start);
 
-        var data: Data = @bitCast(@as(IntEquivalent, 0));
+        var data: Data = undefined;
+        data._padding = 0;
 
         // UnicodeData fields
         if (@hasField(Data, "name")) {
@@ -359,6 +330,8 @@ pub fn writeTableData(
         set_data_time += set_data_end.since(lookup_end);
 
         const offset = try getDataOffset(Data, allocator, &data_map, &data_array, &data);
+        _ = try getDataOffset(Data, allocator, &data_map, &data_array, &data);
+
         const get_offset_end = try std.time.Instant.now();
         get_offset_time += get_offset_end.since(set_data_end);
         try offsets.append(offset);
@@ -369,73 +342,10 @@ pub fn writeTableData(
     const build_data_end = try std.time.Instant.now();
     std.log.debug("Building data time: {d}ms\n", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
 
-    if (configpkg.updating_ucd) {
-        const expected_default_config: types.TableConfig = .override(&configpkg.default, .{
-            .data_len = data_array.items.len,
-        });
-
-        if (!expected_default_config.eql(&configpkg.default)) {
-            std.debug.panic(
-                \\
-                \\ Update default config in `config.zig` with the following:
-                \\
-                \\
-                \\pub const default = TableConfig{{
-                \\    .fields = &[_][]const u8{{}},
-                \\    .data_len = {},
-                \\    .name = .{{
-                \\        .max_len = {},
-                \\        .max_offset = {},
-                \\        .embedded_len = {},
-                \\    }},
-                \\    .decomposition_mapping = .{{
-                \\        .max_len = {},
-                \\        .max_offset = {},
-                \\        .embedded_len = {},
-                \\    }},
-                \\    .numeric_value_numeric = .{{
-                \\        .max_len = {},
-                \\        .max_offset = {},
-                \\        .embedded_len = {},
-                \\    }},
-                \\    .unicode_1_name = .{{
-                \\        .max_len = {},
-                \\        .max_offset = {},
-                \\        .embedded_len = {},
-                \\    }},
-                \\    .case_folding_full = .{{
-                \\        .max_len = {},
-                \\        .max_offset = {},
-                \\        .embedded_len = {},
-                \\    }},
-                \\}};
-                \\
-                \\
-            , .{
-                expected_default_config.data_len,
-                expected_default_config.name.max_len,
-                expected_default_config.name.max_offset,
-                expected_default_config.name.embedded_len,
-                expected_default_config.decomposition_mapping.max_len,
-                expected_default_config.decomposition_mapping.max_offset,
-                expected_default_config.decomposition_mapping.embedded_len,
-                expected_default_config.numeric_value_numeric.max_len,
-                expected_default_config.numeric_value_numeric.max_offset,
-                expected_default_config.numeric_value_numeric.embedded_len,
-                expected_default_config.unicode_1_name.max_len,
-                expected_default_config.unicode_1_name.max_offset,
-                expected_default_config.unicode_1_name.embedded_len,
-                expected_default_config.case_folding_full.max_len,
-                expected_default_config.case_folding_full.max_offset,
-                expected_default_config.case_folding_full.embedded_len,
-            });
-        }
-    }
-
     try writer.print(
-        \\    types.TableData(.override(&types.default_config, .{{
+        \\    types.TableData(.override(&config.default, .{{
         \\        .data_len = {},
-        \\        .fields = .{{
+        \\        .fields = &.{{
         \\
     , .{data_array.items.len});
 
@@ -456,8 +366,10 @@ pub fn writeTableData(
         }
     }
 
+    const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
+
     try writer.print(
-        \\    }}){{
+        \\    }})){{
         \\        .data = @bitCast([{}]{s}{{
         \\
     , .{ data_array.items.len, @typeName(IntEquivalent) });

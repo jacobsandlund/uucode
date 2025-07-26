@@ -157,8 +157,6 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     try parseEmojiData(allocator, &ucd.emoji_data);
 
     if (configpkg.updating_ucd) {
-
-        // `data_len` is checked in `tables.zig`
         const expected_default_config: types.TableConfig = .override(&configpkg.default, .{
             .name = OffsetLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name),
             .decomposition_mapping = OffsetLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping),
@@ -173,7 +171,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
                 \\ Update default config in `config.zig` with the following:
                 \\
                 \\
-                \\pub const default = TableConfig{{
+                \\pub const default = types.TableConfig{{
                 \\    .fields = &[_][]const u8{{}},
                 \\    .data_len = {},
                 \\    .name = .{{

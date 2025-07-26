@@ -5,8 +5,6 @@ pub const max_code_point: u21 = 0x10FFFF;
 pub const num_code_points: u21 = max_code_point + 1;
 pub const code_point_range_end: u21 = max_code_point + 1;
 
-const safe_max_offset = std.math.maxInt(u24);
-
 pub const FullData = struct {
     // UnicodeData fields
     name: []const u8,
@@ -307,7 +305,8 @@ pub fn TableData(comptime config: TableConfig) type {
         break :blk kvs;
     });
 
-    var data_fields: [config.fields.len]std.builtin.Type.StructField = undefined;
+    var data_fields: [config.fields.len + 1]std.builtin.Type.StructField = undefined;
+    var data_bit_size: usize = 0;
     var backing_arrays: [config.fields.len]std.builtin.Type.StructField = undefined;
     var backing_len: usize = 0;
 
@@ -342,11 +341,25 @@ pub fn TableData(comptime config: TableConfig) type {
             .is_comptime = false,
             .alignment = 0, // Required for packed structs
         };
+        data_bit_size += @bitSizeOf(field_type);
     }
+
+    const bits_over_byte = data_bit_size % 8;
+    const padding_bits = if (bits_over_byte == 0) 0 else 8 - bits_over_byte;
+    data_bit_size += padding_bits;
+
+    data_fields[config.fields.len] = .{
+        .name = "_padding",
+        .type = std.meta.Int(.unsigned, padding_bits),
+        .default_value_ptr = null,
+        .is_comptime = false,
+        .alignment = 0, // Required for packed structs
+    };
 
     const Data = @Type(.{
         .@"struct" = .{
             .layout = .@"packed",
+            .backing_integer = std.meta.Int(.unsigned, data_bit_size),
             .fields = &data_fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
