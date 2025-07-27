@@ -33,7 +33,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const build_tests = b.addTest(.{
-        .root_module = t.tables_exe.root_module,
+        .root_module = t.build_tables_mod,
     });
 
     const run_src_tests = b.addRunArtifact(src_tests);
@@ -49,7 +49,7 @@ pub fn createLibMod(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     table_configs: []const u8,
-) struct { lib_mod: *std.Build.Module, tables_exe: *std.Build.Step.Compile } {
+) struct { lib_mod: *std.Build.Module, build_tables_mod: *std.Build.Module } {
     const tables_optimize = switch (optimize) {
         .ReleaseFast => .ReleaseSafe,
         else => optimize,
@@ -86,16 +86,19 @@ pub fn createLibMod(
     table_configs_mod.addImport("config", config_mod);
 
     // Generate tables.zig with config
-    const tables_exe = b.addExecutable(.{
-        .name = "tables",
+    const build_tables_mod = b.createModule(.{
         .root_source_file = b.path("src/build/tables.zig"),
-        .target = target,
+        .target = b.graph.host,
         .optimize = tables_optimize,
     });
-    tables_exe.root_module.addImport("config", config_mod);
-    tables_exe.root_module.addImport("table_configs", table_configs_mod);
-    tables_exe.root_module.addImport("types", types_mod);
-    const run_tables_exe = b.addRunArtifact(tables_exe);
+    const build_tables_exe = b.addExecutable(.{
+        .name = "tables",
+        .root_module = build_tables_mod,
+    });
+    build_tables_mod.addImport("config", config_mod);
+    build_tables_mod.addImport("table_configs", table_configs_mod);
+    build_tables_mod.addImport("types", types_mod);
+    const run_tables_exe = b.addRunArtifact(build_tables_exe);
     run_tables_exe.stdio = .inherit;
     const tables_out = run_tables_exe.addOutputFileArg("tables.zig");
 
@@ -111,5 +114,5 @@ pub fn createLibMod(
     lib_mod.addImport("tables", tables_mod);
     lib_mod.addImport("types", types_mod);
 
-    return .{ .lib_mod = lib_mod, .tables_exe = tables_exe };
+    return .{ .lib_mod = lib_mod, .build_tables_mod = build_tables_mod };
 }
