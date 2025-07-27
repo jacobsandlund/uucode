@@ -1,7 +1,7 @@
 const std = @import("std");
 const Ucd = @import("Ucd.zig");
-const types = @import("types");
-const configpkg = @import("config");
+const types = @import("types.zig");
+const configpkg = @import("config.zig");
 
 pub const std_options: std.Options = .{
     .log_level = .debug,
@@ -38,8 +38,8 @@ pub fn main() !void {
     try writer.writeAll(
         \\//! This file is auto-generated. Do not edit.
         \\
-        \\const types = @import("types");
-        \\const config = @import("config");
+        \\const types = @import("types.zig");
+        \\const config = @import("config.zig");
         \\
         \\pub const tables = .{
         \\

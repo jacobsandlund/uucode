@@ -1,8 +1,8 @@
 const std = @import("std");
 
 const test_table_configs =
-    \\const types = @import("types");
-    \\const config = @import("config");
+    \\const types = @import("types.zig");
+    \\const config = @import("config.zig");
     \\
     \\pub const configs = [_]types.TableConfig{
     \\    .override(&config.default, .{
@@ -22,14 +22,19 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const table_configs = b.option([]const u8, "table-configs", "Table configs") orelse error_configs;
+    const table_data_opt = b.option(std.Build.LazyPath, "table-data", "Built table data");
+
+    const table_data_src = table_data_opt orelse buildTableData(b, table_configs).table_data_src;
+    const lib = createLibMod(b, target, optimize, table_data_src);
 
     // b.addModule with an existing module
-    _ = b.modules.put(b.dupe("uucode"), createLibMod(b, target, optimize, table_configs).lib_mod) catch @panic("OOM");
+    _ = b.modules.put(b.dupe("uucode"), lib) catch @panic("OOM");
 
-    const t = createLibMod(b, target, optimize, test_table_configs);
+    const t = buildTableData(b, test_table_configs);
+    const test_lib_mod = createLibMod(b, target, optimize, t.table_data_src);
 
     const src_tests = b.addTest(.{
-        .root_module = t.lib_mod,
+        .root_module = test_lib_mod,
     });
 
     const build_tests = b.addTest(.{
@@ -44,17 +49,12 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_build_tests.step);
 }
 
-pub fn createLibMod(
+fn createLibMod(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
-    table_configs: []const u8,
-) struct { lib_mod: *std.Build.Module, build_tables_mod: *std.Build.Module } {
-    const tables_optimize = switch (optimize) {
-        .ReleaseFast => .ReleaseSafe,
-        else => optimize,
-    };
-
+    table_data_src: std.Build.LazyPath,
+) *std.Build.Module {
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
@@ -72,50 +72,64 @@ pub fn createLibMod(
         .target = target,
         .optimize = optimize,
     });
-    config_mod.addImport("types", types_mod);
+    config_mod.addImport("types.zig", types_mod);
 
-    // Create table_configs file
+    const table_data_mod = b.createModule(.{
+        .root_source_file = table_data_src,
+        .target = target,
+        .optimize = optimize,
+    });
+    table_data_mod.addImport("types.zig", types_mod);
+    table_data_mod.addImport("config.zig", config_mod);
+
+    lib_mod.addImport("config.zig", config_mod);
+    lib_mod.addImport("table_data", table_data_mod);
+    lib_mod.addImport("types.zig", types_mod);
+
+    return lib_mod;
+}
+
+pub fn buildTableData(
+    b: *std.Build,
+    table_configs: []const u8,
+) struct { build_tables_mod: *std.Build.Module, table_data_src: std.Build.LazyPath } {
+    const target = b.graph.host;
+
+    const types_mod = b.createModule(.{
+        .root_source_file = b.path("src/types.zig"),
+        .target = target,
+    });
+
+    const config_mod = b.createModule(.{
+        .root_source_file = b.path("src/config.zig"),
+        .target = target,
+    });
+    config_mod.addImport("types.zig", types_mod);
+
+    // Create table_configs
     const table_configs_step = b.addWriteFiles();
     const table_configs_file = table_configs_step.add("table_configs.zig", table_configs);
     const table_configs_mod = b.createModule(.{
         .root_source_file = table_configs_file,
         .target = target,
-        .optimize = optimize,
     });
-    table_configs_mod.addImport("types", types_mod);
-    table_configs_mod.addImport("config", config_mod);
+    table_configs_mod.addImport("types.zig", types_mod);
+    table_configs_mod.addImport("config.zig", config_mod);
 
-    // Generate tables.zig with config
+    // Generate table_data.zig with table_configs
     const build_tables_mod = b.createModule(.{
         .root_source_file = b.path("src/build/tables.zig"),
         .target = b.graph.host,
-        .optimize = tables_optimize,
-        .strip = false,
-        .omit_frame_pointer = false,
-        .unwind_tables = .sync,
     });
     const build_tables_exe = b.addExecutable(.{
-        .name = "tables",
+        .name = "uucode_tables",
         .root_module = build_tables_mod,
     });
-    build_tables_mod.addImport("config", config_mod);
+    build_tables_mod.addImport("config.zig", config_mod);
     build_tables_mod.addImport("table_configs", table_configs_mod);
-    build_tables_mod.addImport("types", types_mod);
+    build_tables_mod.addImport("types.zig", types_mod);
     const run_tables_exe = b.addRunArtifact(build_tables_exe);
-    run_tables_exe.stdio = .inherit;
-    const tables_out = run_tables_exe.addOutputFileArg("tables.zig");
+    const table_data_src = run_tables_exe.addOutputFileArg("table_data.zig");
 
-    const tables_mod = b.createModule(.{
-        .root_source_file = tables_out,
-        .target = target,
-        .optimize = optimize,
-    });
-    tables_mod.addImport("types", types_mod);
-    tables_mod.addImport("config", config_mod);
-
-    lib_mod.addImport("config", config_mod);
-    lib_mod.addImport("tables", tables_mod);
-    lib_mod.addImport("types", types_mod);
-
-    return .{ .lib_mod = lib_mod, .build_tables_mod = build_tables_mod };
+    return .{ .build_tables_mod = build_tables_mod, .table_data_src = table_data_src };
 }

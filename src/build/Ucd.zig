@@ -21,8 +21,8 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const types = @import("types");
-const configpkg = @import("config");
+const types = @import("types.zig");
+const configpkg = @import("config.zig");
 
 const table_configs = @import("table_configs").configs;
 const config = blk: {

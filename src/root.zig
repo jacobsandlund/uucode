@@ -1,7 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
-const tables = @import("tables").tables;
-const types = @import("types");
+const tables = @import("table_data").tables;
+const types = @import("types.zig");
 
 fn DataFor(comptime table: anytype) type {
     const DataArray = @FieldType(@TypeOf(table), "data");
