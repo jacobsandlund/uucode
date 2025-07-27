@@ -1,19 +1,5 @@
 const std = @import("std");
 
-const test_table_configs_zig =
-    \\const types = @import("types.zig");
-    \\const config = @import("config.zig");
-    \\
-    \\pub const configs = [_]types.TableConfig{
-    \\    .override(&config.default, .{
-    \\        .fields = &.{"case_folding_simple"},
-    \\    }),
-    \\    .override(&config.default, .{
-    \\        .fields = &.{"is_alphabetic","is_lowercase","is_uppercase"},
-    \\    }),
-    \\};
-;
-
 const error_configs_zig =
     \\Pass `table_configs.zig` with a string or `table_configs_path` with a LazyPath
 ;
@@ -51,6 +37,20 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_src_tests.step);
     test_step.dependOn(&run_build_tests.step);
 }
+
+const test_table_configs_zig =
+    \\const types = @import("types.zig");
+    \\const config = @import("config.zig");
+    \\
+    \\pub const configs = [_]types.TableConfig{
+    \\    .override(&config.default, .{
+    \\        .fields = &.{"case_folding_simple","name"},
+    \\    }),
+    \\    .override(&config.default, .{
+    \\        .fields = &.{"is_alphabetic","is_lowercase","is_uppercase"},
+    \\    }),
+    \\};
+;
 
 fn createLibMod(
     b: *std.Build,

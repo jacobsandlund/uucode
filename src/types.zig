@@ -17,7 +17,7 @@ pub const FullData = struct {
     numeric_value_decimal: ?u4,
     numeric_value_digit: ?u4,
     numeric_value_numeric: []const u8,
-    bidi_mirrored: bool,
+    is_bidi_mirrored: bool,
     unicode_1_name: []const u8,
     simple_uppercase_mapping: ?u21,
     simple_lowercase_mapping: ?u21,
@@ -492,7 +492,7 @@ pub fn ArrayLen(comptime T: type, comptime max_len_: comptime_int) type {
     };
 }
 
-pub fn PackedArray(comptime T: type, comptime len: comptime_int) type {
+pub fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
     const item_bits = @bitSizeOf(T);
 
     return packed struct {
@@ -500,20 +500,19 @@ pub fn PackedArray(comptime T: type, comptime len: comptime_int) type {
 
         bits: Bits,
 
-        pub const Bits = std.meta.Int(.unsigned, item_bits * len);
-        pub const Array = ArrayLen(T, len);
+        pub const Bits = std.meta.Int(.unsigned, item_bits * capacity);
         const ShiftBits = std.math.Log2Int(Bits);
 
         pub fn fromSlice(slice: []const T) Self {
-            if ((comptime len == 0) or slice.len == 0) return .{ .bits = 0 };
+            if ((comptime capacity == 0) or slice.len == 0) return .{ .bits = 0 };
 
             // This may make 1 length slices slightly faster, but it's
             // primarily avoiding an issue where `item_bits` is actually too
             // big to be a valid shift value, and zig can't tell that `i` would
             // never be anything other than 0.
-            if (comptime len == 1) return .{ .bits = @as(Bits, slice[0]) };
+            if (comptime capacity == 1) return .{ .bits = @as(Bits, slice[0]) };
 
-            std.debug.assert(slice.len <= len);
+            std.debug.assert(slice.len <= capacity);
             var bits: Bits = 0;
             for (slice, 0..) |item, i| {
                 bits |= @as(Bits, item) << item_bits * @as(ShiftBits, @intCast(i));
@@ -521,10 +520,11 @@ pub fn PackedArray(comptime T: type, comptime len: comptime_int) type {
             return .{ .bits = bits };
         }
 
-        pub fn toArray(self: Self, array: *Array) void {
-            inline for (0..len) |i| {
-                array[i] = @as(T, @truncate(self.bits >> item_bits * i));
+        pub fn toSlice(self: Self, buffer: []T, len: usize) []T {
+            inline for (0..capacity) |i| {
+                buffer[i] = @as(T, @truncate(self.bits >> item_bits * i));
             }
+            return buffer[0..len];
         }
     };
 }
@@ -577,7 +577,6 @@ pub fn OffsetLen(
         pub const max_offset = config.max_offset;
         pub const embedded_len = config.embedded_len;
 
-        pub const EmbeddedArrayLen = ArrayLen(T, embedded_len);
         pub const BackingArrayLen = ArrayLen(T, max_offset);
         pub const BackingOffsetMap = OffsetMap(T, Offset);
         pub const BackingLenTracking: type = [config.max_len]Offset;
@@ -627,16 +626,16 @@ pub fn OffsetLen(
         pub fn toSlice(
             self: *const Self,
             backing: *const BackingArrayLen,
-            buffer: *EmbeddedArrayLen,
+            buffer: []T,
         ) []const T {
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
             if (comptime embedded_len == max_len) {
-                return self.data.embedded.toArray(buffer)[0..self.len];
+                return self.data.embedded.toSlice(buffer, self.len);
             } else if (comptime embedded_len == 0) {
                 return backing.items[self.data.offset .. self.data.offset + self.len];
             } else if (self.len <= embedded_len) {
-                return self.data.embedded.toArray(buffer)[0..self.len];
+                return self.data.embedded.toSlice(buffer, self.len);
             } else {
                 return backing.items[self.data.offset .. self.data.offset + self.len];
             }
