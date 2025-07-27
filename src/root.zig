@@ -42,6 +42,11 @@ fn alphabetic(cp: u21) bool {
     return getData(table, cp).alphabetic;
 }
 
+fn case_folding_simple(cp: u21) u21 {
+    const table = comptime tableFor("case_folding_simple");
+    return getData(table, cp).case_folding_simple.toOptional() orelse cp;
+}
+
 fn generalCategory(cp: u21) types.GeneralCategory {
     const table = comptime tableFor("general_category");
     return getData(table, cp).general_category;
@@ -80,6 +85,11 @@ test "alphabetic" {
     try testing.expect(alphabetic(65)); // 'A'
     try testing.expect(alphabetic(97)); // 'a'
     try testing.expect(!alphabetic(0));
+}
+
+test "case_folding_simple" {
+    try testing.expectEqual(case_folding_simple(65), 97); // 'a'
+    try testing.expectEqual(case_folding_simple(97), 97); // 'a'
 }
 
 // TODO: "tables" will need to have data for every field
