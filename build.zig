@@ -1,26 +1,60 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
-    buildWithConfig(b,
-        \\const types = @import("types");
-        \\const config = @import("config");
-        \\
-        \\pub const configs = [_]types.TableConfig{
-        \\    .override(&config.default, .{
-        \\        .fields = &.{"case_folding_simple"},
-        \\    }),
-        \\    .override(&config.default, .{
-        \\        .fields = &.{"alphabetic","lowercase","uppercase"},
-        \\    }),
-        \\};
-        \\
-    );
-}
+const test_table_configs =
+    \\const types = @import("types");
+    \\const config = @import("config");
+    \\
+    \\pub const configs = [_]types.TableConfig{
+    \\    .override(&config.default, .{
+    \\        .fields = &.{"case_folding_simple"},
+    \\    }),
+    \\    .override(&config.default, .{
+    \\        .fields = &.{"alphabetic","lowercase","uppercase"},
+    \\    }),
+    \\};
+;
 
-pub fn buildWithConfig(b: *std.Build, table_configs: []const u8) void {
+const error_configs =
+    \\Pass `-Dtable-configs` with a string defining the table configs.
+;
+
+pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const table_configs = b.option([]const u8, "table-configs", "Table configs") orelse error_configs;
 
+    const lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "uucode",
+        .root_module = buildLibMod(b, target, optimize, table_configs).lib_mod,
+    });
+
+    b.installArtifact(lib);
+
+    const t = buildLibMod(b, target, optimize, test_table_configs);
+
+    const src_tests = b.addTest(.{
+        .root_module = t.lib_mod,
+    });
+
+    const build_tests = b.addTest(.{
+        .root_module = t.tables_exe.root_module,
+    });
+
+    const run_src_tests = b.addRunArtifact(src_tests);
+    const run_build_tests = b.addRunArtifact(build_tests);
+
+    const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&run_src_tests.step);
+    test_step.dependOn(&run_build_tests.step);
+}
+
+pub fn buildLibMod(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    table_configs: []const u8,
+) struct { lib_mod: *std.Build.Module, tables_exe: *std.Build.Step.Compile } {
     const tables_optimize = switch (optimize) {
         .ReleaseFast => .ReleaseSafe,
         else => optimize,
@@ -30,12 +64,6 @@ pub fn buildWithConfig(b: *std.Build, table_configs: []const u8) void {
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
-    });
-
-    const lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "uucode",
-        .root_module = lib_mod,
     });
 
     const types_mod = b.createModule(.{
@@ -87,22 +115,6 @@ pub fn buildWithConfig(b: *std.Build, table_configs: []const u8) void {
     lib_mod.addImport("config", config_mod);
     lib_mod.addImport("tables", tables_mod);
     lib_mod.addImport("types", types_mod);
-    tables_out.addStepDependencies(&lib.step);
 
-    b.installArtifact(lib);
-
-    const src_tests = b.addTest(.{
-        .root_module = lib_mod,
-    });
-
-    const build_tests = b.addTest(.{
-        .root_module = tables_exe.root_module,
-    });
-
-    const run_src_tests = b.addRunArtifact(src_tests);
-    const run_build_tests = b.addRunArtifact(build_tests);
-
-    const test_step = b.step("test", "Run tests");
-    test_step.dependOn(&run_src_tests.step);
-    test_step.dependOn(&run_build_tests.step);
+    return .{ .lib_mod = lib_mod, .tables_exe = tables_exe };
 }
