@@ -1,6 +1,23 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
+    buildWithConfig(b,
+        \\const types = @import("types");
+        \\const config = @import("config");
+        \\
+        \\pub const configs = [_]types.TableConfig{
+        \\    .override(&config.default, .{
+        \\        .fields = &.{"case_folding_simple"},
+        \\    }),
+        \\    .override(&config.default, .{
+        \\        .fields = &.{"alphabetic","lowercase","uppercase"},
+        \\    }),
+        \\};
+        \\
+    );
+}
+
+pub fn buildWithConfig(b: *std.Build, table_configs: []const u8) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -36,20 +53,7 @@ pub fn build(b: *std.Build) void {
 
     // Create table_configs file
     const table_configs_step = b.addWriteFiles();
-    const table_configs_file = table_configs_step.add("table_configs.zig",
-        \\const types = @import("types");
-        \\const config = @import("config");
-        \\
-        \\pub const configs = [_]types.TableConfig{
-        \\    .override(&config.default, .{
-        \\        .fields = &.{"case_folding_simple"},
-        \\    }),
-        \\    .override(&config.default, .{
-        \\        .fields = &.{"alphabetic","lowercase","uppercase"},
-        \\    }),
-        \\};
-        \\
-    );
+    const table_configs_file = table_configs_step.add("table_configs.zig", table_configs);
     const table_configs_mod = b.createModule(.{
         .root_source_file = table_configs_file,
         .target = target,
