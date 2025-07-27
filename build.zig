@@ -24,13 +24,14 @@ pub fn build(b: *std.Build) void {
     const table_configs = b.option([]const u8, "table-configs", "Table configs") orelse error_configs;
     const table_data_opt = b.option(std.Build.LazyPath, "table-data", "Built table data");
 
-    const table_data_src = table_data_opt orelse buildTableData(b, table_configs);
+    const root_path = b.path(".");
+    const table_data_src = table_data_opt orelse buildTableData(b, root_path, table_configs);
     const lib = createLibMod(b, target, optimize, table_data_src);
 
     // b.addModule with an existing module
     _ = b.modules.put(b.dupe("uucode"), lib) catch @panic("OOM");
 
-    const t = buildTableDataWithMod(b, test_table_configs);
+    const t = buildTableDataWithMod(b, root_path, test_table_configs);
     const test_lib_mod = createLibMod(b, target, optimize, t.table_data_src);
 
     const src_tests = b.addTest(.{
@@ -91,24 +92,24 @@ fn createLibMod(
 
 fn buildTableDataWithMod(
     b: *std.Build,
+    root_path: std.Build.LazyPath,
     table_configs: []const u8,
 ) struct { build_tables_mod: *std.Build.Module, table_data_src: std.Build.LazyPath } {
     const target = b.graph.host;
 
     const types_mod = b.createModule(.{
-        .root_source_file = b.path("src/types.zig"),
+        .root_source_file = root_path.path(b, "src/types.zig"),
         .target = target,
     });
 
     const config_mod = b.createModule(.{
-        .root_source_file = b.path("src/config.zig"),
+        .root_source_file = root_path.path(b, "src/config.zig"),
         .target = target,
     });
     config_mod.addImport("types.zig", types_mod);
 
     // Create table_configs
-    const table_configs_step = b.addWriteFiles();
-    const table_configs_file = table_configs_step.add("table_configs.zig", table_configs);
+    const table_configs_file = b.addWriteFiles().add("table_configs.zig", table_configs);
     const table_configs_mod = b.createModule(.{
         .root_source_file = table_configs_file,
         .target = target,
@@ -118,7 +119,7 @@ fn buildTableDataWithMod(
 
     // Generate table_data.zig with table_configs
     const build_tables_mod = b.createModule(.{
-        .root_source_file = b.path("src/build/tables.zig"),
+        .root_source_file = root_path.path(b, "src/build/tables.zig"),
         .target = b.graph.host,
     });
     const build_tables_exe = b.addExecutable(.{
@@ -136,7 +137,8 @@ fn buildTableDataWithMod(
 
 pub fn buildTableData(
     b: *std.Build,
+    root_path: std.Build.LazyPath,
     table_configs: []const u8,
 ) std.Build.LazyPath {
-    return buildTableDataWithMod(b, table_configs).table_data_src;
+    return buildTableDataWithMod(b, root_path, table_configs).table_data_src;
 }
