@@ -24,13 +24,13 @@ pub fn build(b: *std.Build) void {
     const table_configs = b.option([]const u8, "table-configs", "Table configs") orelse error_configs;
     const table_data_opt = b.option(std.Build.LazyPath, "table-data", "Built table data");
 
-    const table_data_src = table_data_opt orelse buildTableData(b, table_configs).table_data_src;
+    const table_data_src = table_data_opt orelse buildTableData(b, table_configs);
     const lib = createLibMod(b, target, optimize, table_data_src);
 
     // b.addModule with an existing module
     _ = b.modules.put(b.dupe("uucode"), lib) catch @panic("OOM");
 
-    const t = buildTableData(b, test_table_configs);
+    const t = buildTableDataWithMod(b, test_table_configs);
     const test_lib_mod = createLibMod(b, target, optimize, t.table_data_src);
 
     const src_tests = b.addTest(.{
@@ -89,7 +89,7 @@ fn createLibMod(
     return lib_mod;
 }
 
-pub fn buildTableData(
+fn buildTableDataWithMod(
     b: *std.Build,
     table_configs: []const u8,
 ) struct { build_tables_mod: *std.Build.Module, table_data_src: std.Build.LazyPath } {
@@ -132,4 +132,11 @@ pub fn buildTableData(
     const table_data_src = run_tables_exe.addOutputFileArg("table_data.zig");
 
     return .{ .build_tables_mod = build_tables_mod, .table_data_src = table_data_src };
+}
+
+pub fn buildTableData(
+    b: *std.Build,
+    table_configs: []const u8,
+) std.Build.LazyPath {
+    return buildTableDataWithMod(b, table_configs).table_data_src;
 }
