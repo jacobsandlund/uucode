@@ -22,16 +22,16 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const table_configs = b.option([]const u8, "table-configs", "Table configs") orelse error_configs;
-    const table_data_opt = b.option(std.Build.LazyPath, "table-data", "Built table data");
+    const table_data_src_opt = b.option(std.Build.LazyPath, "table_data_src", "Built table data source file");
 
-    const root_path = b.path("");
-    const table_data_src = table_data_opt orelse buildTableDataInner(b, root_path, table_configs).table_data_src;
+    const table_data_src = table_data_src_opt orelse buildTableData(b, table_configs).table_data_src;
+    b.addNamedLazyPath("table_data_src", table_data_src);
     const lib = createLibMod(b, target, optimize, table_data_src);
 
     // b.addModule with an existing module
     _ = b.modules.put(b.dupe("uucode"), lib) catch @panic("OOM");
 
-    const t = buildTableDataInner(b, root_path, test_table_configs);
+    const t = buildTableData(b, test_table_configs);
     const test_lib_mod = createLibMod(b, target, optimize, t.table_data_src);
 
     const src_tests = b.addTest(.{
@@ -90,20 +90,19 @@ fn createLibMod(
     return lib_mod;
 }
 
-fn buildTableDataInner(
+fn buildTableData(
     b: *std.Build,
-    root_path: std.Build.LazyPath,
     table_configs: []const u8,
 ) struct { build_tables_mod: *std.Build.Module, table_data_src: std.Build.LazyPath } {
     const target = b.graph.host;
 
     const types_mod = b.createModule(.{
-        .root_source_file = root_path.path(b, "src/types.zig"),
+        .root_source_file = b.path("src/types.zig"),
         .target = target,
     });
 
     const config_mod = b.createModule(.{
-        .root_source_file = root_path.path(b, "src/config.zig"),
+        .root_source_file = b.path("src/config.zig"),
         .target = target,
     });
     config_mod.addImport("types.zig", types_mod);
@@ -119,7 +118,7 @@ fn buildTableDataInner(
 
     // Generate table_data.zig with table_configs
     const build_tables_mod = b.createModule(.{
-        .root_source_file = root_path.path(b, "src/build/tables.zig"),
+        .root_source_file = b.path("src/build/tables.zig"),
         .target = b.graph.host,
     });
     const build_tables_exe = b.addExecutable(.{
@@ -133,13 +132,4 @@ fn buildTableDataInner(
     const table_data_src = run_tables_exe.addOutputFileArg("table_data.zig");
 
     return .{ .build_tables_mod = build_tables_mod, .table_data_src = table_data_src };
-}
-
-pub fn buildTableData(
-    b: *std.Build,
-    table_configs: []const u8,
-) std.Build.LazyPath {
-    const dir = std.fs.path.dirname(@src().file) orelse unreachable;
-    const root_path = std.Build.LazyPath{ .cwd_relative = dir };
-    return buildTableDataInner(b, root_path, table_configs).table_data_src;
 }
