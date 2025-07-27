@@ -12,11 +12,10 @@ The architecture works in a few layers:
 
 ## Build & Commands
 
-* Build with: `zig build`
-* Test with: `zig build test`
+* Build and test with: `zig build test`
 * Format code with: `zig fmt`
 
-Always `zig build test` and `zig build` to check that changes still pass.
+Always `zig build test` to check that changes still pass.
 
 ## Code Style
 

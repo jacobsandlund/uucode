@@ -15,7 +15,7 @@ const test_table_configs =
 ;
 
 const error_configs =
-    \\Pass `-Dtable-configs` with a string defining the table configs.
+    \\Pass `table-configs` with a string defining the table configs.
 ;
 
 pub fn build(b: *std.Build) void {
@@ -23,15 +23,10 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const table_configs = b.option([]const u8, "table-configs", "Table configs") orelse error_configs;
 
-    const lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "uucode",
-        .root_module = buildLibMod(b, target, optimize, table_configs).lib_mod,
-    });
+    // b.addModule with an existing module
+    _ = b.modules.put(b.dupe("uucode"), createLibMod(b, target, optimize, table_configs).lib_mod) catch @panic("OOM");
 
-    b.installArtifact(lib);
-
-    const t = buildLibMod(b, target, optimize, test_table_configs);
+    const t = createLibMod(b, target, optimize, test_table_configs);
 
     const src_tests = b.addTest(.{
         .root_module = t.lib_mod,
@@ -49,7 +44,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_build_tests.step);
 }
 
-pub fn buildLibMod(
+pub fn createLibMod(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
