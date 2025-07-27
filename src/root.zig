@@ -27,6 +27,7 @@ fn tableFor(comptime field: []const u8) TableDataFor(field) {
 }
 
 // TODO: benchmark if needing an explicit `inline`
+// TODO: support two stage (stage1 and data) tables
 fn getData(comptime table: anytype, cp: u21) DataFor(table) {
     const stage1_idx = cp >> 8;
     const stage2_idx = cp & 0xFF;

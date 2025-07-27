@@ -321,6 +321,8 @@ pub fn writeTableData(
             data.extended_pictographic = emoji_data.extended_pictographic;
         }
 
+        // TODO: support two stage (stage1 and data) tables
+
         const gop = try data_map.getOrPut(allocator, data);
         var data_index: u24 = undefined;
         if (gop.found_existing) {
