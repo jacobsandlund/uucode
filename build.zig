@@ -139,6 +139,7 @@ pub fn buildTableData(
     b: *std.Build,
     table_configs: []const u8,
 ) std.Build.LazyPath {
-    const root_path = std.Build.LazyPath{ .cwd_relative = std.fs.path.dirname(@src().file) };
+    const dir = std.fs.path.dirname(@src().file) orelse unreachable;
+    const root_path = std.Build.LazyPath{ .cwd_relative = dir };
     return buildTableDataInner(b, root_path, table_configs).table_data_src;
 }
