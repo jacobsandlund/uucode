@@ -32,7 +32,7 @@ fn tableFor(comptime field: []const u8) TableDataFor(field) {
 inline fn getData(comptime table: anytype, cp: u21) DataFor(table) {
     const stage1_idx = cp >> 8; // Top bits select block
     const stage2_idx = cp & 0xFF; // Bottom 8 bits select within block
-    const block_start = table.stage1[stage1_idx] << 8;
+    const block_start = @as(usize, table.stage1[stage1_idx]) << 8;
     const data_idx = table.stage2[block_start + stage2_idx];
     return table.data[data_idx];
 }

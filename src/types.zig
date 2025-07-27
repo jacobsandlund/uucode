@@ -437,12 +437,12 @@ pub fn TableData(comptime config: TableConfig) type {
     if (config.stage1_len > 0) {
         const next_stage_len = if (config.stage2_len > 0) config.stage2_len else config.data_len;
         const block_size = 256;
-        const blocks_len = std.math.divCeil(usize, next_stage_len, block_size);
+        const blocks_len = try std.math.divCeil(usize, next_stage_len, block_size);
         const BlockOffset = std.math.IntFittingRange(0, blocks_len);
 
         const Stage1 = @Type(.{
             .array = .{
-                .len = config.stage2_len,
+                .len = config.stage1_len,
                 .child = BlockOffset,
                 .sentinel_ptr = null,
             },
