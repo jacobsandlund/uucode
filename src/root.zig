@@ -36,6 +36,11 @@ fn getData(comptime table: anytype, cp: u21) DataFor(table) {
     return table.data[data_idx];
 }
 
+pub fn data(comptime table_index: []const u8, cp: u21) DataFor(@field(tables, table_index)) {
+    const table = @field(tables, table_index);
+    return getData(table, cp);
+}
+
 pub fn alphabetic(cp: u21) bool {
     const table = comptime tableFor("alphabetic");
     return getData(table, cp).alphabetic;
