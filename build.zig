@@ -9,7 +9,7 @@ const test_table_configs_zig =
     \\        .fields = &.{"case_folding_simple"},
     \\    }),
     \\    .override(&config.default, .{
-    \\        .fields = &.{"alphabetic","lowercase","uppercase"},
+    \\        .fields = &.{"is_alphabetic","is_lowercase","is_uppercase"},
     \\    }),
     \\};
 ;

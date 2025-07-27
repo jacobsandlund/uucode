@@ -29,25 +29,25 @@ pub const FullData = struct {
     case_folding_full: []const u21,
 
     // DerivedCoreProperties fields
-    math: bool,
-    alphabetic: bool,
-    lowercase: bool,
-    uppercase: bool,
-    cased: bool,
-    case_ignorable: bool,
+    is_math: bool,
+    is_alphabetic: bool,
+    is_lowercase: bool,
+    is_uppercase: bool,
+    is_cased: bool,
+    is_case_ignorable: bool,
     changes_when_lowercased: bool,
     changes_when_uppercased: bool,
     changes_when_titlecased: bool,
     changes_when_casefolded: bool,
     changes_when_casemapped: bool,
-    id_start: bool,
-    id_continue: bool,
-    xid_start: bool,
-    xid_continue: bool,
-    default_ignorable_code_point: bool,
-    grapheme_extend: bool,
-    grapheme_base: bool,
-    grapheme_link: bool,
+    is_id_start: bool,
+    is_id_continue: bool,
+    is_xid_start: bool,
+    is_xid_continue: bool,
+    is_default_ignorable_code_point: bool,
+    is_grapheme_extend: bool,
+    is_grapheme_base: bool,
+    is_grapheme_link: bool,
     indic_conjunct_break: IndicConjunctBreak,
 
     // EastAsianWidth field
@@ -57,12 +57,12 @@ pub const FullData = struct {
     grapheme_break: GraphemeBreak,
 
     // EmojiData fields
-    emoji: bool,
-    emoji_presentation: bool,
-    emoji_modifier: bool,
-    emoji_modifier_base: bool,
-    emoji_component: bool,
-    extended_pictographic: bool,
+    is_emoji: bool,
+    has_emoji_presentation: bool,
+    is_emoji_modifier: bool,
+    is_emoji_modifier_base: bool,
+    is_emoji_component: bool,
+    is_extended_pictographic: bool,
 };
 
 pub const TableConfig = struct {
@@ -223,7 +223,7 @@ pub fn UnicodeData(comptime config: TableConfig) type {
         numeric_value_decimal: PackedOptional(u4),
         numeric_value_digit: PackedOptional(u4),
         numeric_value_numeric: OffsetLen(u8, config.numeric_value_numeric),
-        bidi_mirrored: bool,
+        is_bidi_mirrored: bool,
         unicode_1_name: OffsetLen(u8, config.unicode_1_name),
         simple_uppercase_mapping: PackedOptional(u21),
         simple_lowercase_mapping: PackedOptional(u21),
@@ -247,25 +247,25 @@ pub const IndicConjunctBreak = enum(u2) {
 };
 
 pub const DerivedCoreProperties = struct {
-    math: bool = false,
-    alphabetic: bool = false,
-    lowercase: bool = false,
-    uppercase: bool = false,
-    cased: bool = false,
-    case_ignorable: bool = false,
+    is_math: bool = false,
+    is_alphabetic: bool = false,
+    is_lowercase: bool = false,
+    is_uppercase: bool = false,
+    is_cased: bool = false,
+    is_case_ignorable: bool = false,
     changes_when_lowercased: bool = false,
     changes_when_uppercased: bool = false,
     changes_when_titlecased: bool = false,
     changes_when_casefolded: bool = false,
     changes_when_casemapped: bool = false,
-    id_start: bool = false,
-    id_continue: bool = false,
-    xid_start: bool = false,
-    xid_continue: bool = false,
-    default_ignorable_code_point: bool = false,
-    grapheme_extend: bool = false,
-    grapheme_base: bool = false,
-    grapheme_link: bool = false,
+    is_id_start: bool = false,
+    is_id_continue: bool = false,
+    is_xid_start: bool = false,
+    is_xid_continue: bool = false,
+    is_default_ignorable_code_point: bool = false,
+    is_grapheme_extend: bool = false,
+    is_grapheme_base: bool = false,
+    is_grapheme_link: bool = false,
     indic_conjunct_break: IndicConjunctBreak = .none,
 };
 
@@ -296,12 +296,12 @@ pub const GraphemeBreak = enum(u4) {
 };
 
 pub const EmojiData = packed struct {
-    emoji: bool = false,
-    emoji_presentation: bool = false,
-    emoji_modifier: bool = false,
-    emoji_modifier_base: bool = false,
-    emoji_component: bool = false,
-    extended_pictographic: bool = false,
+    is_emoji: bool = false,
+    has_emoji_presentation: bool = false,
+    is_emoji_modifier: bool = false,
+    is_emoji_modifier_base: bool = false,
+    is_emoji_component: bool = false,
+    is_extended_pictographic: bool = false,
 };
 
 pub fn TableData(comptime config: TableConfig) type {

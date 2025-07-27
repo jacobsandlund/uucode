@@ -41,12 +41,12 @@ pub fn data(comptime table_index: []const u8, cp: u21) DataFor(@field(tables, ta
     return getData(table, cp);
 }
 
-pub fn alphabetic(cp: u21) bool {
-    const table = comptime tableFor("alphabetic");
-    return getData(table, cp).alphabetic;
+pub fn isAlphabetic(cp: u21) bool {
+    const table = comptime tableFor("is_alphabetic");
+    return getData(table, cp).is_alphabetic;
 }
 
-pub fn case_folding_simple(cp: u21) u21 {
+pub fn caseFoldingSimple(cp: u21) u21 {
     const table = comptime tableFor("case_folding_simple");
     return getData(table, cp).case_folding_simple.toOptional() orelse cp;
 }
@@ -61,15 +61,15 @@ test {
     //std.testing.refAllDecls(@This());
 }
 
-test "alphabetic" {
-    try testing.expect(alphabetic(65)); // 'A'
-    try testing.expect(alphabetic(97)); // 'a'
-    try testing.expect(!alphabetic(0));
+test "isAlphabetic" {
+    try testing.expect(isAlphabetic(65)); // 'A'
+    try testing.expect(isAlphabetic(97)); // 'a'
+    try testing.expect(!isAlphabetic(0));
 }
 
-test "case_folding_simple" {
-    try testing.expectEqual(case_folding_simple(65), 97); // 'a'
-    try testing.expectEqual(case_folding_simple(97), 97); // 'a'
+test "caseFoldingSimple" {
+    try testing.expectEqual(caseFoldingSimple(65), 97); // 'a'
+    try testing.expectEqual(caseFoldingSimple(97), 97); // 'a'
 }
 
 // TODO: "tables" will need to have data for every field

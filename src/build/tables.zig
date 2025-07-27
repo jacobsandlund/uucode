@@ -190,8 +190,8 @@ pub fn writeTableData(
         if (@hasField(Data, "numeric_value_numeric")) {
             data.numeric_value_numeric = unicode_data.numeric_value_numeric;
         }
-        if (@hasField(Data, "bidi_mirrored")) {
-            data.bidi_mirrored = unicode_data.bidi_mirrored;
+        if (@hasField(Data, "is_bidi_mirrored")) {
+            data.is_bidi_mirrored = unicode_data.is_bidi_mirrored;
         }
         if (@hasField(Data, "unicode_1_name")) {
             data.unicode_1_name = unicode_data.unicode_1_name;
@@ -230,23 +230,23 @@ pub fn writeTableData(
         }
 
         // DerivedCoreProperties fields
-        if (@hasField(Data, "math")) {
-            data.math = derived_core_properties.math;
+        if (@hasField(Data, "is_math")) {
+            data.is_math = derived_core_properties.is_math;
         }
-        if (@hasField(Data, "alphabetic")) {
-            data.alphabetic = derived_core_properties.alphabetic;
+        if (@hasField(Data, "is_alphabetic")) {
+            data.is_alphabetic = derived_core_properties.is_alphabetic;
         }
-        if (@hasField(Data, "lowercase")) {
-            data.lowercase = derived_core_properties.lowercase;
+        if (@hasField(Data, "is_lowercase")) {
+            data.is_lowercase = derived_core_properties.is_lowercase;
         }
-        if (@hasField(Data, "uppercase")) {
-            data.uppercase = derived_core_properties.uppercase;
+        if (@hasField(Data, "is_uppercase")) {
+            data.is_uppercase = derived_core_properties.is_uppercase;
         }
-        if (@hasField(Data, "cased")) {
-            data.cased = derived_core_properties.cased;
+        if (@hasField(Data, "is_cased")) {
+            data.is_cased = derived_core_properties.is_cased;
         }
-        if (@hasField(Data, "case_ignorable")) {
-            data.case_ignorable = derived_core_properties.case_ignorable;
+        if (@hasField(Data, "is_case_ignorable")) {
+            data.is_case_ignorable = derived_core_properties.is_case_ignorable;
         }
         if (@hasField(Data, "changes_when_lowercased")) {
             data.changes_when_lowercased = derived_core_properties.changes_when_lowercased;
@@ -263,29 +263,29 @@ pub fn writeTableData(
         if (@hasField(Data, "changes_when_casemapped")) {
             data.changes_when_casemapped = derived_core_properties.changes_when_casemapped;
         }
-        if (@hasField(Data, "id_start")) {
-            data.id_start = derived_core_properties.id_start;
+        if (@hasField(Data, "is_id_start")) {
+            data.is_id_start = derived_core_properties.is_id_start;
         }
-        if (@hasField(Data, "id_continue")) {
-            data.id_continue = derived_core_properties.id_continue;
+        if (@hasField(Data, "is_id_continue")) {
+            data.is_id_continue = derived_core_properties.is_id_continue;
         }
-        if (@hasField(Data, "xid_start")) {
-            data.xid_start = derived_core_properties.xid_start;
+        if (@hasField(Data, "is_xid_start")) {
+            data.is_xid_start = derived_core_properties.is_xid_start;
         }
-        if (@hasField(Data, "xid_continue")) {
-            data.xid_continue = derived_core_properties.xid_continue;
+        if (@hasField(Data, "is_xid_continue")) {
+            data.is_xid_continue = derived_core_properties.is_xid_continue;
         }
-        if (@hasField(Data, "default_ignorable_code_point")) {
-            data.default_ignorable_code_point = derived_core_properties.default_ignorable_code_point;
+        if (@hasField(Data, "is_default_ignorable_code_point")) {
+            data.is_default_ignorable_code_point = derived_core_properties.is_default_ignorable_code_point;
         }
-        if (@hasField(Data, "grapheme_extend")) {
-            data.grapheme_extend = derived_core_properties.grapheme_extend;
+        if (@hasField(Data, "is_grapheme_extend")) {
+            data.is_grapheme_extend = derived_core_properties.is_grapheme_extend;
         }
-        if (@hasField(Data, "grapheme_base")) {
-            data.grapheme_base = derived_core_properties.grapheme_base;
+        if (@hasField(Data, "is_grapheme_base")) {
+            data.is_grapheme_base = derived_core_properties.is_grapheme_base;
         }
-        if (@hasField(Data, "grapheme_link")) {
-            data.grapheme_link = derived_core_properties.grapheme_link;
+        if (@hasField(Data, "is_grapheme_link")) {
+            data.is_grapheme_link = derived_core_properties.is_grapheme_link;
         }
         if (@hasField(Data, "indic_conjunct_break")) {
             data.indic_conjunct_break = derived_core_properties.indic_conjunct_break;
@@ -302,23 +302,23 @@ pub fn writeTableData(
         }
 
         // EmojiData fields
-        if (@hasField(Data, "emoji")) {
-            data.emoji = emoji_data.emoji;
+        if (@hasField(Data, "is_emoji")) {
+            data.is_emoji = emoji_data.is_emoji;
         }
-        if (@hasField(Data, "emoji_presentation")) {
-            data.emoji_presentation = emoji_data.emoji_presentation;
+        if (@hasField(Data, "has_emoji_presentation")) {
+            data.has_emoji_presentation = emoji_data.has_emoji_presentation;
         }
-        if (@hasField(Data, "emoji_modifier")) {
-            data.emoji_modifier = emoji_data.emoji_modifier;
+        if (@hasField(Data, "is_emoji_modifier")) {
+            data.is_emoji_modifier = emoji_data.is_emoji_modifier;
         }
-        if (@hasField(Data, "emoji_modifier_base")) {
-            data.emoji_modifier_base = emoji_data.emoji_modifier_base;
+        if (@hasField(Data, "is_emoji_modifier_base")) {
+            data.is_emoji_modifier_base = emoji_data.is_emoji_modifier_base;
         }
-        if (@hasField(Data, "emoji_component")) {
-            data.emoji_component = emoji_data.emoji_component;
+        if (@hasField(Data, "is_emoji_component")) {
+            data.is_emoji_component = emoji_data.is_emoji_component;
         }
-        if (@hasField(Data, "extended_pictographic")) {
-            data.extended_pictographic = emoji_data.extended_pictographic;
+        if (@hasField(Data, "is_extended_pictographic")) {
+            data.is_extended_pictographic = emoji_data.is_extended_pictographic;
         }
 
         // TODO: support two stage (stage1 and data) tables

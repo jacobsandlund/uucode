@@ -288,7 +288,7 @@ fn parseUnicodeData(
         .numeric_value_decimal = .null,
         .numeric_value_digit = .null,
         .numeric_value_numeric = .empty,
-        .bidi_mirrored = false,
+        .is_bidi_mirrored = false,
         .unicode_1_name = .empty,
         .simple_uppercase_mapping = .null,
         .simple_lowercase_mapping = .null,
@@ -326,7 +326,7 @@ fn parseUnicodeData(
         const numeric_decimal_str = parts.next().?; // Field 6
         const numeric_digit_str = parts.next().?; // Field 7
         const numeric_numeric_str = parts.next().?; // Field 8
-        const bidi_mirrored = std.mem.eql(u8, parts.next().?, "Y"); // Field 9
+        const is_bidi_mirrored = std.mem.eql(u8, parts.next().?, "Y"); // Field 9
         const unicode_1_name = parts.next().?; // Field 10
         _ = parts.next().?; // Field 11: Obsolete ISO_Comment
         const simple_uppercase_mapping_str = parts.next().?; // Field 12
@@ -426,7 +426,7 @@ fn parseUnicodeData(
             .numeric_value_decimal = .fromOptional(numeric_value_decimal),
             .numeric_value_digit = .fromOptional(numeric_value_digit),
             .numeric_value_numeric = numeric_value_numeric,
-            .bidi_mirrored = bidi_mirrored,
+            .is_bidi_mirrored = is_bidi_mirrored,
             .unicode_1_name = try .fromSliceTracked(allocator, &ucd.backing.unicode_1_name, &maps.unicode_1_name, &tracking.unicode_1_name, unicode_1_name),
             .simple_uppercase_mapping = .fromOptional(simple_uppercase_mapping),
             .simple_lowercase_mapping = .fromOptional(simple_lowercase_mapping),
@@ -549,17 +549,17 @@ fn parseDerivedCoreProperties(
             }
 
             if (std.mem.eql(u8, property, "Math")) {
-                result.value_ptr.math = true;
+                result.value_ptr.is_math = true;
             } else if (std.mem.eql(u8, property, "Alphabetic")) {
-                result.value_ptr.alphabetic = true;
+                result.value_ptr.is_alphabetic = true;
             } else if (std.mem.eql(u8, property, "Lowercase")) {
-                result.value_ptr.lowercase = true;
+                result.value_ptr.is_lowercase = true;
             } else if (std.mem.eql(u8, property, "Uppercase")) {
-                result.value_ptr.uppercase = true;
+                result.value_ptr.is_uppercase = true;
             } else if (std.mem.eql(u8, property, "Cased")) {
-                result.value_ptr.cased = true;
+                result.value_ptr.is_cased = true;
             } else if (std.mem.eql(u8, property, "Case_Ignorable")) {
-                result.value_ptr.case_ignorable = true;
+                result.value_ptr.is_case_ignorable = true;
             } else if (std.mem.eql(u8, property, "Changes_When_Lowercased")) {
                 result.value_ptr.changes_when_lowercased = true;
             } else if (std.mem.eql(u8, property, "Changes_When_Uppercased")) {
@@ -571,21 +571,21 @@ fn parseDerivedCoreProperties(
             } else if (std.mem.eql(u8, property, "Changes_When_Casemapped")) {
                 result.value_ptr.changes_when_casemapped = true;
             } else if (std.mem.eql(u8, property, "ID_Start")) {
-                result.value_ptr.id_start = true;
+                result.value_ptr.is_id_start = true;
             } else if (std.mem.eql(u8, property, "ID_Continue")) {
-                result.value_ptr.id_continue = true;
+                result.value_ptr.is_id_continue = true;
             } else if (std.mem.eql(u8, property, "XID_Start")) {
-                result.value_ptr.xid_start = true;
+                result.value_ptr.is_xid_start = true;
             } else if (std.mem.eql(u8, property, "XID_Continue")) {
-                result.value_ptr.xid_continue = true;
+                result.value_ptr.is_xid_continue = true;
             } else if (std.mem.eql(u8, property, "Default_Ignorable_Code_Point")) {
-                result.value_ptr.default_ignorable_code_point = true;
+                result.value_ptr.is_default_ignorable_code_point = true;
             } else if (std.mem.eql(u8, property, "Grapheme_Extend")) {
-                result.value_ptr.grapheme_extend = true;
+                result.value_ptr.is_grapheme_extend = true;
             } else if (std.mem.eql(u8, property, "Grapheme_Base")) {
-                result.value_ptr.grapheme_base = true;
+                result.value_ptr.is_grapheme_base = true;
             } else if (std.mem.eql(u8, property, "Grapheme_Link")) {
-                result.value_ptr.grapheme_link = true;
+                result.value_ptr.is_grapheme_link = true;
             } else if (std.mem.eql(u8, property, "InCB")) {
                 if (std.mem.eql(u8, value_str, "Linker")) {
                     result.value_ptr.indic_conjunct_break = .linker;
@@ -772,17 +772,17 @@ fn parseEmojiData(
             }
 
             if (std.mem.eql(u8, prop_str, "Emoji")) {
-                result.value_ptr.emoji = true;
+                result.value_ptr.is_emoji = true;
             } else if (std.mem.eql(u8, prop_str, "Emoji_Presentation")) {
-                result.value_ptr.emoji_presentation = true;
+                result.value_ptr.has_emoji_presentation = true;
             } else if (std.mem.eql(u8, prop_str, "Emoji_Modifier")) {
-                result.value_ptr.emoji_modifier = true;
+                result.value_ptr.is_emoji_modifier = true;
             } else if (std.mem.eql(u8, prop_str, "Emoji_Modifier_Base")) {
-                result.value_ptr.emoji_modifier_base = true;
+                result.value_ptr.is_emoji_modifier_base = true;
             } else if (std.mem.eql(u8, prop_str, "Emoji_Component")) {
-                result.value_ptr.emoji_component = true;
+                result.value_ptr.is_emoji_component = true;
             } else if (std.mem.eql(u8, prop_str, "Extended_Pictographic")) {
-                result.value_ptr.extended_pictographic = true;
+                result.value_ptr.is_extended_pictographic = true;
             } else {
                 std.log.err("Unknown EmojiData property: {s}", .{prop_str});
                 unreachable;
