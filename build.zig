@@ -90,6 +90,9 @@ pub fn createLibMod(
         .root_source_file = b.path("src/build/tables.zig"),
         .target = b.graph.host,
         .optimize = tables_optimize,
+        .strip = false,
+        .omit_frame_pointer = false,
+        .unwind_tables = .sync,
     });
     const build_tables_exe = b.addExecutable(.{
         .name = "tables",
