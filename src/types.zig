@@ -305,6 +305,7 @@ pub const EmojiData = packed struct {
 };
 
 pub fn TableData(comptime config: TableConfig) type {
+    @setEvalBranchQuota(10_000);
     const full_fields_map = comptime std.static_string_map.StaticStringMap(std.builtin.Type.StructField).initComptime(blk: {
         const full_fields = @typeInfo(FullData).@"struct".fields;
         var kvs: [full_fields.len]struct { []const u8, std.builtin.Type.StructField } = undefined;
