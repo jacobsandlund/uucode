@@ -24,14 +24,14 @@ pub fn build(b: *std.Build) void {
     const table_configs = b.option([]const u8, "table-configs", "Table configs") orelse error_configs;
     const table_data_opt = b.option(std.Build.LazyPath, "table-data", "Built table data");
 
-    const root_path = b.path(".");
-    const table_data_src = table_data_opt orelse buildTableData(b, root_path, table_configs);
+    const root_path = b.path("");
+    const table_data_src = table_data_opt orelse buildTableDataInner(b, root_path, table_configs).table_data_src;
     const lib = createLibMod(b, target, optimize, table_data_src);
 
     // b.addModule with an existing module
     _ = b.modules.put(b.dupe("uucode"), lib) catch @panic("OOM");
 
-    const t = buildTableDataWithMod(b, root_path, test_table_configs);
+    const t = buildTableDataInner(b, root_path, test_table_configs);
     const test_lib_mod = createLibMod(b, target, optimize, t.table_data_src);
 
     const src_tests = b.addTest(.{
@@ -90,7 +90,7 @@ fn createLibMod(
     return lib_mod;
 }
 
-fn buildTableDataWithMod(
+fn buildTableDataInner(
     b: *std.Build,
     root_path: std.Build.LazyPath,
     table_configs: []const u8,
@@ -137,8 +137,8 @@ fn buildTableDataWithMod(
 
 pub fn buildTableData(
     b: *std.Build,
-    root_path: std.Build.LazyPath,
     table_configs: []const u8,
 ) std.Build.LazyPath {
-    return buildTableDataWithMod(b, root_path, table_configs).table_data_src;
+    const root_path = std.Build.LazyPath{ .cwd_relative = std.fs.path.dirname(@src().file) };
+    return buildTableDataInner(b, root_path, table_configs).table_data_src;
 }
