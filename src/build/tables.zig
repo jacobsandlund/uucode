@@ -358,9 +358,11 @@ pub fn writeTable(
 
     try writer.print(
         \\    types.Table(.override(&config.default, .{{
-        \\        .stage1_len = {},
-        \\        .stage2_len = {},
-        \\        .data_len = {},
+        \\        .stages = .{{ .len = .{{
+        \\            .stage1 = {},
+        \\            .stage2 = {},
+        \\            .data = {},
+        \\         }}}},
         \\        .fields = &.{{
         \\
     , .{ stage1.items.len, stage2.items.len, data_array.items.len });

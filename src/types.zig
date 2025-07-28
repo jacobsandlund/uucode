@@ -67,11 +67,39 @@ pub const TableConfig = struct {
     numeric_value_numeric: OffsetLenConfig,
     unicode_1_name: OffsetLenConfig,
     case_folding_full: OffsetLenConfig,
+    stages: Stages,
 
-    // Used only once tables are built
-    stage1_len: usize = 0,
-    stage2_len: usize = 0,
-    data_len: usize = 0,
+    pub const Stages = union(enum) {
+        // TODO: support two stage tables (and actually support auto)
+        auto: void,
+        //two: void,
+        //three: void,
+
+        len: Len,
+
+        pub const Len = struct {
+            stage1: usize,
+            stage2: usize,
+            data: usize,
+        };
+
+        pub fn eql(self: Stages, other: Stages) bool {
+            switch (self) {
+                .len => |self_len| {
+                    switch (other) {
+                        .len => |other_len| {
+                            return self_len.data == other_len.data and self_len.stage2 == other_len.stage2 and self_len.stage1 == other_len.stage1;
+                        },
+                        else => return false,
+                    }
+                },
+                else => {
+                    const StagesTagType = @typeInfo(Stages).@"union".tag_type.?;
+                    return @as(StagesTagType, self) == @as(StagesTagType, other);
+                },
+            }
+        }
+    };
 
     pub const offset_len_fields = .{ "name", "decomposition_mapping", "numeric_value_numeric", "unicode_1_name", "case_folding_full" };
 
@@ -80,14 +108,25 @@ pub const TableConfig = struct {
         if (@hasField(@TypeOf(other), "fields")) {
             result.fields = other.fields;
         }
-        if (@hasField(@TypeOf(other), "stage1_len")) {
-            result.stage1_len = other.stage1_len;
-        }
-        if (@hasField(@TypeOf(other), "stage2_len")) {
-            result.stage2_len = other.stage2_len;
-        }
-        if (@hasField(@TypeOf(other), "data_len")) {
-            result.data_len = other.data_len;
+        if (@hasField(@TypeOf(other), "stages")) {
+            switch (@typeInfo(@FieldType(@TypeOf(other), "stages"))) {
+                .@"struct" => |struct_info| {
+                    if (struct_info.fields.len != 1 or !std.mem.eql(u8, struct_info.fields[0].name, "len")) {
+                        @compileError("Stages struct must have a single field named `len`");
+                    }
+                    result.stages = .{ .len = .{
+                        .stage1 = other.stages.len.stage1,
+                        .stage2 = other.stages.len.stage2,
+                        .data = other.stages.len.data,
+                    } };
+                },
+                .@"enum" => {
+                    result.stages = other.stages;
+                },
+                else => {
+                    @compileError("Unknown stages type " ++ @typeName(@FieldType(@TypeOf(other), "stages")));
+                },
+            }
         }
         inline for (offset_len_fields) |field| {
             if (@hasField(@TypeOf(other), field)) {
@@ -99,7 +138,7 @@ pub const TableConfig = struct {
     }
 
     pub fn eql(self: *const TableConfig, other: *const TableConfig) bool {
-        if (self.fields.len != other.fields.len or self.data_len != other.data_len or self.stage1_len != other.stage1_len or self.stage2_len != other.stage2_len) {
+        if (self.fields.len != other.fields.len or !self.stages.eql(other.stages)) {
             return false;
         }
 
@@ -372,9 +411,14 @@ pub fn Table(comptime config: TableConfig) type {
         },
     });
 
+    const len: TableConfig.Stages.Len = switch (config.stages) {
+        .len => |len| len,
+        else => .{ .stage1 = 0, .stage2 = 0, .data = 0 },
+    };
+
     const DataArray = @Type(.{
         .array = .{
-            .len = config.data_len,
+            .len = len.data,
             .child = Data,
             .sentinel_ptr = null,
         },
@@ -409,12 +453,12 @@ pub fn Table(comptime config: TableConfig) type {
     };
     var table_fields_len: usize = 2;
 
-    if (config.stage2_len > 0) {
-        const DataOffset = std.math.IntFittingRange(0, config.data_len);
+    if (len.stage2 > 0) {
+        const DataOffset = std.math.IntFittingRange(0, len.data);
 
         const Stage2 = @Type(.{
             .array = .{
-                .len = config.stage2_len,
+                .len = len.stage2,
                 .child = DataOffset,
                 .sentinel_ptr = null,
             },
@@ -430,15 +474,15 @@ pub fn Table(comptime config: TableConfig) type {
         table_fields_len += 1;
     }
 
-    if (config.stage1_len > 0) {
-        const next_stage_len = if (config.stage2_len > 0) config.stage2_len else config.data_len;
+    if (len.stage1 > 0) {
+        const next_stage_len = if (len.stage2 > 0) len.stage2 else len.data;
         const block_size = 256;
         const blocks_len = try std.math.divCeil(usize, next_stage_len, block_size);
         const BlockOffset = std.math.IntFittingRange(0, blocks_len);
 
         const Stage1 = @Type(.{
             .array = .{
-                .len = config.stage1_len,
+                .len = len.stage1,
                 .child = BlockOffset,
                 .sentinel_ptr = null,
             },

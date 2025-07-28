@@ -174,7 +174,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
                 \\
                 \\pub const default = types.TableConfig{{
                 \\    .fields = &[_][]const u8{{}},
-                \\    .data_len = {},
+                \\    .stages = .auto,
                 \\    .name = .{{
                 \\        .max_len = {},
                 \\        .max_offset = {},
@@ -204,7 +204,6 @@ pub fn init(allocator: std.mem.Allocator) !Self {
                 \\
                 \\
             , .{
-                expected_default_config.data_len,
                 expected_default_config.name.max_len,
                 expected_default_config.name.max_offset,
                 expected_default_config.name.embedded_len,

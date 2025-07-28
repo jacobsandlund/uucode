@@ -17,6 +17,7 @@ pub const all_fields = brk: {
 
 pub const default = types.TableConfig{
     .fields = &[_][]const u8{},
+    .stages = .auto,
     .name = .{
         .max_len = 88,
         .max_offset = 1031029,
@@ -46,6 +47,7 @@ pub const default = types.TableConfig{
 
 pub const updating_ucd_config = types.TableConfig{
     .fields = &all_fields,
+    .stages = .auto,
     .name = .{
         .max_len = 200,
         .max_offset = 2_000_000,
