@@ -22,22 +22,23 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const types = @import("types.zig");
-const configpkg = @import("config.zig");
+const config = @import("config.zig");
 
-const table_configs = @import("table_configs").configs;
-const config = blk: {
-    if (configpkg.updating_ucd) {
-        break :blk configpkg.updating_ucd_config;
+const table_configs = &@import("build_config").tables;
+
+const ucd_config = blk: {
+    if (config.updating_ucd) {
+        break :blk config.updating_ucd_config;
     }
 
     var combined_fields: []const []const u8 = &[_][]const u8{};
-    var c: types.TableConfig = configpkg.default;
+    var c: types.TableConfig = config.default;
 
     for (table_configs) |tc| {
         combined_fields = combined_fields ++ tc.fields;
 
         for (types.TableConfig.offset_len_fields) |field| {
-            if (!@field(tc, field).eql(@field(configpkg.default, field))) {
+            if (!@field(tc, field).eql(@field(config.default, field))) {
                 if (for (tc.fields) |field_name| {
                     if (std.mem.eql(u8, field_name, field)) break false;
                 } else true) {
@@ -55,10 +56,10 @@ const config = blk: {
 };
 
 // TODO: use
-const config_fields_map = std.static_string_map.StaticStringMap(void).initComptime(config.fields);
+const config_fields_map = std.static_string_map.StaticStringMap(void).initComptime(ucd_config.fields);
 
-const UnicodeData = types.UnicodeData(config);
-const CaseFolding = types.CaseFolding(config);
+const UnicodeData = types.UnicodeData(ucd_config);
+const CaseFolding = types.CaseFolding(ucd_config);
 
 unicode_data: []UnicodeData,
 case_folding: std.AutoHashMapUnmanaged(u21, CaseFolding),
@@ -115,7 +116,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
         .backing = undefined,
     };
 
-    ucd.unicode_data = try allocator.alloc(UnicodeData, types.num_code_points);
+    ucd.unicode_data = try allocator.alloc(UnicodeData, config.code_point_range_end);
     errdefer allocator.free(ucd.unicode_data);
 
     ucd.backing = blk: {
@@ -156,8 +157,8 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     try parseGraphemeBreakProperty(allocator, &ucd.grapheme_break);
     try parseEmojiData(allocator, &ucd.emoji_data);
 
-    if (configpkg.updating_ucd) {
-        const expected_default_config: types.TableConfig = .override(&configpkg.default, .{
+    if (config.updating_ucd) {
+        const expected_default_config: types.TableConfig = .override(&config.default, .{
             .name = OffsetLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name),
             .decomposition_mapping = OffsetLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping),
             .numeric_value_numeric = OffsetLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric),
@@ -165,7 +166,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
             .case_folding_full = OffsetLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full),
         });
 
-        if (!expected_default_config.eql(&configpkg.default)) {
+        if (!expected_default_config.eql(&config.default)) {
             std.debug.panic(
                 \\
                 \\ Update default config in `config.zig` with the following:
@@ -276,7 +277,7 @@ fn parseUnicodeData(
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
-    var next_cp: u21 = types.min_code_point;
+    var next_cp: u21 = 0x0000;
     const default_data = UnicodeData{
         .name = .empty,
         .general_category = types.GeneralCategory.Cn, // Other, not assigned
@@ -306,14 +307,14 @@ fn parseUnicodeData(
 
         while (cp > next_cp) : (next_cp += 1) {
             // Fill any gaps or ranges
-            ucd.unicode_data[next_cp - types.min_code_point] = range_data orelse default_data;
+            ucd.unicode_data[next_cp] = range_data orelse default_data;
         }
 
         if (range_data != null) {
             // We're in a range, so the next entry marks the last, with the same
             // information.
             std.debug.assert(std.mem.endsWith(u8, parts.next().?, "Last>"));
-            ucd.unicode_data[next_cp - types.min_code_point] = range_data.?;
+            ucd.unicode_data[next_cp] = range_data.?;
             range_data = null;
             continue;
         }
@@ -438,12 +439,12 @@ fn parseUnicodeData(
             range_data = unicode_data;
         }
 
-        ucd.unicode_data[cp - types.min_code_point] = unicode_data;
+        ucd.unicode_data[cp] = unicode_data;
     }
 
     // Fill any remaining gaps at the end with default values
-    while (next_cp < types.code_point_range_end) : (next_cp += 1) {
-        ucd.unicode_data[next_cp - types.min_code_point] = default_data;
+    while (next_cp < config.code_point_range_end) : (next_cp += 1) {
+        ucd.unicode_data[next_cp] = default_data;
     }
 }
 

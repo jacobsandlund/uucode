@@ -1,10 +1,5 @@
 const std = @import("std");
 
-pub const min_code_point: u21 = 0x0000;
-pub const max_code_point: u21 = 0x10FFFF;
-pub const num_code_points: u21 = max_code_point + 1;
-pub const code_point_range_end: u21 = max_code_point + 1;
-
 pub const FullData = struct {
     // UnicodeData fields
     name: []const u8,
@@ -304,7 +299,7 @@ pub const EmojiData = packed struct {
     is_extended_pictographic: bool = false,
 };
 
-pub fn TableData(comptime config: TableConfig) type {
+pub fn Table(comptime config: TableConfig) type {
     @setEvalBranchQuota(10_000);
     const full_fields_map = comptime std.static_string_map.StaticStringMap(std.builtin.Type.StructField).initComptime(blk: {
         const full_fields = @typeInfo(FullData).@"struct".fields;

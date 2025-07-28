@@ -1,26 +1,26 @@
 const std = @import("std");
 
-const error_configs_zig =
-    \\Pass `table_configs.zig` with a string or `table_configs_path` with a LazyPath
+const error_build_config_zig =
+    \\TODO: eliminate this and craft a `build_config.zig` from options
 ;
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const table_configs_zig = b.option([]const u8, "table_configs.zig", "Table configs source code") orelse error_configs_zig;
-    const table_configs_path = b.option(std.Build.LazyPath, "table_configs_path", "Path to table configs source code") orelse b.addWriteFiles().add("table_configs.zig", table_configs_zig);
-    const table_data_path_opt = b.option(std.Build.LazyPath, "table_data.zig", "Built table data source file");
+    const build_config_zig = b.option([]const u8, "build_config.zig", "Build config source code") orelse error_build_config_zig;
+    const build_config_path = b.option(std.Build.LazyPath, "build_config_path", "Path to build config zig file") orelse b.addWriteFiles().add("build_config.zig", build_config_zig);
+    const tables_path_opt = b.option(std.Build.LazyPath, "tables.zig", "Built tables source file");
 
-    const table_data_path = table_data_path_opt orelse buildTableData(b, table_configs_path).table_data_path;
-    b.addNamedLazyPath("table_data.zig", table_data_path);
-    const lib = createLibMod(b, target, optimize, table_data_path);
+    const tables_path = tables_path_opt orelse buildTables(b, build_config_path).tables_path;
+    b.addNamedLazyPath("tables.zig", tables_path);
+    const lib = createLibMod(b, target, optimize, tables_path);
 
     // b.addModule with an existing module
     _ = b.modules.put(b.dupe("uucode"), lib) catch @panic("OOM");
 
-    const test_table_configs_path = b.addWriteFiles().add("test_table_configs.zig", test_table_configs_zig);
-    const t = buildTableData(b, test_table_configs_path);
-    const test_lib_mod = createLibMod(b, target, optimize, t.table_data_path);
+    const test_build_config_path = b.addWriteFiles().add("test_build_config.zig", test_build_config_zig);
+    const t = buildTables(b, test_build_config_path);
+    const test_lib_mod = createLibMod(b, target, optimize, t.tables_path);
 
     const src_tests = b.addTest(.{
         .root_module = test_lib_mod,
@@ -38,11 +38,11 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_build_tests.step);
 }
 
-const test_table_configs_zig =
+const test_build_config_zig =
     \\const types = @import("types.zig");
     \\const config = @import("config.zig");
     \\
-    \\pub const configs = [_]types.TableConfig{
+    \\pub const tables = [_]types.TableConfig{
     \\    .override(&config.default, .{
     \\        .fields = &.{"case_folding_simple","name"},
     \\    }),
@@ -56,7 +56,7 @@ fn createLibMod(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
-    table_data_path: std.Build.LazyPath,
+    tables_path: std.Build.LazyPath,
 ) *std.Build.Module {
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
@@ -77,25 +77,25 @@ fn createLibMod(
     });
     config_mod.addImport("types.zig", types_mod);
 
-    const table_data_mod = b.createModule(.{
-        .root_source_file = table_data_path,
+    const tables_mod = b.createModule(.{
+        .root_source_file = tables_path,
         .target = target,
         .optimize = optimize,
     });
-    table_data_mod.addImport("types.zig", types_mod);
-    table_data_mod.addImport("config.zig", config_mod);
+    tables_mod.addImport("types.zig", types_mod);
+    tables_mod.addImport("config.zig", config_mod);
 
     lib_mod.addImport("config.zig", config_mod);
-    lib_mod.addImport("table_data", table_data_mod);
+    lib_mod.addImport("tables", tables_mod);
     lib_mod.addImport("types.zig", types_mod);
 
     return lib_mod;
 }
 
-fn buildTableData(
+fn buildTables(
     b: *std.Build,
-    table_configs_path: std.Build.LazyPath,
-) struct { build_tables_mod: *std.Build.Module, table_data_path: std.Build.LazyPath } {
+    build_config_path: std.Build.LazyPath,
+) struct { build_tables_mod: *std.Build.Module, tables_path: std.Build.LazyPath } {
     const target = b.graph.host;
 
     const types_mod = b.createModule(.{
@@ -109,28 +109,28 @@ fn buildTableData(
     });
     config_mod.addImport("types.zig", types_mod);
 
-    // Create table_configs
-    const table_configs_mod = b.createModule(.{
-        .root_source_file = table_configs_path,
+    // Create build_config
+    const build_config_mod = b.createModule(.{
+        .root_source_file = build_config_path,
         .target = target,
     });
-    table_configs_mod.addImport("types.zig", types_mod);
-    table_configs_mod.addImport("config.zig", config_mod);
+    build_config_mod.addImport("types.zig", types_mod);
+    build_config_mod.addImport("config.zig", config_mod);
 
-    // Generate table_data.zig with table_configs
+    // Generate tables.zig with build_config
     const build_tables_mod = b.createModule(.{
         .root_source_file = b.path("src/build/tables.zig"),
         .target = b.graph.host,
     });
     const build_tables_exe = b.addExecutable(.{
-        .name = "uucode_tables",
+        .name = "uucode_build_tables",
         .root_module = build_tables_mod,
     });
     build_tables_mod.addImport("config.zig", config_mod);
-    build_tables_mod.addImport("table_configs", table_configs_mod);
+    build_tables_mod.addImport("build_config", build_config_mod);
     build_tables_mod.addImport("types.zig", types_mod);
-    const run_tables_exe = b.addRunArtifact(build_tables_exe);
-    const table_data_path = run_tables_exe.addOutputFileArg("table_data.zig");
+    const run_build_tables_exe = b.addRunArtifact(build_tables_exe);
+    const tables_path = run_build_tables_exe.addOutputFileArg("tables.zig");
 
-    return .{ .build_tables_mod = build_tables_mod, .table_data_path = table_data_path };
+    return .{ .build_tables_mod = build_tables_mod, .tables_path = tables_path };
 }

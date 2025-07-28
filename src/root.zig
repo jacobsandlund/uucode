@@ -1,6 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
-const tables = @import("table_data").tables;
+const tables = @import("tables").tables;
 const types = @import("types.zig");
 
 fn DataFor(comptime table: anytype) type {
@@ -8,7 +8,7 @@ fn DataFor(comptime table: anytype) type {
     return @typeInfo(DataArray).array.child;
 }
 
-fn TableDataFor(comptime field: []const u8) type {
+fn TableFor(comptime field: []const u8) type {
     for (tables) |table| {
         if (@hasField(DataFor(table), field)) {
             return @TypeOf(table);
@@ -17,7 +17,7 @@ fn TableDataFor(comptime field: []const u8) type {
     @compileError("Table not found for field: " ++ field);
 }
 
-fn tableFor(comptime field: []const u8) TableDataFor(field) {
+fn tableFor(comptime field: []const u8) TableFor(field) {
     inline for (tables) |table| {
         if (@hasField(DataFor(table), field)) {
             return table;
@@ -36,12 +36,13 @@ fn getData(comptime table: anytype, cp: u21) DataFor(table) {
     return table.data[data_idx];
 }
 
-pub fn data(comptime table_index: []const u8, cp: u21) DataFor(@field(tables, table_index)) {
+pub fn get(comptime table_index: []const u8, cp: u21) DataFor(@field(tables, table_index)) {
     const table = @field(tables, table_index);
     return getData(table, cp);
 }
 
 // UnicodeData fields
+
 pub fn name(cp: u21, buffer_for_embedded: []u8) []const u8 {
     const table = comptime tableFor("name");
     const n = getData(table, cp).name;
@@ -122,6 +123,7 @@ pub fn simpleTitlecaseMapping(cp: u21) ?u21 {
 }
 
 // CaseFolding fields
+
 pub fn caseFoldingSimple(cp: u21) u21 {
     const table = comptime tableFor("case_folding_simple");
     return getData(table, cp).case_folding_simple.toOptional() orelse cp;
@@ -139,6 +141,7 @@ pub fn caseFoldingFull(cp: u21, buffer_for_embedded: []u21) []const u21 {
 }
 
 // DerivedCoreProperties fields
+
 pub fn isMath(cp: u21) bool {
     const table = comptime tableFor("is_math");
     return getData(table, cp).is_math;
@@ -240,18 +243,21 @@ pub fn indicConjunctBreak(cp: u21) types.IndicConjunctBreak {
 }
 
 // EastAsianWidth field
+
 pub fn eastAsianWidth(cp: u21) types.EastAsianWidth {
     const table = comptime tableFor("east_asian_width");
     return getData(table, cp).east_asian_width;
 }
 
 // GraphemeBreak field
+
 pub fn graphemeBreak(cp: u21) types.GraphemeBreak {
     const table = comptime tableFor("grapheme_break");
     return getData(table, cp).grapheme_break;
 }
 
 // EmojiData fields
+
 pub fn isEmoji(cp: u21) bool {
     const table = comptime tableFor("is_emoji");
     return getData(table, cp).is_emoji;
@@ -285,6 +291,13 @@ pub fn isExtendedPictographic(cp: u21) bool {
 test {
     // TODO: "tables" will need to have data for every field
     //std.testing.refAllDecls(@This());
+}
+
+test "get" {
+    const d1 = get("1", 65);
+    try testing.expect(d1.is_alphabetic);
+    try testing.expect(d1.is_uppercase);
+    try testing.expect(!d1.is_lowercase);
 }
 
 test "name" {

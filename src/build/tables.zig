@@ -1,7 +1,7 @@
 const std = @import("std");
 const Ucd = @import("Ucd.zig");
 const types = @import("types.zig");
-const configpkg = @import("config.zig");
+const config = @import("config.zig");
 
 pub const std_options: std.Options = .{
     .log_level = .debug,
@@ -12,7 +12,7 @@ const buffer_size = 100_000_000;
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
-    const table_configs: []const types.TableConfig = if (configpkg.updating_ucd) &.{configpkg.updating_ucd_config} else &@import("table_configs").configs;
+    const table_configs: []const types.TableConfig = if (config.updating_ucd) &.{config.updating_ucd_config} else &@import("build_config").tables;
 
     const buffer = try std.heap.page_allocator.alloc(u8, buffer_size);
     defer std.heap.page_allocator.free(buffer);
@@ -49,11 +49,11 @@ pub fn main() !void {
     defer arena.deinit();
     const arena_alloc = arena.allocator();
 
-    inline for (table_configs, 0..) |config, i| {
+    inline for (table_configs, 0..) |table_config, i| {
         const start = try std.time.Instant.now();
 
-        try writeTableData(
-            config,
+        try writeTable(
+            table_config,
             arena_alloc,
             &ucd,
             writer,
@@ -63,7 +63,7 @@ pub fn main() !void {
         _ = arena.reset(.retain_capacity);
 
         const end = try std.time.Instant.now();
-        std.log.debug("`writeTableData` for config {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
+        std.log.debug("`writeTable` for table_config {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
     }
 
     try writer.writeAll(
@@ -122,14 +122,14 @@ const BlockMap = std.HashMapUnmanaged(Block, u16, struct {
     }
 }, std.hash_map.default_max_load_percentage);
 
-pub fn writeTableData(
-    comptime config: types.TableConfig,
+pub fn writeTable(
+    comptime table_config: types.TableConfig,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
     writer: anytype,
 ) !void {
-    const TableData = types.TableData(config);
-    const Data = @typeInfo(@FieldType(TableData, "data")).array.child;
+    const Table = types.Table(table_config);
+    const Data = @typeInfo(@FieldType(Table, "data")).array.child;
 
     var data_map: DataMap(Data) = .empty;
     defer data_map.deinit(allocator);
@@ -147,9 +147,9 @@ pub fn writeTableData(
 
     const build_data_start = try std.time.Instant.now();
 
-    var cp: u21 = types.min_code_point;
-    while (cp < types.code_point_range_end) : (cp += 1) {
-        const unicode_data = ucd.unicode_data[cp - types.min_code_point];
+    var cp: u21 = 0;
+    while (cp < config.code_point_range_end) : (cp += 1) {
+        const unicode_data = ucd.unicode_data[cp];
         const case_folding = ucd.case_folding.get(cp);
         const derived_core_properties = ucd.derived_core_properties.get(cp) orelse types.DerivedCoreProperties{};
         const east_asian_width = ucd.east_asian_width.get(cp) orelse types.EastAsianWidth.neutral;
@@ -336,7 +336,7 @@ pub fn writeTableData(
         block[block_len] = data_index;
         block_len += 1;
 
-        if (block_len == block_size or cp == types.code_point_range_end - 1) {
+        if (block_len == block_size or cp == config.code_point_range_end - 1) {
             if (block_len < block_size) @memset(block[block_len..block_size], 0);
             const gop_block = try block_map.getOrPut(allocator, block);
             var block_index: u16 = undefined;
@@ -357,7 +357,7 @@ pub fn writeTableData(
     std.log.debug("Building data time: {d}ms\n", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
 
     try writer.print(
-        \\    types.TableData(.override(&config.default, .{{
+        \\    types.Table(.override(&config.default, .{{
         \\        .stage1_len = {},
         \\        .stage2_len = {},
         \\        .data_len = {},
@@ -365,7 +365,7 @@ pub fn writeTableData(
         \\
     , .{ stage1.items.len, stage2.items.len, data_array.items.len });
 
-    inline for (config.fields) |field_name| {
+    inline for (table_config.fields) |field_name| {
         try writer.print("\"{s}\",", .{field_name});
     }
     try writer.writeAll(
@@ -374,11 +374,11 @@ pub fn writeTableData(
         \\
     );
     inline for (types.TableConfig.offset_len_fields) |field| {
-        if (!@field(config, field).eql(@field(configpkg.default, field))) {
+        if (!@field(table_config, field).eql(@field(config.default, field))) {
             try writer.print(
                 \\        .{s} = {},
                 \\
-            , .{ field, @field(config, field) });
+            , .{ field, @field(table_config, field) });
         }
     }
 
@@ -389,7 +389,7 @@ pub fn writeTableData(
         \\
     );
 
-    inline for (@typeInfo(@FieldType(TableData, "backing")).@"struct".fields) |field| {
+    inline for (@typeInfo(@FieldType(Table, "backing")).@"struct".fields) |field| {
         try writer.print(
             \\            .{s} = .{{
             \\                .items = .{{
