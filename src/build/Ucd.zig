@@ -45,11 +45,11 @@ const ucd_config = blk: {
         "unicode_1_name",
         "case_folding_full",
     };
-    for (offset_len_fields) |field| {
+    for (offset_len_fields) |f| {
         // Configure any offset_len fields not present in the table configs so
         // that we throw away the data after parsing.
-        if (!c.hasField(field)) {
-            c.fields.appendAssumeCapacity(config.default.getField(field).?.override(.{
+        if (!c.hasField(f)) {
+            c.fields.appendAssumeCapacity(config.default.field(f).?.override(.{
                 .embedded_len = 0,
                 .max_offset = 0,
             }));

@@ -126,8 +126,8 @@ pub const TableConfig = struct {
                 .offset_len => |o| {
                     var result = o;
 
-                    inline for (@typeInfo(@TypeOf(other)).@"struct".fields) |field| {
-                        @field(result, field.name) = @field(other, field.name);
+                    inline for (@typeInfo(@TypeOf(other)).@"struct".fields) |f| {
+                        @field(result, f.name) = @field(other, f.name);
                     }
 
                     return .{ .offset_len = result };
@@ -157,22 +157,22 @@ pub const TableConfig = struct {
     };
 
     pub fn hasField(self: *const TableConfig, name: []const u8) bool {
-        return for (self.fields.slice()) |field| {
-            if (std.mem.eql(u8, field.name(), name)) {
+        return for (self.fields.slice()) |f| {
+            if (std.mem.eql(u8, f.name(), name)) {
                 break true;
             }
         } else false;
     }
 
-    pub fn getField(self: *const TableConfig, name: []const u8) ?Field {
-        return for (self.fields.slice()) |field| {
-            if (std.mem.eql(u8, field.name(), name)) {
-                break field;
+    pub fn field(self: *const TableConfig, name: []const u8) ?Field {
+        return for (self.fields.slice()) |f| {
+            if (std.mem.eql(u8, f.name(), name)) {
+                break f;
             }
         } else null;
     }
 
-    pub fn override(self: *const TableConfig, other: anytype) TableConfig {
+    pub fn override(self: *const TableConfig, comptime other: anytype) TableConfig {
         var result = self.*;
 
         if (!@hasField(@TypeOf(other), "fields")) {
@@ -183,20 +183,20 @@ pub const TableConfig = struct {
         //}
 
         result.fields.clear();
-        inline for (other.fields) |field| {
-            switch (@typeInfo(@TypeOf(field))) {
+        inline for (other.fields) |f| {
+            switch (@typeInfo(@TypeOf(f))) {
                 .@"struct" => {
-                    const original = self.getField(field.name) orelse {
-                        std.debug.panic("Field '{s}' not found in TableConfig being overriden", .{field.name});
+                    const original = self.field(f.name) orelse {
+                        std.debug.panic("Field '{s}' not found in TableConfig being overriden", .{f.name});
                     };
-                    result.fields.appendAssumeCapacity(original.override(field));
+                    result.fields.appendAssumeCapacity(original.override(f));
                 },
                 .pointer, .array => {
-                    if (self.getField(field)) |original| {
+                    if (self.field(f)) |original| {
                         result.fields.appendAssumeCapacity(original);
                     } else {
                         result.fields.appendAssumeCapacity(.{ .basic = .{
-                            .name = field,
+                            .name = f,
                         } });
                     }
                 },
@@ -332,18 +332,18 @@ pub const NumericType = enum(u2) {
 
 pub fn UnicodeData(comptime config: TableConfig) type {
     return struct {
-        name: OffsetLen(u8, config.getField("name").?.offset_len),
+        name: OffsetLen(u8, config.field("name").?.offset_len),
         general_category: GeneralCategory,
         canonical_combining_class: u8,
         bidi_class: BidiClass,
         decomposition_type: DecompositionType,
-        decomposition_mapping: OffsetLen(u21, config.getField("decomposition_mapping").?.offset_len),
+        decomposition_mapping: OffsetLen(u21, config.field("decomposition_mapping").?.offset_len),
         numeric_type: NumericType,
         numeric_value_decimal: PackedOptional(u4),
         numeric_value_digit: PackedOptional(u4),
-        numeric_value_numeric: OffsetLen(u8, config.getField("numeric_value_numeric").?.offset_len),
+        numeric_value_numeric: OffsetLen(u8, config.field("numeric_value_numeric").?.offset_len),
         is_bidi_mirrored: bool,
-        unicode_1_name: OffsetLen(u8, config.getField("unicode_1_name").?.offset_len),
+        unicode_1_name: OffsetLen(u8, config.field("unicode_1_name").?.offset_len),
         simple_uppercase_mapping: PackedOptional(u21),
         simple_lowercase_mapping: PackedOptional(u21),
         simple_titlecase_mapping: PackedOptional(u21),
@@ -354,7 +354,7 @@ pub fn CaseFolding(comptime config: TableConfig) type {
     return struct {
         case_folding_simple: PackedOptional(u21),
         case_folding_turkish: PackedOptional(u21),
-        case_folding_full: OffsetLen(u21, config.getField("case_folding_full").?.offset_len),
+        case_folding_full: OffsetLen(u21, config.field("case_folding_full").?.offset_len),
     };
 }
 

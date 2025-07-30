@@ -1,34 +1,87 @@
 const std = @import("std");
 
-const error_build_config_zig =
-    \\TODO: eliminate this and craft a `build_config.zig` from options
-;
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    //const build_config_fields0 = b.option(
-    //    []const []const u8,
-    //    "table_0_fields",
-    //    "Build config source code",
-    //) orelse error_build_config_zig;
+    const table_0_fields = b.option(
+        []const []const u8,
+        "table_0_fields",
+        "Fields for table 0",
+    );
 
-    const build_config_zig = b.option(
+    const table_1_fields = b.option(
+        []const []const u8,
+        "table_1_fields",
+        "Fields for table 1",
+    );
+
+    const build_config_zig_opt = b.option(
         []const u8,
         "build_config.zig",
         "Build config source code",
-    ) orelse error_build_config_zig;
+    );
 
-    const build_config_path = b.option(
+    const build_config_path_opt = b.option(
         std.Build.LazyPath,
         "build_config_path",
         "Path to build config zig file",
-    ) orelse b.addWriteFiles().add("build_config.zig", build_config_zig);
+    );
 
     const tables_path_opt = b.option(std.Build.LazyPath, "tables.zig", "Built tables source file");
 
-    const tables_path = tables_path_opt orelse buildTables(b, build_config_path).tables_path;
+    const tables_path = tables_path_opt orelse tables_blk: {
+        const build_config_path = build_config_path_opt orelse path_blk: {
+            const build_config_zig = build_config_zig_opt orelse config_blk: {
+                var bytes = std.ArrayList(u8).init(b.allocator);
+                defer bytes.deinit();
+                const writer = bytes.writer();
+
+                writer.writeAll(
+                    \\const config = @import("config.zig");
+                    \\
+                    \\pub const tables = config.tables(.{
+                    \\    .{
+                    \\        .fields = .{
+                    \\
+                ) catch @panic("OOM");
+
+                if (table_0_fields) |fields| {
+                    for (fields) |f| {
+                        writer.print("            \"{s}\",\n", .{f}) catch @panic("OOM");
+                    }
+                } else {
+                    writer.writeAll("Specify either `table_0_fields`, `build_config.zig`, `build_config_path`, or `tables.zig`\n") catch @panic("OOM");
+                }
+
+                if (table_1_fields) |fields| {
+                    writer.writeAll(
+                        \\         },
+                        \\     },
+                        \\    .{
+                        \\        .fields = .{
+                    ) catch @panic("OOM");
+
+                    for (fields) |f| {
+                        writer.print("            \"{s}\",\n", .{f}) catch @panic("OOM");
+                    }
+                }
+
+                writer.writeAll(
+                    \\         },
+                    \\     },
+                    \\});
+                    \\
+                ) catch @panic("OOM");
+
+                break :config_blk bytes.toOwnedSlice() catch @panic("OOM");
+            };
+
+            break :path_blk b.addWriteFiles().add("build_config.zig", build_config_zig);
+        };
+        break :tables_blk buildTables(b, build_config_path).tables_path;
+    };
+
     b.addNamedLazyPath("tables.zig", tables_path);
 
     const lib = createLibMod(b, target, optimize, tables_path);
@@ -61,12 +114,13 @@ const test_build_config_zig =
     \\
     \\pub const tables = config.tables(.{
     \\    .{
-    \\        .fields = .{"case_folding_simple", "name"},
+    \\        .fields = .{ "case_folding_simple", .{ .name = "name", .embedded_len = 15 } },
     \\    },
     \\    .{
-    \\        .fields = .{"is_alphabetic", "is_lowercase", "is_uppercase"},
+    \\        .fields = .{ "is_alphabetic", "is_lowercase", "is_uppercase" },
     \\    },
     \\});
+    \\
 ;
 
 fn createLibMod(
