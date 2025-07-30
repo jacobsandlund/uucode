@@ -1,52 +1,18 @@
 const std = @import("std");
+const getpkg = @import("get.zig");
 const testing = std.testing;
-const tables = @import("tables").tables;
 const types = @import("types.zig");
 
-fn DataFor(comptime table: anytype) type {
-    const DataArray = @FieldType(@TypeOf(table), "data");
-    return @typeInfo(DataArray).array.child;
-}
-
-fn TableFor(comptime field: []const u8) type {
-    for (tables) |table| {
-        if (@hasField(DataFor(table), field)) {
-            return @TypeOf(table);
-        }
-    }
-    @compileError("Table not found for field: " ++ field);
-}
-
-fn tableFor(comptime field: []const u8) TableFor(field) {
-    inline for (tables) |table| {
-        if (@hasField(DataFor(table), field)) {
-            return table;
-        }
-    }
-    unreachable;
-}
-
-// TODO: benchmark if needing an explicit `inline`
-// TODO: support two stage (stage1 and data) tables
-fn getData(comptime table: anytype, cp: u21) DataFor(table) {
-    const stage1_idx = cp >> 8;
-    const stage2_idx = cp & 0xFF;
-    const block_start = @as(usize, table.stage1[stage1_idx]) << 8;
-    const data_idx = table.stage2[block_start + stage2_idx];
-    return table.data[data_idx];
-}
-
-pub fn get(comptime table_index: []const u8, cp: u21) DataFor(@field(tables, table_index)) {
-    const table = @field(tables, table_index);
-    return getData(table, cp);
-}
+pub const get = getpkg.get;
+const tableFor = getpkg.tableFor;
+const getData = getpkg.getData;
 
 // UnicodeData fields
 
 pub fn name(cp: u21, buffer_for_embedded: []u8) []const u8 {
     const table = comptime tableFor("name");
     const n = getData(table, cp).name;
-    return n.toSlice(&table.backing.name, buffer_for_embedded);
+    return n.slice(buffer_for_embedded);
 }
 
 pub fn generalCategory(cp: u21) types.GeneralCategory {
@@ -72,7 +38,7 @@ pub fn decompositionType(cp: u21) types.DecompositionType {
 pub fn decompositionMapping(cp: u21, buffer_for_embedded: []u21) []const u21 {
     const table = comptime tableFor("decomposition_mapping");
     const dm = getData(table, cp).decomposition_mapping;
-    return dm.toSlice(&table.backing.decomposition_mapping, buffer_for_embedded);
+    return dm.slice(buffer_for_embedded);
 }
 
 pub fn numericType(cp: u21) types.NumericType {
@@ -82,18 +48,18 @@ pub fn numericType(cp: u21) types.NumericType {
 
 pub fn numericValueDecimal(cp: u21) ?u4 {
     const table = comptime tableFor("numeric_value_decimal");
-    return getData(table, cp).numeric_value_decimal.toOptional();
+    return getData(table, cp).numeric_value_decimal.optional();
 }
 
 pub fn numericValueDigit(cp: u21) ?u4 {
     const table = comptime tableFor("numeric_value_digit");
-    return getData(table, cp).numeric_value_digit.toOptional();
+    return getData(table, cp).numeric_value_digit.optional();
 }
 
 pub fn numericValueNumeric(cp: u21, buffer_for_embedded: []u8) []const u8 {
     const table = comptime tableFor("numeric_value_numeric");
     const nvn = getData(table, cp).numeric_value_numeric;
-    return nvn.toSlice(&table.backing.numeric_value_numeric, buffer_for_embedded);
+    return nvn.slice(buffer_for_embedded);
 }
 
 pub fn isBidiMirrored(cp: u21) bool {
@@ -104,40 +70,40 @@ pub fn isBidiMirrored(cp: u21) bool {
 pub fn unicode1Name(cp: u21, buffer_for_embedded: []u8) []const u8 {
     const table = comptime tableFor("unicode_1_name");
     const u1n = getData(table, cp).unicode_1_name;
-    return u1n.toSlice(&table.backing.unicode_1_name, buffer_for_embedded);
+    return u1n.slice(buffer_for_embedded);
 }
 
 pub fn simpleUppercaseMapping(cp: u21) ?u21 {
     const table = comptime tableFor("simple_uppercase_mapping");
-    return getData(table, cp).simple_uppercase_mapping.toOptional();
+    return getData(table, cp).simple_uppercase_mapping.optional();
 }
 
 pub fn simpleLowercaseMapping(cp: u21) ?u21 {
     const table = comptime tableFor("simple_lowercase_mapping");
-    return getData(table, cp).simple_lowercase_mapping.toOptional();
+    return getData(table, cp).simple_lowercase_mapping.optional();
 }
 
 pub fn simpleTitlecaseMapping(cp: u21) ?u21 {
     const table = comptime tableFor("simple_titlecase_mapping");
-    return getData(table, cp).simple_titlecase_mapping.toOptional();
+    return getData(table, cp).simple_titlecase_mapping.optional();
 }
 
 // CaseFolding fields
 
 pub fn caseFoldingSimple(cp: u21) u21 {
     const table = comptime tableFor("case_folding_simple");
-    return getData(table, cp).case_folding_simple.toOptional() orelse cp;
+    return getData(table, cp).case_folding_simple.optional() orelse cp;
 }
 
 pub fn caseFoldingTurkish(cp: u21) ?u21 {
     const table = comptime tableFor("case_folding_turkish");
-    return getData(table, cp).case_folding_turkish.toOptional();
+    return getData(table, cp).case_folding_turkish.optional();
 }
 
 pub fn caseFoldingFull(cp: u21, buffer_for_embedded: []u21) []const u21 {
     const table = comptime tableFor("case_folding_full");
     const cff = getData(table, cp).case_folding_full;
-    return cff.toSlice(&table.backing.case_folding_full, buffer_for_embedded);
+    return cff.slice(buffer_for_embedded);
 }
 
 // DerivedCoreProperties fields
@@ -291,13 +257,6 @@ pub fn isExtendedPictographic(cp: u21) bool {
 test {
     // TODO: "tables" will need to have data for every field
     //std.testing.refAllDecls(@This());
-}
-
-test "get" {
-    const d1 = get("1", 65);
-    try testing.expect(d1.is_alphabetic);
-    try testing.expect(d1.is_uppercase);
-    try testing.expect(!d1.is_lowercase);
 }
 
 test "name" {

@@ -7,12 +7,30 @@ const error_build_config_zig =
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const build_config_zig = b.option([]const u8, "build_config.zig", "Build config source code") orelse error_build_config_zig;
-    const build_config_path = b.option(std.Build.LazyPath, "build_config_path", "Path to build config zig file") orelse b.addWriteFiles().add("build_config.zig", build_config_zig);
+
+    //const build_config_fields0 = b.option(
+    //    []const []const u8,
+    //    "table_0_fields",
+    //    "Build config source code",
+    //) orelse error_build_config_zig;
+
+    const build_config_zig = b.option(
+        []const u8,
+        "build_config.zig",
+        "Build config source code",
+    ) orelse error_build_config_zig;
+
+    const build_config_path = b.option(
+        std.Build.LazyPath,
+        "build_config_path",
+        "Path to build config zig file",
+    ) orelse b.addWriteFiles().add("build_config.zig", build_config_zig);
+
     const tables_path_opt = b.option(std.Build.LazyPath, "tables.zig", "Built tables source file");
 
     const tables_path = tables_path_opt orelse buildTables(b, build_config_path).tables_path;
     b.addNamedLazyPath("tables.zig", tables_path);
+
     const lib = createLibMod(b, target, optimize, tables_path);
 
     // b.addModule with an existing module
@@ -39,17 +57,16 @@ pub fn build(b: *std.Build) void {
 }
 
 const test_build_config_zig =
-    \\const types = @import("types.zig");
     \\const config = @import("config.zig");
     \\
-    \\pub const tables = [_]types.TableConfig{
-    \\    .override(&config.default, .{
+    \\pub const tables = config.tables(.{
+    \\    .{
     \\        .fields = .{"case_folding_simple", "name"},
-    \\    }),
-    \\    .override(&config.default, .{
+    \\    },
+    \\    .{
     \\        .fields = .{"is_alphabetic", "is_lowercase", "is_uppercase"},
-    \\    }),
-    \\};
+    \\    },
+    \\});
 ;
 
 fn createLibMod(
@@ -85,9 +102,19 @@ fn createLibMod(
     tables_mod.addImport("types.zig", types_mod);
     tables_mod.addImport("config.zig", config_mod);
 
+    const get_mod = b.createModule(.{
+        .root_source_file = b.path("src/get.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    get_mod.addImport("types.zig", types_mod);
+    get_mod.addImport("tables", tables_mod);
+    types_mod.addImport("get.zig", get_mod);
+
     lib_mod.addImport("config.zig", config_mod);
     lib_mod.addImport("tables", tables_mod);
     lib_mod.addImport("types.zig", types_mod);
+    lib_mod.addImport("get.zig", get_mod);
 
     return lib_mod;
 }

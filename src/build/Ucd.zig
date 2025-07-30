@@ -407,7 +407,7 @@ fn parseUnicodeData(
                     mapping_len += 1;
                 }
 
-                decomposition_mapping = try .fromSliceTracked(allocator, &ucd.backing.decomposition_mapping, &maps.decomposition_mapping, &tracking.decomposition_mapping, temp_mapping[0..mapping_len]);
+                decomposition_mapping = try .init(allocator, &ucd.backing.decomposition_mapping, &maps.decomposition_mapping, &tracking.decomposition_mapping, temp_mapping[0..mapping_len]);
             }
         }
 
@@ -431,25 +431,25 @@ fn parseUnicodeData(
             };
         } else if (numeric_numeric_str.len > 0) {
             numeric_type = types.NumericType.numeric;
-            numeric_value_numeric = try .fromSliceTracked(allocator, &ucd.backing.numeric_value_numeric, &maps.numeric_value_numeric, &tracking.numeric_value_numeric, numeric_numeric_str);
+            numeric_value_numeric = try .init(allocator, &ucd.backing.numeric_value_numeric, &maps.numeric_value_numeric, &tracking.numeric_value_numeric, numeric_numeric_str);
         }
 
         const unicode_data = UnicodeData{
-            .name = try .fromSliceTracked(allocator, &ucd.backing.name, &maps.name, &tracking.name, name),
+            .name = try .init(allocator, &ucd.backing.name, &maps.name, &tracking.name, name),
             .general_category = general_category,
             .canonical_combining_class = canonical_combining_class,
             .bidi_class = bidi_class,
             .decomposition_type = decomposition_type,
             .decomposition_mapping = decomposition_mapping,
             .numeric_type = numeric_type,
-            .numeric_value_decimal = .fromOptional(numeric_value_decimal),
-            .numeric_value_digit = .fromOptional(numeric_value_digit),
+            .numeric_value_decimal = .init(numeric_value_decimal),
+            .numeric_value_digit = .init(numeric_value_digit),
             .numeric_value_numeric = numeric_value_numeric,
             .is_bidi_mirrored = is_bidi_mirrored,
-            .unicode_1_name = try .fromSliceTracked(allocator, &ucd.backing.unicode_1_name, &maps.unicode_1_name, &tracking.unicode_1_name, unicode_1_name),
-            .simple_uppercase_mapping = .fromOptional(simple_uppercase_mapping),
-            .simple_lowercase_mapping = .fromOptional(simple_lowercase_mapping),
-            .simple_titlecase_mapping = .fromOptional(simple_titlecase_mapping),
+            .unicode_1_name = try .init(allocator, &ucd.backing.unicode_1_name, &maps.unicode_1_name, &tracking.unicode_1_name, unicode_1_name),
+            .simple_uppercase_mapping = .init(simple_uppercase_mapping),
+            .simple_lowercase_mapping = .init(simple_lowercase_mapping),
+            .simple_titlecase_mapping = .init(simple_titlecase_mapping),
         };
 
         // Handle range entries with "First>" and "Last>"
@@ -525,7 +525,7 @@ fn parseCaseFolding(
             },
             'F' => {
                 std.debug.assert(mapping_len > 1);
-                result.value_ptr.case_folding_full = try .fromSliceTracked(allocator, &ucd.backing.case_folding_full, &maps.case_folding_full, &tracking.case_folding_full, mapping[0..mapping_len]);
+                result.value_ptr.case_folding_full = try .init(allocator, &ucd.backing.case_folding_full, &maps.case_folding_full, &tracking.case_folding_full, mapping[0..mapping_len]);
             },
             'T' => {
                 std.debug.assert(mapping_len == 1);

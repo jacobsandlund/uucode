@@ -119,7 +119,7 @@ pub const TableConfig = struct {
         }
 
         pub fn override(self: Field, other: anytype) Field {
-            std.debug.assert(std.mem.eql(u8, self.name(), other.name));
+            std.debug.assert(!@hasField(@TypeOf(other), "name") or std.mem.eql(u8, self.name(), other.name));
 
             switch (self) {
                 .basic => return self,
@@ -605,12 +605,12 @@ pub fn ArrayLen(comptime T: type, comptime max_len: comptime_int) type {
             self.len += 1;
         }
 
-        pub fn appendSliceAssumeCapacity(self: *@This(), slice: []const T) void {
-            @memcpy(self.items[self.len..][0..slice.len], slice);
-            self.len += @intCast(slice.len);
+        pub fn appendSliceAssumeCapacity(self: *@This(), s: []const T) void {
+            @memcpy(self.items[self.len..][0..s.len], s);
+            self.len += @intCast(s.len);
         }
 
-        pub fn toSlice(self: @This()) []const T {
+        pub fn slice(self: @This()) []const T {
             return self.items[0..self.len];
         }
     };
@@ -625,24 +625,24 @@ pub fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
         const Bits = std.meta.Int(.unsigned, item_bits * capacity);
         const ShiftBits = std.math.Log2Int(Bits);
 
-        pub fn fromSlice(slice: []const T) Self {
-            if ((comptime capacity == 0) or slice.len == 0) return .{ .bits = 0 };
+        pub fn init(s: []const T) Self {
+            if ((comptime capacity == 0) or s.len == 0) return .{ .bits = 0 };
 
             // This may make 1 length slices slightly faster, but it's
             // primarily avoiding an issue where `item_bits` is actually too
             // big to be a valid shift value, and zig can't tell that `i` would
             // never be anything other than 0.
-            if (comptime capacity == 1) return .{ .bits = @as(Bits, slice[0]) };
+            if (comptime capacity == 1) return .{ .bits = @as(Bits, s[0]) };
 
-            std.debug.assert(slice.len <= capacity);
+            std.debug.assert(s.len <= capacity);
             var bits: Bits = 0;
-            for (slice, 0..) |item, i| {
+            for (s, 0..) |item, i| {
                 bits |= @as(Bits, item) << item_bits * @as(ShiftBits, @intCast(i));
             }
             return .{ .bits = bits };
         }
 
-        pub fn toSlice(self: Self, buffer: []T, len: usize) []T {
+        pub fn slice(self: Self, buffer: []T, len: usize) []T {
             inline for (0..capacity) |i| {
                 buffer[i] = @as(T, @truncate(self.bits >> item_bits * i));
             }
@@ -651,6 +651,7 @@ pub fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
     };
 }
 
+// TODO: also track range of type T, to determine a min T
 pub fn OffsetLen(
     comptime T: type,
     comptime config: TableConfig.Field.OffsetLenField,
@@ -682,26 +683,26 @@ pub fn OffsetLen(
         pub const BackingOffsetMap = OffsetMap(T, Offset);
         pub const BackingLenTracking: type = [max_len]Offset;
 
-        pub fn fromSliceTracked(
+        pub fn init(
             allocator: std.mem.Allocator,
             backing: *BackingArrayLen,
             map: *BackingOffsetMap,
             len_tracking: *BackingLenTracking,
-            slice: []const T,
+            s: []const T,
         ) !Self {
-            const len: Len = @intCast(slice.len);
+            const len: Len = @intCast(s.len);
 
             if (comptime embedded_len == 0 and max_offset == 0) {
                 return .empty;
-            } else if ((comptime embedded_len == max_len) or slice.len <= embedded_len) {
+            } else if ((comptime embedded_len == max_len) or s.len <= embedded_len) {
                 return .{
                     .len = len,
                     .data = .{
-                        .embedded = EmbeddedArray.fromSlice(slice),
+                        .embedded = EmbeddedArray.init(s),
                     },
                 };
             } else {
-                const gop = try map.getOrPut(allocator, slice);
+                const gop = try map.getOrPut(allocator, s);
                 if (gop.found_existing) {
                     return .{
                         .len = len,
@@ -713,9 +714,9 @@ pub fn OffsetLen(
 
                 const offset = backing.len;
                 gop.value_ptr.* = offset;
-                backing.appendSliceAssumeCapacity(slice);
-                gop.key_ptr.* = backing.items[offset .. offset + slice.len];
-                len_tracking[slice.len - 1] += 1;
+                backing.appendSliceAssumeCapacity(s);
+                gop.key_ptr.* = backing.items[offset .. offset + s.len];
+                len_tracking[s.len - 1] += 1;
 
                 return .{
                     .len = len,
@@ -726,19 +727,22 @@ pub fn OffsetLen(
             }
         }
 
-        pub fn toSlice(
+        pub fn slice(
             self: *const Self,
-            backing: *const BackingArrayLen,
             buffer: []T,
         ) []const T {
+            // Note: while it would be better for modularity to pass `backing`
+            // in, this makes for a nicer API without having to wrap OffsetLen.
+            const backing = comptime @field(@import("get.zig").tableFor(name).backing, name);
+
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
             if (comptime embedded_len == max_len) {
-                return self.data.embedded.toSlice(buffer, self.len);
+                return self.data.embedded.slice(buffer, self.len);
             } else if (comptime embedded_len == 0) {
                 return backing.items[self.data.offset .. self.data.offset + self.len];
             } else if (self.len <= embedded_len) {
-                return self.data.embedded.toSlice(buffer, self.len);
+                return self.data.embedded.slice(buffer, self.len);
             } else {
                 return backing.items[self.data.offset .. self.data.offset + self.len];
             }
@@ -757,17 +761,6 @@ pub fn OffsetLen(
             } else {
                 return std.hash.autoHash(hasher, self.data.offset);
             }
-        }
-
-        pub fn tightConfig(
-            backing: *BackingArrayLen,
-        ) TableConfig.Field.OffsetLenField {
-            return .{
-                .name = name,
-                .max_len = max_len,
-                .max_offset = backing.len,
-                .embedded_len = embedded_len,
-            };
         }
 
         pub fn minBitsConfig(
@@ -859,8 +852,8 @@ pub fn PackedOptional(comptime T: type) type {
 
         pub const @"null" = Self{ .data = max };
 
-        pub fn fromOptional(optional: ?T) Self {
-            if (optional) |value| {
+        pub fn init(opt: ?T) Self {
+            if (opt) |value| {
                 std.debug.assert(value != max);
                 return .{ .data = value };
             } else {
@@ -868,7 +861,7 @@ pub fn PackedOptional(comptime T: type) type {
             }
         }
 
-        pub fn toOptional(self: Self) ?T {
+        pub fn optional(self: Self) ?T {
             if (self.data != max) {
                 return self.data;
             } else {

@@ -4,7 +4,7 @@ const types = @import("types.zig");
 pub const max_code_point: u21 = 0x10FFFF;
 pub const code_point_range_end: u21 = max_code_point + 1;
 
-pub const updating_ucd = true;
+pub const updating_ucd = false;
 
 pub const all_fields = brk: {
     const full_fields = @typeInfo(types.FullData).@"struct".fields;
@@ -15,6 +15,16 @@ pub const all_fields = brk: {
 
     break :brk fields;
 };
+
+pub fn tables(comptime overrides: anytype) [@typeInfo(@TypeOf(overrides)).@"struct".fields.len]types.TableConfig {
+    var t: [@typeInfo(@TypeOf(overrides)).@"struct".fields.len]types.TableConfig = undefined;
+
+    inline for (overrides, 0..) |override, i| {
+        t[i] = .override(&default, override);
+    }
+
+    return t;
+}
 
 pub const default = types.TableConfig{
     .stages = .auto,
