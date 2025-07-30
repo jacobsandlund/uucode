@@ -44,10 +44,10 @@ const test_build_config_zig =
     \\
     \\pub const tables = [_]types.TableConfig{
     \\    .override(&config.default, .{
-    \\        .fields = &.{"case_folding_simple","name"},
+    \\        .fields = .{"case_folding_simple", "name"},
     \\    }),
     \\    .override(&config.default, .{
-    \\        .fields = &.{"is_alphabetic","is_lowercase","is_uppercase"},
+    \\        .fields = .{"is_alphabetic", "is_lowercase", "is_uppercase"},
     \\    }),
     \\};
 ;

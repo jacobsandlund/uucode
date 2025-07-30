@@ -31,32 +31,33 @@ const ucd_config = blk: {
         break :blk config.updating_ucd_config;
     }
 
-    var combined_fields: []const []const u8 = &[_][]const u8{};
     var c: types.TableConfig = config.default;
+    c.fields.clear();
 
     for (table_configs) |tc| {
-        combined_fields = combined_fields ++ tc.fields;
+        c.fields.appendSliceAssumeCapacity(tc.fields.slice());
+    }
 
-        for (types.TableConfig.offset_len_fields) |field| {
-            if (!@field(tc, field).eql(@field(config.default, field))) {
-                if (for (tc.fields) |field_name| {
-                    if (std.mem.eql(u8, field_name, field)) break false;
-                } else true) {
-                    @compileError("Field '" ++ field ++ "' is not part of the TableConfig `fields`, even though it differs from the default");
-                }
-
-                @field(c, field) = @field(tc, field);
-            }
+    const offset_len_fields = .{
+        "name",
+        "decomposition_mapping",
+        "numeric_value_numeric",
+        "unicode_1_name",
+        "case_folding_full",
+    };
+    for (offset_len_fields) |field| {
+        // Configure any offset_len fields not present in the table configs so
+        // that we throw away the data after parsing.
+        if (!c.hasField(field)) {
+            c.fields.appendAssumeCapacity(config.default.getField(field).?.override(.{
+                .embedded_len = 0,
+                .max_offset = 0,
+            }));
         }
     }
 
-    c.fields = combined_fields;
-
     break :blk c;
 };
-
-// TODO: use
-const config_fields_map = std.static_string_map.StaticStringMap(void).initComptime(ucd_config.fields);
 
 const UnicodeData = types.UnicodeData(ucd_config);
 const CaseFolding = types.CaseFolding(ucd_config);
@@ -158,12 +159,19 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     try parseEmojiData(allocator, &ucd.emoji_data);
 
     if (config.updating_ucd) {
+        const expected_name = OffsetLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name);
+        const expected_decomposition_mapping = OffsetLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping);
+        const expected_numeric_value_numeric = OffsetLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric);
+        const expected_unicode_1_name = OffsetLenData.unicode_1_name.minBitsConfig(&ucd.backing.unicode_1_name, &tracking.unicode_1_name);
+        const expected_case_folding_full = OffsetLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full);
         const expected_default_config: types.TableConfig = .override(&config.default, .{
-            .name = OffsetLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name),
-            .decomposition_mapping = OffsetLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping),
-            .numeric_value_numeric = OffsetLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric),
-            .unicode_1_name = OffsetLenData.unicode_1_name.minBitsConfig(&ucd.backing.unicode_1_name, &tracking.unicode_1_name),
-            .case_folding_full = OffsetLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full),
+            .fields = .{
+                expected_name,
+                expected_decomposition_mapping,
+                expected_numeric_value_numeric,
+                expected_unicode_1_name,
+                expected_case_folding_full,
+            },
         });
 
         if (!expected_default_config.eql(&config.default)) {
@@ -173,52 +181,63 @@ pub fn init(allocator: std.mem.Allocator) !Self {
                 \\
                 \\
                 \\pub const default = types.TableConfig{{
-                \\    .fields = &[_][]const u8{{}},
                 \\    .stages = .auto,
-                \\    .name = .{{
-                \\        .max_len = {},
-                \\        .max_offset = {},
-                \\        .embedded_len = {},
-                \\    }},
-                \\    .decomposition_mapping = .{{
-                \\        .max_len = {},
-                \\        .max_offset = {},
-                \\        .embedded_len = {},
-                \\    }},
-                \\    .numeric_value_numeric = .{{
-                \\        .max_len = {},
-                \\        .max_offset = {},
-                \\        .embedded_len = {},
-                \\    }},
-                \\    .unicode_1_name = .{{
-                \\        .max_len = {},
-                \\        .max_offset = {},
-                \\        .embedded_len = {},
-                \\    }},
-                \\    .case_folding_full = .{{
-                \\        .max_len = {},
-                \\        .max_offset = {},
-                \\        .embedded_len = {},
+                \\    .fields = fields: {{
+                \\        var f = std.BoundedArray(types.TableConfig.Field, all_fields.len){{}};
+                \\        f.appendSliceAssumeCapacity(&.{{
+                \\            .{{ .offset_len = .{{
+                \\                .name = "name",
+                \\                .max_len = {},
+                \\                .max_offset = {},
+                \\                .embedded_len = {},
+                \\            }} }},
+                \\            .{{ .offset_len = .{{
+                \\                .name = "decomposition_mapping",
+                \\                .max_len = {},
+                \\                .max_offset = {},
+                \\                .embedded_len = {},
+                \\            }} }},
+                \\            .{{ .offset_len = .{{
+                \\                .name = "numeric_value_numeric",
+                \\                .max_len = {},
+                \\                .max_offset = {},
+                \\                .embedded_len = {},
+                \\            }} }},
+                \\            .{{ .offset_len = .{{
+                \\                .name = "unicode_1_name",
+                \\                .max_len = {},
+                \\                .max_offset = {},
+                \\                .embedded_len = {},
+                \\            }} }},
+                \\            .{{ .offset_len = .{{
+                \\                .name = "case_folding_full",
+                \\                .max_len = {},
+                \\                .max_offset = {},
+                \\                .embedded_len = {},
+                \\            }} }},
+                \\        }});
+                \\
+                \\        break :fields f;
                 \\    }},
                 \\}};
                 \\
                 \\
             , .{
-                expected_default_config.name.max_len,
-                expected_default_config.name.max_offset,
-                expected_default_config.name.embedded_len,
-                expected_default_config.decomposition_mapping.max_len,
-                expected_default_config.decomposition_mapping.max_offset,
-                expected_default_config.decomposition_mapping.embedded_len,
-                expected_default_config.numeric_value_numeric.max_len,
-                expected_default_config.numeric_value_numeric.max_offset,
-                expected_default_config.numeric_value_numeric.embedded_len,
-                expected_default_config.unicode_1_name.max_len,
-                expected_default_config.unicode_1_name.max_offset,
-                expected_default_config.unicode_1_name.embedded_len,
-                expected_default_config.case_folding_full.max_len,
-                expected_default_config.case_folding_full.max_offset,
-                expected_default_config.case_folding_full.embedded_len,
+                expected_name.max_len,
+                expected_name.max_offset,
+                expected_name.embedded_len,
+                expected_decomposition_mapping.max_len,
+                expected_decomposition_mapping.max_offset,
+                expected_decomposition_mapping.embedded_len,
+                expected_numeric_value_numeric.max_len,
+                expected_numeric_value_numeric.max_offset,
+                expected_numeric_value_numeric.embedded_len,
+                expected_unicode_1_name.max_len,
+                expected_unicode_1_name.max_offset,
+                expected_unicode_1_name.embedded_len,
+                expected_case_folding_full.max_len,
+                expected_case_folding_full.max_offset,
+                expected_case_folding_full.embedded_len,
             });
         }
     }

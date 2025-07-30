@@ -61,13 +61,8 @@ pub const FullData = struct {
 };
 
 pub const TableConfig = struct {
-    fields: []const []const u8,
-    name: OffsetLenConfig,
-    decomposition_mapping: OffsetLenConfig,
-    numeric_value_numeric: OffsetLenConfig,
-    unicode_1_name: OffsetLenConfig,
-    case_folding_full: OffsetLenConfig,
     stages: Stages,
+    fields: std.BoundedArray(Field, @typeInfo(FullData).@"struct".fields.len),
 
     pub const Stages = union(enum) {
         // TODO: support two stage tables (and actually support auto)
@@ -101,13 +96,114 @@ pub const TableConfig = struct {
         }
     };
 
-    pub const offset_len_fields = .{ "name", "decomposition_mapping", "numeric_value_numeric", "unicode_1_name", "case_folding_full" };
+    pub const Field = union(enum) {
+        basic: Basic,
+        offset_len: OffsetLenField,
+
+        pub const Basic = struct {
+            name: []const u8,
+        };
+
+        pub const OffsetLenField = struct {
+            name: []const u8,
+            max_len: usize = 0,
+            max_offset: usize = 0,
+            embedded_len: usize = 0,
+        };
+
+        pub fn name(self: Field) []const u8 {
+            return switch (self) {
+                .basic => |b| b.name,
+                .offset_len => |o| o.name,
+            };
+        }
+
+        pub fn override(self: Field, other: anytype) Field {
+            std.debug.assert(std.mem.eql(u8, self.name(), other.name));
+
+            switch (self) {
+                .basic => return self,
+                .offset_len => |o| {
+                    var result = o;
+
+                    inline for (@typeInfo(@TypeOf(other)).@"struct".fields) |field| {
+                        @field(result, field.name) = @field(other, field.name);
+                    }
+
+                    return .{ .offset_len = result };
+                },
+            }
+        }
+
+        pub fn eql(self: Field, other: Field) bool {
+            const FieldEnum = @typeInfo(Field).@"union".tag_type.?;
+
+            if (@as(FieldEnum, self) != @as(FieldEnum, other)) return false;
+
+            switch (self) {
+                .basic => |a| {
+                    const b = other.basic;
+                    return std.mem.eql(u8, a.name, b.name);
+                },
+                .offset_len => |a| {
+                    const b = other.offset_len;
+                    return a.max_len == b.max_len and
+                        a.max_offset == b.max_offset and
+                        a.embedded_len == b.embedded_len and
+                        std.mem.eql(u8, a.name, b.name);
+                },
+            }
+        }
+    };
+
+    pub fn hasField(self: *const TableConfig, name: []const u8) bool {
+        return for (self.fields.slice()) |field| {
+            if (std.mem.eql(u8, field.name(), name)) {
+                break true;
+            }
+        } else false;
+    }
+
+    pub fn getField(self: *const TableConfig, name: []const u8) ?Field {
+        return for (self.fields.slice()) |field| {
+            if (std.mem.eql(u8, field.name(), name)) {
+                break field;
+            }
+        } else null;
+    }
 
     pub fn override(self: *const TableConfig, other: anytype) TableConfig {
         var result = self.*;
-        if (@hasField(@TypeOf(other), "fields")) {
-            result.fields = other.fields;
+
+        if (!@hasField(@TypeOf(other), "fields")) {
+            @compileError("Table config must define `fields`");
         }
+        //switch (@typeInfo(@FieldType(@TypeOf(other), "fields"))) {
+        //    .pointer => |pointer|
+        //}
+
+        result.fields.clear();
+        inline for (other.fields) |field| {
+            switch (@typeInfo(@TypeOf(field))) {
+                .@"struct" => {
+                    const original = self.getField(field.name) orelse {
+                        std.debug.panic("Field '{s}' not found in TableConfig being overriden", .{field.name});
+                    };
+                    result.fields.appendAssumeCapacity(original.override(field));
+                },
+                .pointer, .array => {
+                    if (self.getField(field)) |original| {
+                        result.fields.appendAssumeCapacity(original);
+                    } else {
+                        result.fields.appendAssumeCapacity(.{ .basic = .{
+                            .name = field,
+                        } });
+                    }
+                },
+                else => @compileError("Field has unexpected type"),
+            }
+        }
+
         if (@hasField(@TypeOf(other), "stages")) {
             switch (@typeInfo(@FieldType(@TypeOf(other), "stages"))) {
                 .@"struct" => |struct_info| {
@@ -128,11 +224,6 @@ pub const TableConfig = struct {
                 },
             }
         }
-        inline for (offset_len_fields) |field| {
-            if (@hasField(@TypeOf(other), field)) {
-                @field(result, field) = @field(self, field).override(@field(other, field));
-            }
-        }
 
         return result;
     }
@@ -142,14 +233,8 @@ pub const TableConfig = struct {
             return false;
         }
 
-        for (self.fields, other.fields) |a, b| {
-            if (!std.mem.eql(u8, a, b)) {
-                return false;
-            }
-        }
-
-        inline for (offset_len_fields) |field| {
-            if (!@field(self, field).eql(@field(other, field))) {
+        for (self.fields.slice(), other.fields.slice()) |a, b| {
+            if (!a.eql(b)) {
                 return false;
             }
         }
@@ -247,18 +332,18 @@ pub const NumericType = enum(u2) {
 
 pub fn UnicodeData(comptime config: TableConfig) type {
     return struct {
-        name: OffsetLen(u8, config.name),
+        name: OffsetLen(u8, config.getField("name").?.offset_len),
         general_category: GeneralCategory,
         canonical_combining_class: u8,
         bidi_class: BidiClass,
         decomposition_type: DecompositionType,
-        decomposition_mapping: OffsetLen(u21, config.decomposition_mapping),
+        decomposition_mapping: OffsetLen(u21, config.getField("decomposition_mapping").?.offset_len),
         numeric_type: NumericType,
         numeric_value_decimal: PackedOptional(u4),
         numeric_value_digit: PackedOptional(u4),
-        numeric_value_numeric: OffsetLen(u8, config.numeric_value_numeric),
+        numeric_value_numeric: OffsetLen(u8, config.getField("numeric_value_numeric").?.offset_len),
         is_bidi_mirrored: bool,
-        unicode_1_name: OffsetLen(u8, config.unicode_1_name),
+        unicode_1_name: OffsetLen(u8, config.getField("unicode_1_name").?.offset_len),
         simple_uppercase_mapping: PackedOptional(u21),
         simple_lowercase_mapping: PackedOptional(u21),
         simple_titlecase_mapping: PackedOptional(u21),
@@ -269,7 +354,7 @@ pub fn CaseFolding(comptime config: TableConfig) type {
     return struct {
         case_folding_simple: PackedOptional(u21),
         case_folding_turkish: PackedOptional(u21),
-        case_folding_full: OffsetLen(u21, config.case_folding_full),
+        case_folding_full: OffsetLen(u21, config.getField("case_folding_full").?.offset_len),
     };
 }
 
@@ -355,14 +440,14 @@ pub fn Table(comptime config: TableConfig) type {
     var backing_arrays: [config.fields.len]std.builtin.Type.StructField = undefined;
     var backing_len: usize = 0;
 
-    for (config.fields, 0..) |field_name, i| {
-        const field = full_fields_map.get(field_name) orelse {
-            @compileError("Field '" ++ field_name ++ "' not found in FullData");
+    for (config.fields.slice(), 0..) |field_config, i| {
+        const field = full_fields_map.get(field_config.name()) orelse {
+            @compileError("Field '" ++ field_config.name() ++ "' not found in FullData");
         };
 
         const field_type = switch (@typeInfo(field.type)) {
             .pointer => |pointer| blk: {
-                const OL = OffsetLen(pointer.child, @field(config, field_name));
+                const OL = OffsetLen(pointer.child, field_config.offset_len);
 
                 backing_arrays[backing_len] = .{
                     .name = field.name,
@@ -508,13 +593,12 @@ pub fn Table(comptime config: TableConfig) type {
     });
 }
 
-pub fn ArrayLen(comptime T: type, comptime max_len_: comptime_int) type {
+pub fn ArrayLen(comptime T: type, comptime max_len: comptime_int) type {
     return struct {
         items: [max_len]T,
         len: Len,
 
-        pub const Len = std.math.IntFittingRange(0, max_len);
-        pub const max_len = max_len_;
+        const Len = std.math.IntFittingRange(0, max_len);
 
         pub fn appendAssumeCapacity(self: *@This(), item: T) void {
             self.items[self.len] = item;
@@ -533,14 +617,12 @@ pub fn ArrayLen(comptime T: type, comptime max_len_: comptime_int) type {
 }
 
 pub fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
-    const item_bits = @bitSizeOf(T);
-
     return packed struct {
-        const Self = @This();
-
         bits: Bits,
 
-        pub const Bits = std.meta.Int(.unsigned, item_bits * capacity);
+        const Self = @This();
+        const item_bits = @bitSizeOf(T);
+        const Bits = std.meta.Int(.unsigned, item_bits * capacity);
         const ShiftBits = std.math.Log2Int(Bits);
 
         pub fn fromSlice(slice: []const T) Self {
@@ -569,32 +651,16 @@ pub fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
     };
 }
 
-pub const OffsetLenConfig = struct {
-    max_len: usize = 0,
-    max_offset: usize = 0,
-    embedded_len: usize = 0,
-
-    pub fn override(self: OffsetLenConfig, other: anytype) OffsetLenConfig {
-        var result = self;
-        inline for (@typeInfo(@TypeOf(other)).@"struct".fields) |field| {
-            @field(result, field.name) = @field(other, field.name);
-        }
-
-        return result;
-    }
-
-    pub fn eql(self: OffsetLenConfig, other: OffsetLenConfig) bool {
-        return self.max_len == other.max_len and
-            self.max_offset == other.max_offset and
-            self.embedded_len == other.embedded_len;
-    }
-};
-
 pub fn OffsetLen(
     comptime T: type,
-    comptime config: OffsetLenConfig,
+    comptime config: TableConfig.Field.OffsetLenField,
 ) type {
-    if (config.max_len == 0) {
+    const name = config.name;
+    const max_len = config.max_len;
+    const max_offset = config.max_offset;
+    const embedded_len = config.embedded_len;
+
+    if (max_len == 0) {
         @compileError("OffsetLen with max_len == 0 is not supported due to Zig compiler bug");
     }
 
@@ -606,20 +672,15 @@ pub fn OffsetLen(
         len: Len,
 
         const Self = @This();
+        const EmbeddedArray = PackedArray(T, embedded_len);
+        pub const Offset = std.math.IntFittingRange(0, max_offset);
+        const Len = std.math.IntFittingRange(0, max_len);
 
         pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
 
-        pub const Offset = std.math.IntFittingRange(0, config.max_offset);
-        pub const Len = std.math.IntFittingRange(0, config.max_len);
-        pub const EmbeddedArray = PackedArray(T, config.embedded_len);
-
-        pub const max_len = config.max_len;
-        pub const max_offset = config.max_offset;
-        pub const embedded_len = config.embedded_len;
-
         pub const BackingArrayLen = ArrayLen(T, max_offset);
         pub const BackingOffsetMap = OffsetMap(T, Offset);
-        pub const BackingLenTracking: type = [config.max_len]Offset;
+        pub const BackingLenTracking: type = [max_len]Offset;
 
         pub fn fromSliceTracked(
             allocator: std.mem.Allocator,
@@ -630,7 +691,9 @@ pub fn OffsetLen(
         ) !Self {
             const len: Len = @intCast(slice.len);
 
-            if ((comptime embedded_len == max_len) or slice.len <= embedded_len) {
+            if (comptime embedded_len == 0 and max_offset == 0) {
+                return .empty;
+            } else if ((comptime embedded_len == max_len) or slice.len <= embedded_len) {
                 return .{
                     .len = len,
                     .data = .{
@@ -698,8 +761,9 @@ pub fn OffsetLen(
 
         pub fn tightConfig(
             backing: *BackingArrayLen,
-        ) OffsetLenConfig {
+        ) TableConfig.Field.OffsetLenField {
             return .{
+                .name = name,
                 .max_len = max_len,
                 .max_offset = backing.len,
                 .embedded_len = embedded_len,
@@ -709,7 +773,7 @@ pub fn OffsetLen(
         pub fn minBitsConfig(
             backing: *BackingArrayLen,
             len_tracking: *BackingLenTracking,
-        ) OffsetLenConfig {
+        ) TableConfig.Field.OffsetLenField {
             if (comptime embedded_len != 0) {
                 @compileError("embedded_len != 0 is not supported for minBitsConfig");
             }
@@ -721,6 +785,7 @@ pub fn OffsetLen(
                     break;
                 }
             } else return .{
+                .name = name,
                 .max_len = 0,
                 .max_offset = 0,
                 .embedded_len = 0,
@@ -757,6 +822,7 @@ pub fn OffsetLen(
             std.debug.assert(current_max_offset == backing.len);
 
             return .{
+                .name = name,
                 .max_len = actual_max_len,
                 .max_offset = best_max_offset,
                 .embedded_len = best_embedded_len,

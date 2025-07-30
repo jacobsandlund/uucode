@@ -367,25 +367,26 @@ pub fn writeTable(
         \\
     , .{ stage1.items.len, stage2.items.len, data_array.items.len });
 
-    inline for (table_config.fields) |field_name| {
-        try writer.print("\"{s}\",", .{field_name});
-    }
-    try writer.writeAll(
-        \\
-        \\        },
-        \\
-    );
-    inline for (types.TableConfig.offset_len_fields) |field| {
-        if (!@field(table_config, field).eql(@field(config.default, field))) {
-            try writer.print(
-                \\        .{s} = {},
-                \\
-            , .{ field, @field(table_config, field) });
+    for (table_config.fields.slice()) |field| {
+        switch (field) {
+            .basic => |b| {
+                try writer.print("            \"{s}\",\n", .{b.name});
+            },
+            .offset_len => |o| {
+                try writer.print(
+                    \\            .{{
+                    \\                .name = "{s}",
+                    \\                .max_len = {},
+                    \\                .max_offset = {},
+                    \\                .embedded_len = {},
+                    \\            }},
+                    \\
+                , .{ o.name, o.max_len, o.max_offset, o.embedded_len });
+            },
         }
     }
-
     try writer.writeAll(
-        \\
+        \\        },
         \\    })){
         \\        .backing = .{
         \\
