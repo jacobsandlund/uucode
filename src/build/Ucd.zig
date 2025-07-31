@@ -66,7 +66,7 @@ unicode_data: []UnicodeData,
 case_folding: std.AutoHashMapUnmanaged(u21, CaseFolding),
 derived_core_properties: std.AutoHashMapUnmanaged(u21, types.DerivedCoreProperties),
 east_asian_width: std.AutoHashMapUnmanaged(u21, types.EastAsianWidth),
-grapheme_break: std.AutoHashMapUnmanaged(u21, types.GraphemeBreak),
+original_grapheme_break: std.AutoHashMapUnmanaged(u21, types.OriginalGraphemeBreak),
 emoji_data: std.AutoHashMapUnmanaged(u21, types.EmojiData),
 backing: *BackingArrays,
 
@@ -112,7 +112,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
         .case_folding = .{},
         .derived_core_properties = .{},
         .east_asian_width = .{},
-        .grapheme_break = .{},
+        .original_grapheme_break = .{},
         .emoji_data = .{},
         .backing = undefined,
     };
@@ -155,7 +155,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     try parseCaseFolding(allocator, &ucd, &maps, &tracking);
     try parseDerivedCoreProperties(allocator, &ucd.derived_core_properties);
     try parseEastAsianWidth(allocator, &ucd.east_asian_width);
-    try parseGraphemeBreakProperty(allocator, &ucd.grapheme_break);
+    try parseGraphemeBreakProperty(allocator, &ucd.original_grapheme_break);
     try parseEmojiData(allocator, &ucd.emoji_data);
 
     if (config.updating_ucd) {
@@ -253,7 +253,7 @@ pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
     self.case_folding.deinit(allocator);
     self.derived_core_properties.deinit(allocator);
     self.east_asian_width.deinit(allocator);
-    self.grapheme_break.deinit(allocator);
+    self.original_grapheme_break.deinit(allocator);
     self.emoji_data.deinit(allocator);
     allocator.destroy(self.backing);
 }
@@ -287,6 +287,15 @@ fn parseUnicodeData(
     tracking: *BackingLenTracking,
 ) !void {
     const file_path = "ucd/UnicodeData.txt";
+
+    // TODO: look for defaults in the Derived Extracted properties files:
+    // https://www.unicode.org/reports/tr44/#Derived_Extracted
+    //
+    // > For nondefault values of properties, if there is any inadvertent
+    // mismatch between the primary data files specifying those properties and
+    // these lists of extracted properties, the primary data files are taken as
+    // definitive. However, for default values of properties, the extracted
+    // data files are definitive.
 
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
@@ -703,7 +712,7 @@ fn parseEastAsianWidth(
 
 fn parseGraphemeBreakProperty(
     allocator: std.mem.Allocator,
-    map: *std.AutoHashMapUnmanaged(u21, types.GraphemeBreak),
+    map: *std.AutoHashMapUnmanaged(u21, types.OriginalGraphemeBreak),
 ) !void {
     const file_path = "ucd/auxiliary/GraphemeBreakProperty.txt";
 
@@ -725,33 +734,33 @@ fn parseGraphemeBreakProperty(
         const range = try parseCodePointRange(cp_str);
 
         const prop = if (std.mem.eql(u8, prop_str, "Prepend"))
-            types.GraphemeBreak.prepend
+            types.OriginalGraphemeBreak.prepend
         else if (std.mem.eql(u8, prop_str, "CR"))
-            types.GraphemeBreak.cr
+            types.OriginalGraphemeBreak.cr
         else if (std.mem.eql(u8, prop_str, "LF"))
-            types.GraphemeBreak.lf
+            types.OriginalGraphemeBreak.lf
         else if (std.mem.eql(u8, prop_str, "Control"))
-            types.GraphemeBreak.control
+            types.OriginalGraphemeBreak.control
         else if (std.mem.eql(u8, prop_str, "Extend"))
-            types.GraphemeBreak.extend
+            types.OriginalGraphemeBreak.extend
         else if (std.mem.eql(u8, prop_str, "Regional_Indicator"))
-            types.GraphemeBreak.regional_indicator
+            types.OriginalGraphemeBreak.regional_indicator
         else if (std.mem.eql(u8, prop_str, "SpacingMark"))
-            types.GraphemeBreak.spacingmark
+            types.OriginalGraphemeBreak.spacingmark
         else if (std.mem.eql(u8, prop_str, "L"))
-            types.GraphemeBreak.l
+            types.OriginalGraphemeBreak.l
         else if (std.mem.eql(u8, prop_str, "V"))
-            types.GraphemeBreak.v
+            types.OriginalGraphemeBreak.v
         else if (std.mem.eql(u8, prop_str, "T"))
-            types.GraphemeBreak.t
+            types.OriginalGraphemeBreak.t
         else if (std.mem.eql(u8, prop_str, "LV"))
-            types.GraphemeBreak.lv
+            types.OriginalGraphemeBreak.lv
         else if (std.mem.eql(u8, prop_str, "LVT"))
-            types.GraphemeBreak.lvt
+            types.OriginalGraphemeBreak.lvt
         else if (std.mem.eql(u8, prop_str, "ZWJ"))
-            types.GraphemeBreak.zwj
+            types.OriginalGraphemeBreak.zwj
         else
-            types.GraphemeBreak.other;
+            types.OriginalGraphemeBreak.other;
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {

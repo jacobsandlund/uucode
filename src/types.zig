@@ -48,8 +48,10 @@ pub const FullData = struct {
     // EastAsianWidth field
     east_asian_width: EastAsianWidth,
 
-    // GraphemeBreak field
-    grapheme_break: GraphemeBreak,
+    // OriginalGraphemeBreak field
+    // The original field from GraphemeBreakProperty.txt, but without treating
+    // emoji modifiers correctly, fixed below in GraphemeBreak.
+    original_grapheme_break: OriginalGraphemeBreak,
 
     // EmojiData fields
     is_emoji: bool,
@@ -58,6 +60,9 @@ pub const FullData = struct {
     is_emoji_modifier_base: bool,
     is_emoji_component: bool,
     is_extended_pictographic: bool,
+
+    // GraphemeBreak field (derived)
+    grapheme_break: GraphemeBreak,
 };
 
 pub const TableConfig = struct {
@@ -397,7 +402,7 @@ pub const EastAsianWidth = enum(u3) {
     ambiguous,
 };
 
-pub const GraphemeBreak = enum(u4) {
+pub const OriginalGraphemeBreak = enum(u4) {
     other,
     prepend,
     cr,
@@ -412,6 +417,26 @@ pub const GraphemeBreak = enum(u4) {
     lv,
     lvt,
     zwj,
+};
+
+pub const GraphemeBreak = enum(u5) {
+    other,
+    prepend,
+    cr,
+    lf,
+    control,
+    extend,
+    regional_indicator,
+    spacingmark,
+    l,
+    v,
+    t,
+    lv,
+    lvt,
+    zwj,
+    emoji_modifier_base,
+    emoji_modifier,
+    extended_pictographic,
 };
 
 pub const EmojiData = packed struct {

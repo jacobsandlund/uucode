@@ -153,7 +153,7 @@ pub fn writeTable(
         const case_folding = ucd.case_folding.get(cp);
         const derived_core_properties = ucd.derived_core_properties.get(cp) orelse types.DerivedCoreProperties{};
         const east_asian_width = ucd.east_asian_width.get(cp) orelse types.EastAsianWidth.neutral;
-        const grapheme_break = ucd.grapheme_break.get(cp) orelse types.GraphemeBreak.other;
+        const original_grapheme_break = ucd.original_grapheme_break.get(cp) orelse types.OriginalGraphemeBreak.other;
         const emoji_data = ucd.emoji_data.get(cp) orelse types.EmojiData{};
 
         var data: Data = undefined;
@@ -296,9 +296,9 @@ pub fn writeTable(
             data.east_asian_width = east_asian_width;
         }
 
-        // GraphemeBreak field
-        if (@hasField(Data, "grapheme_break")) {
-            data.grapheme_break = grapheme_break;
+        // OriginalGraphemeBreak field
+        if (@hasField(Data, "original_grapheme_break")) {
+            data.original_grapheme_break = original_grapheme_break;
         }
 
         // EmojiData fields
@@ -319,6 +319,19 @@ pub fn writeTable(
         }
         if (@hasField(Data, "is_extended_pictographic")) {
             data.is_extended_pictographic = emoji_data.is_extended_pictographic;
+        }
+
+        // GraphemeBreak field (derived)
+        if (@hasField(Data, "grapheme_break")) {
+            if (emoji_data.is_emoji_modifier) {
+                data.grapheme_break = .emoji_modifier;
+            } else if (emoji_data.is_emoji_modifier_base) {
+                data.grapheme_break = .emoji_modifier_base;
+            } else if (emoji_data.is_extended_pictographic) {
+                data.grapheme_break = .extended_pictographic;
+            } else {
+                data.grapheme_break = original_grapheme_break;
+            }
         }
 
         // TODO: support two stage (stage1 and data) tables
