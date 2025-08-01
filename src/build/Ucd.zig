@@ -10,12 +10,12 @@
 //! - DerivedCoreProperties.txt
 //!   - multiple non-disjoint sections
 //!   - keyed by code point(s) (range)
-//! - DerivedEastAsianWidth.txt
+//! - extracted/DerivedEastAsianWidth.txt
 //!   - @missing ranges overlap with main section code points
 //!   - keyed by code point(s) (range)
-//! - GraphemeBreakProperty.txt
+//! - auxiliary/GraphemeBreakProperty.txt
 //!   - keyed by code point(s) (range)
-//! - emoji-data.txt
+//! - emoji/emoji-data.txt
 //!   - multiple non-disjoint sections
 //!   - keyed by code point(s) (range)
 

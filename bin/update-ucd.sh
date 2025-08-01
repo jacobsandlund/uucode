@@ -1,38 +1,31 @@
 #!/bin/bash
 
-UNICODE_VERSION="16.0.0"
-BASE_URL="https://www.unicode.org/Public/${UNICODE_VERSION}/ucd"
+version="16.0.0"
 
-echo "Updating Unicode Character Database version $UNICODE_VERSION..."
+base_url="https://www.unicode.org/Public/zipped/${version}"
 
-UCD_FILES=(
-    "CaseFolding.txt"
-    "DerivedCoreProperties.txt"
-    "auxiliary/GraphemeBreakProperty.txt"
-    "UnicodeData.txt"
-    "emoji/emoji-data.txt"
-    "extracted/DerivedEastAsianWidth.txt"
-)
+rm -rf ucd
+mkdir -p ucd/Unihan
 
-for file in "${UCD_FILES[@]}"; do
-    file_url="${BASE_URL}/${file}"
-    target_path="ucd/${file}"
+cd ucd
+curl -o ucd.zip "${base_url}/UCD.zip"
+unzip ucd.zip
+rm ucd.zip
 
-    mkdir -p "$(dirname "$target_path")"
-
-    curl -L -o "$target_path" "$file_url"
-done
+cd Unihan
+curl -o unihan.zip "${base_url}/Unihan.zip"
+unzip unihan.zip
+rm unihan.zip
 
 echo
+echo "########################################################################"
 echo
-echo "Next, see the note towards the top of 'src/build/Ucd.zig' and switch to"
-echo "using these increased capacities temporarily (commenting out the old"
-echo "ones):"
+echo "Done updating UCD files to version ${version}"
 echo
-echo "const string_pool_capacity = 10_000_000;"
-echo "const code_point_pool_capacity = 100_000;"
+echo "Explicitly add any new files to start parsing to the list of .gitignore"
+echo "exceptions."
 echo
-echo "Then run 'zig build' and the error messages will print out the new"
-echo "constants to be used at the top of 'src/build/Ucd.zig', and"
-echo "'src/type.zig'."
+echo "Next, flip the 'updating_ucd' flag in 'src/config.zig' to true, and"
+echo "'zig build test' once, updating the 'default' config if it needs"
+echo "changing, before flipping 'updating_ucd' back to false."
 echo
