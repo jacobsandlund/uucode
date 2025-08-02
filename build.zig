@@ -39,16 +39,18 @@ pub fn build(b: *std.Build) void {
 
                 writer.writeAll(
                     \\const config = @import("config.zig");
+                    \\const d = config.default;
                     \\
-                    \\pub const tables = config.tables(.{
+                    \\pub const tables = [_]config.Table{
                     \\    .{
-                    \\        .fields = .{
+                    \\        .stages = .auto,
+                    \\        .fields = &.{
                     \\
                 ) catch @panic("OOM");
 
                 if (table_0_fields) |fields| {
                     for (fields) |f| {
-                        writer.print("            \"{s}\",\n", .{f}) catch @panic("OOM");
+                        writer.print("            d.field(\"{s}\"),\n", .{f}) catch @panic("OOM");
                     }
                 } else {
                     writer.writeAll("Specify either `table_0_fields`, `build_config.zig`, `build_config_path`, or `tables.zig`\n") catch @panic("OOM");
@@ -59,18 +61,19 @@ pub fn build(b: *std.Build) void {
                         \\         },
                         \\     },
                         \\    .{
-                        \\        .fields = .{
+                        \\        .stages = .auto,
+                        \\        .fields = &.{
                     ) catch @panic("OOM");
 
                     for (fields) |f| {
-                        writer.print("            \"{s}\",\n", .{f}) catch @panic("OOM");
+                        writer.print("            d.field(\"{s}\"),\n", .{f}) catch @panic("OOM");
                     }
                 }
 
                 writer.writeAll(
                     \\         },
                     \\     },
-                    \\});
+                    \\};
                     \\
                 ) catch @panic("OOM");
 
@@ -111,15 +114,27 @@ pub fn build(b: *std.Build) void {
 
 const test_build_config_zig =
     \\const config = @import("config.zig");
+    \\const d = config.default;
     \\
-    \\pub const tables = config.tables(.{
+    \\pub const tables = [_]config.Table{
     \\    .{
-    \\        .fields = .{ "case_folding_simple", .{ .name = "name", .embedded_len = 15 } },
+    \\        .stages = .auto,
+    \\        .fields = &.{
+    \\            d.field("case_folding_simple"),
+    \\            d.field("name").override(.{
+    \\                .embedded_len = 15,
+    \\            }),
+    \\         },
     \\    },
     \\    .{
-    \\        .fields = .{ "is_alphabetic", "is_lowercase", "is_uppercase" },
+    \\        .stages = .auto,
+    \\        .fields = &.{
+    \\            d.field("is_alphabetic"),
+    \\            d.field("is_lowercase"),
+    \\            d.field("is_uppercase"),
+    \\         },
     \\    },
-    \\});
+    \\};
     \\
 ;
 
@@ -135,17 +150,18 @@ fn createLibMod(
         .optimize = optimize,
     });
 
-    const types_mod = b.createModule(.{
-        .root_source_file = b.path("src/types.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/config.zig"),
         .target = target,
         .optimize = optimize,
     });
+
+    const types_mod = b.createModule(.{
+        .root_source_file = b.path("src/types.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    types_mod.addImport("config.zig", config_mod);
     config_mod.addImport("types.zig", types_mod);
 
     const tables_mod = b.createModule(.{
@@ -179,15 +195,16 @@ fn buildTables(
 ) struct { build_tables_mod: *std.Build.Module, tables_path: std.Build.LazyPath } {
     const target = b.graph.host;
 
-    const types_mod = b.createModule(.{
-        .root_source_file = b.path("src/types.zig"),
-        .target = target,
-    });
-
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/config.zig"),
         .target = target,
     });
+
+    const types_mod = b.createModule(.{
+        .root_source_file = b.path("src/types.zig"),
+        .target = target,
+    });
+    types_mod.addImport("config.zig", config_mod);
     config_mod.addImport("types.zig", types_mod);
 
     // Create build_config

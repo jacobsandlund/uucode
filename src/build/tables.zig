@@ -12,7 +12,7 @@ const buffer_size = 100_000_000;
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
-    const table_configs: []const types.TableConfig = if (config.updating_ucd) &.{config.updating_ucd_config} else &@import("build_config").tables;
+    const table_configs: []const config.Table = if (config.updating_ucd) &.{config.updating_ucd_config} else &@import("build_config").tables;
 
     const buffer = try std.heap.page_allocator.alloc(u8, buffer_size);
     defer std.heap.page_allocator.free(buffer);
@@ -123,7 +123,7 @@ const BlockMap = std.HashMapUnmanaged(Block, u16, struct {
 }, std.hash_map.default_max_load_percentage);
 
 pub fn writeTable(
-    comptime table_config: types.TableConfig,
+    comptime table_config: config.Table,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
     writer: anytype,
@@ -370,7 +370,7 @@ pub fn writeTable(
     std.log.debug("Building data time: {d}ms\n", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
 
     try writer.print(
-        \\    types.Table(.override(&config.default, .{{
+        \\    types.Table(.{{
         \\        .stages = .{{ .len = .{{
         \\            .stage1 = {},
         \\            .stage2 = {},
@@ -380,38 +380,42 @@ pub fn writeTable(
         \\
     , .{ stage1.items.len, stage2.items.len, data_array.items.len });
 
-    for (table_config.fields.slice()) |field| {
-        switch (field) {
-            .basic => |b| {
-                try writer.print("            \"{s}\",\n", .{b.name});
-            },
-            .offset_len => |o| {
-                try writer.print(
-                    \\            .{{
-                    \\                .name = "{s}",
-                    \\                .max_len = {},
-                    \\                .max_offset = {},
-                    \\                .embedded_len = {},
-                    \\            }},
-                    \\
-                , .{ o.name, o.max_len, o.max_offset, o.embedded_len });
-            },
+    const Backing = @FieldType(Table, "backing");
+
+    inline for (table_config.fields) |f| {
+        var max_offset: usize = 0;
+
+        if (@hasField(Backing, f.name)) {
+            max_offset = @field(ucd.backing, f.name).len;
         }
+
+        try writer.print(
+            \\            .{{
+            \\                .name = "{s}",
+            \\                .type = {},
+            \\                .max_len = {},
+            \\                .max_offset = {},
+            \\                .embedded_len = {},
+            \\            }},
+            \\
+        , .{ f.name, f.type, f.max_len, max_offset, f.embedded_len });
     }
     try writer.writeAll(
         \\        },
-        \\    })){
+        \\    }){
         \\        .backing = .{
         \\
     );
 
-    inline for (@typeInfo(@FieldType(Table, "backing")).@"struct".fields) |field| {
+    inline for (@typeInfo(Backing).@"struct".fields) |field| {
+        const backing = @field(ucd.backing, field.name);
+
         try writer.print(
             \\            .{s} = .{{
-            \\                .items = .{{
+            \\                .buffer = .{{
         , .{field.name});
 
-        for (@field(ucd.backing, field.name).items) |item| {
+        for (backing.slice()) |item| {
             try writer.print("{},", .{item});
         }
 
@@ -421,7 +425,7 @@ pub fn writeTable(
             \\                .len = {},
             \\            }},
             \\
-        , .{@field(ucd.backing, field.name).len});
+        , .{backing.len});
     }
 
     const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));

@@ -26,18 +26,7 @@ const config = @import("config.zig");
 
 const table_configs = &@import("build_config").tables;
 
-const ucd_config = blk: {
-    if (config.updating_ucd) {
-        break :blk config.updating_ucd_config;
-    }
-
-    var c: types.TableConfig = config.default;
-    c.fields.clear();
-
-    for (table_configs) |tc| {
-        c.fields.appendSliceAssumeCapacity(tc.fields.slice());
-    }
-
+const all_fields = blk: {
     const offset_len_fields = .{
         "name",
         "decomposition_mapping",
@@ -45,18 +34,60 @@ const ucd_config = blk: {
         "unicode_1_name",
         "case_folding_full",
     };
-    for (offset_len_fields) |f| {
-        // Configure any offset_len fields not present in the table configs so
-        // that we throw away the data after parsing.
-        if (!c.hasField(f)) {
-            c.fields.appendAssumeCapacity(config.default.field(f).?.override(.{
-                .embedded_len = 0,
-                .max_offset = 0,
-            }));
+
+    var fields: [config.default.fields.len]config.Table.Field = undefined;
+    var i: usize = 0;
+
+    for (table_configs) |tc| {
+        for (tc.fields) |f| {
+            for (fields[0..i]) |existing| {
+                if (std.mem.eql(u8, existing.name, f.name)) {
+                    @compileError("Field '" ++ f.name ++ "' already exists in table config");
+                }
+            }
+
+            fields[i] = f;
+            i += 1;
         }
     }
 
-    break :blk c;
+    loop_fields: for (config.default.fields) |f| {
+        @setEvalBranchQuota(5_000);
+
+        for (fields[0..i]) |existing| {
+            if (std.mem.eql(u8, existing.name, f.name)) {
+                continue :loop_fields;
+            }
+        }
+
+        const is_offset_len = for (offset_len_fields) |offset_field| {
+            if (std.mem.eql(u8, offset_field, f.name)) break true;
+        } else false;
+
+        if (is_offset_len) {
+            fields[i] = config.default.field(f.name).override(.{
+                .embedded_len = 0,
+                .max_offset = 0,
+            });
+        } else {
+            fields[i] = f;
+        }
+
+        i += 1;
+    }
+
+    break :blk fields;
+};
+
+const ucd_config = blk: {
+    if (config.updating_ucd) {
+        break :blk config.updating_ucd_config;
+    }
+
+    break :blk config.Table{
+        .stages = .auto,
+        .fields = &all_fields,
+    };
 };
 
 const UnicodeData = types.UnicodeData(ucd_config);
@@ -81,11 +112,11 @@ const OffsetLenData = struct {
 };
 
 const BackingArrays = struct {
-    name: OffsetLenData.name.BackingArrayLen,
-    decomposition_mapping: OffsetLenData.decomposition_mapping.BackingArrayLen,
-    numeric_value_numeric: OffsetLenData.numeric_value_numeric.BackingArrayLen,
-    unicode_1_name: OffsetLenData.unicode_1_name.BackingArrayLen,
-    case_folding_full: OffsetLenData.case_folding_full.BackingArrayLen,
+    name: OffsetLenData.name.BackingArray,
+    decomposition_mapping: OffsetLenData.decomposition_mapping.BackingArray,
+    numeric_value_numeric: OffsetLenData.numeric_value_numeric.BackingArray,
+    unicode_1_name: OffsetLenData.unicode_1_name.BackingArray,
+    case_folding_full: OffsetLenData.case_folding_full.BackingArray,
 };
 
 const BackingMaps = struct {
@@ -164,15 +195,16 @@ pub fn init(allocator: std.mem.Allocator) !Self {
         const expected_numeric_value_numeric = OffsetLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric);
         const expected_unicode_1_name = OffsetLenData.unicode_1_name.minBitsConfig(&ucd.backing.unicode_1_name, &tracking.unicode_1_name);
         const expected_case_folding_full = OffsetLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full);
-        const expected_default_config: types.TableConfig = .override(&config.default, .{
-            .fields = .{
+        const expected_default_config: config.Table = .{
+            .stages = .auto,
+            .fields = &.{
                 expected_name,
                 expected_decomposition_mapping,
                 expected_numeric_value_numeric,
                 expected_unicode_1_name,
                 expected_case_folding_full,
             },
-        });
+        };
 
         if (!expected_default_config.eql(&config.default)) {
             std.debug.panic(
@@ -416,7 +448,7 @@ fn parseUnicodeData(
                     mapping_len += 1;
                 }
 
-                decomposition_mapping = try .init(allocator, &ucd.backing.decomposition_mapping, &maps.decomposition_mapping, &tracking.decomposition_mapping, temp_mapping[0..mapping_len]);
+                decomposition_mapping = try .fromSlice(allocator, &ucd.backing.decomposition_mapping, &maps.decomposition_mapping, &tracking.decomposition_mapping, temp_mapping[0..mapping_len]);
             }
         }
 
@@ -440,25 +472,25 @@ fn parseUnicodeData(
             };
         } else if (numeric_numeric_str.len > 0) {
             numeric_type = types.NumericType.numeric;
-            numeric_value_numeric = try .init(allocator, &ucd.backing.numeric_value_numeric, &maps.numeric_value_numeric, &tracking.numeric_value_numeric, numeric_numeric_str);
+            numeric_value_numeric = try .fromSlice(allocator, &ucd.backing.numeric_value_numeric, &maps.numeric_value_numeric, &tracking.numeric_value_numeric, numeric_numeric_str);
         }
 
         const unicode_data = UnicodeData{
-            .name = try .init(allocator, &ucd.backing.name, &maps.name, &tracking.name, name),
+            .name = try .fromSlice(allocator, &ucd.backing.name, &maps.name, &tracking.name, name),
             .general_category = general_category,
             .canonical_combining_class = canonical_combining_class,
             .bidi_class = bidi_class,
             .decomposition_type = decomposition_type,
             .decomposition_mapping = decomposition_mapping,
             .numeric_type = numeric_type,
-            .numeric_value_decimal = .init(numeric_value_decimal),
-            .numeric_value_digit = .init(numeric_value_digit),
+            .numeric_value_decimal = .fromOptional(numeric_value_decimal),
+            .numeric_value_digit = .fromOptional(numeric_value_digit),
             .numeric_value_numeric = numeric_value_numeric,
             .is_bidi_mirrored = is_bidi_mirrored,
-            .unicode_1_name = try .init(allocator, &ucd.backing.unicode_1_name, &maps.unicode_1_name, &tracking.unicode_1_name, unicode_1_name),
-            .simple_uppercase_mapping = .init(simple_uppercase_mapping),
-            .simple_lowercase_mapping = .init(simple_lowercase_mapping),
-            .simple_titlecase_mapping = .init(simple_titlecase_mapping),
+            .unicode_1_name = try .fromSlice(allocator, &ucd.backing.unicode_1_name, &maps.unicode_1_name, &tracking.unicode_1_name, unicode_1_name),
+            .simple_uppercase_mapping = .fromOptional(simple_uppercase_mapping),
+            .simple_lowercase_mapping = .fromOptional(simple_lowercase_mapping),
+            .simple_titlecase_mapping = .fromOptional(simple_titlecase_mapping),
         };
 
         // Handle range entries with "First>" and "Last>"
@@ -534,7 +566,7 @@ fn parseCaseFolding(
             },
             'F' => {
                 std.debug.assert(mapping_len > 1);
-                result.value_ptr.case_folding_full = try .init(allocator, &ucd.backing.case_folding_full, &maps.case_folding_full, &tracking.case_folding_full, mapping[0..mapping_len]);
+                result.value_ptr.case_folding_full = try .fromSlice(allocator, &ucd.backing.case_folding_full, &maps.case_folding_full, &tracking.case_folding_full, mapping[0..mapping_len]);
             },
             'T' => {
                 std.debug.assert(mapping_len == 1);
