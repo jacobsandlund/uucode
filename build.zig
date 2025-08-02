@@ -116,19 +116,53 @@ const test_build_config_zig =
     \\const config = @import("config.zig");
     \\const d = config.default;
     \\
+    \\fn computeFoo(cp: u21, input_data: anytype, data: anytype) void {
+    \\    _ = cp;
+    \\    const foo: u8 = switch (input_data.grapheme_break) {
+    \\        .other => 0,
+    \\        .cr => 1,
+    \\        .lf => 2,
+    \\        .control => 3,
+    \\        .extend => 4,
+    \\        .l => 5,
+    \\        .v => 6,
+    \\        .lv => 7,
+    \\        .lvt => 8,
+    \\        .t => 9,
+    \\        else => 10,
+    \\    };
+    \\
+    \\    data.x_foo = foo;
+    \\}
+    \\
+    \\const x = config.Extension{
+    \\    .input_fields = &.{"grapheme_break"},
+    \\    .compute = &computeFoo,
+    \\    .fields = &.{
+    \\        .{
+    \\            .name = "x_foo",
+    \\            .type = u8,
+    \\        },
+    \\    },
+    \\};
+    \\
     \\pub const tables = [_]config.Table{
     \\    .{
     \\        .stages = .auto,
+    \\        .extensions = &.{x},
     \\        .fields = &.{
+    \\            x.field("x_foo"),
     \\            d.field("case_folding_simple"),
     \\            d.field("name").override(.{
     \\                .embedded_len = 15,
     \\                .max_offset = 986664,
     \\            }),
+    \\            d.field("grapheme_break"),
     \\         },
     \\    },
     \\    .{
     \\        .stages = .auto,
+    \\        .extensions = &.{},
     \\        .fields = &.{
     \\            d.field("is_alphabetic"),
     \\            d.field("is_lowercase"),

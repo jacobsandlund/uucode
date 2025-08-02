@@ -92,7 +92,8 @@ pub fn simpleTitlecaseMapping(cp: u21) ?u21 {
 
 pub fn caseFoldingSimple(cp: u21) u21 {
     const table = comptime tableFor("case_folding_simple");
-    return getData(table, cp).case_folding_simple.optional() orelse cp;
+    const cf = getData(table, cp).case_folding_simple;
+    return cf.optional() orelse cp;
 }
 
 pub fn caseFoldingTurkish(cp: u21) ?u21 {
@@ -271,11 +272,25 @@ test "isAlphabetic" {
 }
 
 test "caseFoldingSimple" {
-    try testing.expectEqual(caseFoldingSimple(65), 97); // 'a'
-    try testing.expectEqual(caseFoldingSimple(97), 97); // 'a'
+    try testing.expectEqual(97, caseFoldingSimple(65)); // 'a'
+    try testing.expectEqual(97, caseFoldingSimple(97)); // 'a'
 }
 
 // TODO: "tables" will need to have data for every field
 //test "generalCategory" {
 //    try testing.expect(generalCategory(65) == .Lu); // 'A'
 //}
+
+// TODO: figure out how to get the build to test get.zig, and move these there:
+
+test "get" {
+    const d1 = get("1", 65);
+    try testing.expect(d1.is_alphabetic);
+    try testing.expect(d1.is_uppercase);
+    try testing.expect(!d1.is_lowercase);
+}
+
+test "get x_" {
+    try testing.expectEqual(0, get("0", 65).x_foo);
+    try testing.expectEqual(3, get("0", 0).x_foo);
+}

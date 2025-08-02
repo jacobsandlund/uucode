@@ -32,6 +32,11 @@ const all_fields = blk: {
 
     for (table_configs) |tc| {
         for (tc.fields) |f| {
+            if (f.isExtension()) continue;
+
+            // Accessing default field will panic if it doesn't exist
+            _ = config.default.field(f.name);
+
             for (fields[0..i]) |existing| {
                 if (std.mem.eql(u8, existing.name, f.name)) {
                     @compileError("Field '" ++ f.name ++ "' already exists in table config");
@@ -76,6 +81,7 @@ const ucd_config = blk: {
 
     break :blk config.Table{
         .stages = .auto,
+        .extensions = &.{},
         .fields = &all_fields,
     };
 };

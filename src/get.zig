@@ -44,9 +44,4 @@ pub fn get(comptime table_index: []const u8, cp: u21) DataFor(@field(tables, tab
     return getData(table, cp);
 }
 
-test "get" {
-    const d1 = get("1", 65);
-    try testing.expect(d1.is_alphabetic);
-    try testing.expect(d1.is_uppercase);
-    try testing.expect(!d1.is_lowercase);
-}
+// TODO: figure out how to get the build to test this file (tests are in root.zig)

@@ -156,8 +156,7 @@ pub fn writeTable(
         const original_grapheme_break = ucd.original_grapheme_break.get(cp) orelse types.OriginalGraphemeBreak.other;
         const emoji_data = ucd.emoji_data.get(cp) orelse types.EmojiData{};
 
-        var data: Data = undefined;
-        data._padding = 0;
+        var data: Data = @bitCast(@as(std.meta.Int(.unsigned, @bitSizeOf(Data)), 0));
 
         // UnicodeData fields
         if (@hasField(Data, "name")) {
@@ -349,6 +348,10 @@ pub fn writeTable(
             }
         }
 
+        inline for (table_config.extensions) |extension| {
+            extension.compute(cp, &data, &data);
+        }
+
         // TODO: support two stage (stage1 and data) tables
 
         const gop = try data_map.getOrPut(allocator, data);
@@ -391,6 +394,7 @@ pub fn writeTable(
         \\            .stage2 = {},
         \\            .data = {},
         \\         }}}},
+        \\        .extensions = &.{{}},
         \\        .fields = &.{{
         \\
     , .{ stage1.items.len, stage2.items.len, data_array.items.len });

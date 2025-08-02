@@ -70,6 +70,10 @@ pub const Field = struct {
         return @typeInfo(self.type) == .pointer;
     }
 
+    pub fn isExtension(self: Field) bool {
+        return std.mem.eql(u8, self.name[0..2], "x_");
+    }
+
     pub fn override(self: Field, overrides: anytype) Field {
         var result = self;
 
@@ -84,7 +88,7 @@ pub const Field = struct {
 pub const Table = struct {
     stages: Stages,
     fields: []const Field,
-    //extensions: []const Extension,
+    extensions: []const Extension,
 
     pub const Stages = union(enum) {
         // TODO: support two stage tables (and actually support auto)
@@ -101,14 +105,6 @@ pub const Table = struct {
         };
     };
 
-    pub fn hasField(self: *const Table, name: []const u8) bool {
-        return for (self.fields) |f| {
-            if (std.mem.eql(u8, f.name, name)) {
-                break true;
-            }
-        } else false;
-    }
-
     pub fn field(self: *const Table, name: []const u8) Field {
         return for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
@@ -118,27 +114,21 @@ pub const Table = struct {
     }
 };
 
-//pub const Extension = struct {
-//    fields: []const Field,
-//    input_fields: []const []const u8,
-//    compute: *const fn (cp: u21, input_data: anytype, source_data: anytype) void,
-//
-//    pub const Field = struct {
-//        name: []const u8,
-//        type_info: std.builtin.TypeInfo,
-//    };
-//
-//    pub fn field(self: *const Table, name: []const u8) Field {
-//        return for (self.fields.slice()) |f| {
-//          if (std.mem.eql(u8, f.name(), name)) {
-//                break f;
-//            }
-//        } else std.debug.panic("Field '{s}' not found in Table", .{name});
-//    }
-//};
+pub const Extension = struct {
+    fields: []const Field,
+    input_fields: []const []const u8,
+    compute: *const fn (cp: u21, input_data: anytype, data: anytype) void,
+
+    pub fn field(self: *const Extension, name: []const u8) Field {
+        return for (self.fields) |f| {
+            break f;
+        } else @compileError("Field '" ++ name ++ "' not found in Extension");
+    }
+};
 
 pub const default = Table{
     .stages = .auto,
+    .extensions = &.{},
     .fields = &.{
         // UnicodeData fields
         .{
@@ -281,5 +271,6 @@ const updating_ucd_fields = brk: {
 
 pub const updating_ucd_config = Table{
     .stages = .auto,
+    .extensions = &.{},
     .fields = &updating_ucd_fields,
 };
