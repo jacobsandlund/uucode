@@ -27,15 +27,7 @@ const config = @import("config.zig");
 const table_configs = &@import("build_config").tables;
 
 const all_fields = blk: {
-    const offset_len_fields = .{
-        "name",
-        "decomposition_mapping",
-        "numeric_value_numeric",
-        "unicode_1_name",
-        "case_folding_full",
-    };
-
-    var fields: [config.default.fields.len]config.Table.Field = undefined;
+    var fields: [config.default.fields.len]config.Field = undefined;
     var i: usize = 0;
 
     for (table_configs) |tc| {
@@ -60,11 +52,9 @@ const all_fields = blk: {
             }
         }
 
-        const is_offset_len = for (offset_len_fields) |offset_field| {
-            if (std.mem.eql(u8, offset_field, f.name)) break true;
-        } else false;
-
-        if (is_offset_len) {
+        if (f.isVarLen()) {
+            // When varlen fields aren't present, we configure this so the
+            // values get thrown away.
             fields[i] = config.default.field(f.name).override(.{
                 .embedded_len = 0,
                 .max_offset = 0,
@@ -103,7 +93,7 @@ backing: *BackingArrays,
 
 const Self = @This();
 
-const OffsetLenData = struct {
+const VarLenData = struct {
     const name = @FieldType(UnicodeData, "name");
     const decomposition_mapping = @FieldType(UnicodeData, "decomposition_mapping");
     const numeric_value_numeric = @FieldType(UnicodeData, "numeric_value_numeric");
@@ -112,27 +102,27 @@ const OffsetLenData = struct {
 };
 
 const BackingArrays = struct {
-    name: OffsetLenData.name.BackingArray,
-    decomposition_mapping: OffsetLenData.decomposition_mapping.BackingArray,
-    numeric_value_numeric: OffsetLenData.numeric_value_numeric.BackingArray,
-    unicode_1_name: OffsetLenData.unicode_1_name.BackingArray,
-    case_folding_full: OffsetLenData.case_folding_full.BackingArray,
+    name: VarLenData.name.BackingArray,
+    decomposition_mapping: VarLenData.decomposition_mapping.BackingArray,
+    numeric_value_numeric: VarLenData.numeric_value_numeric.BackingArray,
+    unicode_1_name: VarLenData.unicode_1_name.BackingArray,
+    case_folding_full: VarLenData.case_folding_full.BackingArray,
 };
 
-const BackingMaps = struct {
-    name: OffsetLenData.name.BackingOffsetMap,
-    decomposition_mapping: OffsetLenData.decomposition_mapping.BackingOffsetMap,
-    numeric_value_numeric: OffsetLenData.numeric_value_numeric.BackingOffsetMap,
-    unicode_1_name: OffsetLenData.unicode_1_name.BackingOffsetMap,
-    case_folding_full: OffsetLenData.case_folding_full.BackingOffsetMap,
+const OffsetMaps = struct {
+    name: VarLenData.name.OffsetMap,
+    decomposition_mapping: VarLenData.decomposition_mapping.OffsetMap,
+    numeric_value_numeric: VarLenData.numeric_value_numeric.OffsetMap,
+    unicode_1_name: VarLenData.unicode_1_name.OffsetMap,
+    case_folding_full: VarLenData.case_folding_full.OffsetMap,
 };
 
-const BackingLenTracking = struct {
-    name: OffsetLenData.name.BackingLenTracking,
-    decomposition_mapping: OffsetLenData.decomposition_mapping.BackingLenTracking,
-    numeric_value_numeric: OffsetLenData.numeric_value_numeric.BackingLenTracking,
-    unicode_1_name: OffsetLenData.unicode_1_name.BackingLenTracking,
-    case_folding_full: OffsetLenData.case_folding_full.BackingLenTracking,
+const LenTracking = struct {
+    name: VarLenData.name.LenTracking,
+    decomposition_mapping: VarLenData.decomposition_mapping.LenTracking,
+    numeric_value_numeric: VarLenData.numeric_value_numeric.LenTracking,
+    unicode_1_name: VarLenData.unicode_1_name.LenTracking,
+    case_folding_full: VarLenData.case_folding_full.LenTracking,
 };
 
 pub fn init(allocator: std.mem.Allocator) !Self {
@@ -160,23 +150,23 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     errdefer allocator.destroy(ucd.backing);
 
     var maps = blk: {
-        var m: BackingMaps = undefined;
-        inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
+        var m: OffsetMaps = undefined;
+        inline for (@typeInfo(OffsetMaps).@"struct".fields) |field| {
             @field(m, field.name) = .empty;
         }
         break :blk m;
     };
     defer {
-        inline for (@typeInfo(BackingMaps).@"struct".fields) |field| {
+        inline for (@typeInfo(OffsetMaps).@"struct".fields) |field| {
             @field(maps, field.name).deinit(allocator);
         }
     }
 
     var tracking = blk: {
-        var lt: BackingLenTracking = undefined;
-        inline for (@typeInfo(BackingLenTracking).@"struct".fields) |field| {
+        var lt: LenTracking = undefined;
+        inline for (@typeInfo(LenTracking).@"struct".fields) |field| {
             const field_info = @typeInfo(field.type);
-            @field(lt, field.name) = [_]@field(OffsetLenData, field.name).Offset{0} ** field_info.array.len;
+            @field(lt, field.name) = [_]@field(VarLenData, field.name).Offset{0} ** field_info.array.len;
         }
 
         break :blk lt;
@@ -190,11 +180,11 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     try parseEmojiData(allocator, &ucd.emoji_data);
 
     if (config.updating_ucd) {
-        const expected_name = OffsetLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name);
-        const expected_decomposition_mapping = OffsetLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping);
-        const expected_numeric_value_numeric = OffsetLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric);
-        const expected_unicode_1_name = OffsetLenData.unicode_1_name.minBitsConfig(&ucd.backing.unicode_1_name, &tracking.unicode_1_name);
-        const expected_case_folding_full = OffsetLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full);
+        const expected_name = VarLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name);
+        const expected_decomposition_mapping = VarLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping);
+        const expected_numeric_value_numeric = VarLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric);
+        const expected_unicode_1_name = VarLenData.unicode_1_name.minBitsConfig(&ucd.backing.unicode_1_name, &tracking.unicode_1_name);
+        const expected_case_folding_full = VarLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full);
         const expected_default_config: config.Table = .{
             .stages = .auto,
             .fields = &.{
@@ -315,8 +305,8 @@ fn stripComment(line: []const u8) []const u8 {
 fn parseUnicodeData(
     allocator: std.mem.Allocator,
     ucd: *Self,
-    maps: *BackingMaps,
-    tracking: *BackingLenTracking,
+    maps: *OffsetMaps,
+    tracking: *LenTracking,
 ) !void {
     const file_path = "ucd/UnicodeData.txt";
 
@@ -411,7 +401,7 @@ fn parseUnicodeData(
         // Parse decomposition type and mapping from single field
         // Default: character decomposes to itself (field 5 empty)
         var decomposition_type = types.DecompositionType.default;
-        var decomposition_mapping: OffsetLenData.decomposition_mapping = .empty;
+        var decomposition_mapping: VarLenData.decomposition_mapping = .empty;
 
         if (decomposition_str.len > 0) {
             // Non-empty field means canonical unless explicit type is given
@@ -456,7 +446,7 @@ fn parseUnicodeData(
         var numeric_type = types.NumericType.none;
         var numeric_value_decimal: ?u4 = null;
         var numeric_value_digit: ?u4 = null;
-        var numeric_value_numeric: OffsetLenData.numeric_value_numeric = .empty;
+        var numeric_value_numeric: VarLenData.numeric_value_numeric = .empty;
 
         if (numeric_decimal_str.len > 0) {
             numeric_type = types.NumericType.decimal;
@@ -483,14 +473,14 @@ fn parseUnicodeData(
             .decomposition_type = decomposition_type,
             .decomposition_mapping = decomposition_mapping,
             .numeric_type = numeric_type,
-            .numeric_value_decimal = .fromOptional(numeric_value_decimal),
-            .numeric_value_digit = .fromOptional(numeric_value_digit),
+            .numeric_value_decimal = .init(numeric_value_decimal),
+            .numeric_value_digit = .init(numeric_value_digit),
             .numeric_value_numeric = numeric_value_numeric,
             .is_bidi_mirrored = is_bidi_mirrored,
             .unicode_1_name = try .fromSlice(allocator, &ucd.backing.unicode_1_name, &maps.unicode_1_name, &tracking.unicode_1_name, unicode_1_name),
-            .simple_uppercase_mapping = .fromOptional(simple_uppercase_mapping),
-            .simple_lowercase_mapping = .fromOptional(simple_lowercase_mapping),
-            .simple_titlecase_mapping = .fromOptional(simple_titlecase_mapping),
+            .simple_uppercase_mapping = .init(simple_uppercase_mapping),
+            .simple_lowercase_mapping = .init(simple_lowercase_mapping),
+            .simple_titlecase_mapping = .init(simple_titlecase_mapping),
         };
 
         // Handle range entries with "First>" and "Last>"
@@ -510,8 +500,8 @@ fn parseUnicodeData(
 fn parseCaseFolding(
     allocator: std.mem.Allocator,
     ucd: *Self,
-    maps: *BackingMaps,
-    tracking: *BackingLenTracking,
+    maps: *OffsetMaps,
+    tracking: *LenTracking,
 ) !void {
     const file_path = "ucd/CaseFolding.txt";
 

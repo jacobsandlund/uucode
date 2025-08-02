@@ -1,6 +1,6 @@
 //! This file defines the low(er)-level `get` method, returning `Data`.
 //! (It also must be separate from `root.zig` so that `types.zig` can use it to
-//! allow for a better `slice` API on `OffsetLen` fields.)
+//! allow for a better `slice` API on `VarLen` fields.)
 const std = @import("std");
 const testing = std.testing;
 const tables = @import("tables").tables;

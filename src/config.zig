@@ -6,6 +6,38 @@ pub const code_point_range_end: u21 = max_code_point + 1;
 
 pub const updating_ucd = false;
 
+pub const Field = struct {
+    name: [:0]const u8,
+    type: type,
+
+    // For VarLen fields
+    max_len: usize = 0,
+    max_offset: usize = 0,
+    embedded_len: usize = 0,
+
+    pub fn isVarLen(self: Field) bool {
+        return @typeInfo(self.type) == .pointer;
+    }
+
+    pub fn override(self: Field, overrides: anytype) Field {
+        var result = self;
+
+        inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| {
+            @field(result, f.name) = @field(overrides, f.name);
+        }
+
+        return result;
+    }
+
+    pub fn eql(a: Field, b: Field) bool {
+        return a.type == b.type and
+            a.max_len == b.max_len and
+            a.max_offset == b.max_offset and
+            a.embedded_len == b.embedded_len and
+            std.mem.eql(u8, a.name, b.name);
+    }
+};
+
 pub const Table = struct {
     stages: Stages,
     fields: []const Field,
@@ -40,34 +72,6 @@ pub const Table = struct {
                     return @as(StagesTagType, self) == @as(StagesTagType, other);
                 },
             }
-        }
-    };
-
-    pub const Field = struct {
-        name: [:0]const u8,
-        type: type,
-
-        // For OffsetLen fields
-        max_len: usize = 0,
-        max_offset: usize = 0,
-        embedded_len: usize = 0,
-
-        pub fn override(self: Field, overrides: anytype) Field {
-            var result = self;
-
-            inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| {
-                @field(result, f.name) = @field(overrides, f.name);
-            }
-
-            return result;
-        }
-
-        pub fn eql(a: Field, b: Field) bool {
-            return a.type == b.type and
-                a.max_len == b.max_len and
-                a.max_offset == b.max_offset and
-                a.embedded_len == b.embedded_len and
-                std.mem.eql(u8, a.name, b.name);
         }
     };
 
@@ -219,37 +223,51 @@ pub const default = Table{
     },
 };
 
-//pub const updating_ucd_config = default.override(.{
-//    .fields = .{
-//        .{
-//            .name = "name",
-//            .max_len = 200,
-//            .max_offset = 2_000_000,
-//            .embedded_len = 0,
-//        },
-//        .{
-//            .name = "decomposition_mapping",
-//            .max_len = 40,
-//            .max_offset = 16_000,
-//            .embedded_len = 0,
-//        },
-//        .{
-//            .name = "numeric_value_numeric",
-//            .max_len = 30,
-//            .max_offset = 4000,
-//            .embedded_len = 0,
-//        },
-//        .{
-//            .name = "unicode_1_name",
-//            .max_len = 120,
-//            .max_offset = 100_000,
-//            .embedded_len = 0,
-//        },
-//        .{
-//            .name = "case_folding_full",
-//            .max_len = 9,
-//            .max_offset = 500,
-//            .embedded_len = 0,
-//        },
-//    },
-//});
+const updating_ucd_fields = brk: {
+    var fields: [default.fields.len]Field = undefined;
+
+    const offset_len_fields = [_]Field{
+        default.field("name").override(.{
+            .max_len = 200,
+            .max_offset = 2_000_000,
+        }),
+        default.field("decomposition_mapping").override(.{
+            .max_len = 40,
+            .max_offset = 16_000,
+        }),
+        default.field("numeric_value_numeric").override(.{
+            .max_len = 30,
+            .max_offset = 4000,
+        }),
+        default.field("unicode_1_name").override(.{
+            .max_len = 120,
+            .max_offset = 100_000,
+        }),
+        default.field("case_folding_full").override(.{
+            .max_len = 9,
+            .max_offset = 500,
+        }),
+    };
+
+    for (offset_len_fields, 0..) |f, i| {
+        fields[i] = f.override(.{
+            .embedded_len = 0,
+        });
+    }
+
+    var i = offset_len_fields.len;
+
+    for (default.fields) |f| {
+        if (!f.isVarLen()) {
+            fields[i] = f;
+            i += 1;
+        }
+    }
+
+    break :brk fields;
+};
+
+pub const updating_ucd_config = Table{
+    .stages = .auto,
+    .fields = &updating_ucd_fields,
+};

@@ -201,10 +201,10 @@ pub const EmojiData = struct {
     is_extended_pictographic: bool = false,
 };
 
-fn Field(c: config.Table.Field) type {
+fn Field(c: config.Field) type {
     return switch (@typeInfo(c.type)) {
-        .pointer => OffsetLen(c),
-        .optional => PackedOptional(c),
+        .pointer => VarLen(c),
+        .optional => Optional(c),
         else => c.type,
     };
 }
@@ -219,7 +219,7 @@ pub fn Table(comptime c: config.Table) type {
     for (c.fields, 0..) |f, i| {
         const F = Field(f);
 
-        if (@typeInfo(f.type) == .pointer) {
+        if (f.isVarLen()) {
             backing_arrays[backing_len] = .{
                 .name = f.name,
                 .type = F.BackingArray,
@@ -394,8 +394,8 @@ pub fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
     };
 }
 
-pub fn OffsetLen(
-    comptime c: config.Table.Field,
+pub fn VarLen(
+    comptime c: config.Field,
 ) type {
     const T = @typeInfo(c.type).pointer.child;
     const max_len = c.max_len;
@@ -403,7 +403,7 @@ pub fn OffsetLen(
     const embedded_len = c.embedded_len;
 
     if (max_len == 0) {
-        @compileError("OffsetLen with max_len == 0 is not supported due to Zig compiler bug");
+        @compileError("VarLen with max_len == 0 is not supported due to Zig compiler bug");
     }
 
     return packed struct {
@@ -421,15 +421,15 @@ pub fn OffsetLen(
         pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
 
         pub const BackingArray = std.BoundedArray(T, max_offset);
-        pub const BackingOffsetMap = OffsetMap(T, Offset);
-        pub const BackingLenTracking: type = [max_len]Offset;
+        pub const OffsetMap = SliceMap(T, Offset);
+        pub const LenTracking: type = [max_len]Offset;
 
         // TODO: also track range of type T, to determine a min T
         pub fn fromSlice(
             allocator: std.mem.Allocator,
             backing: *BackingArray,
-            map: *BackingOffsetMap,
-            len_tracking: *BackingLenTracking,
+            map: *OffsetMap,
+            len_tracking: *LenTracking,
             s: []const T,
         ) !Self {
             const len: Len = @intCast(s.len);
@@ -474,7 +474,7 @@ pub fn OffsetLen(
             buffer: []T,
         ) []const T {
             // Note: while it would be better for modularity to pass `backing`
-            // in, this makes for a nicer API without having to wrap OffsetLen.
+            // in, this makes for a nicer API without having to wrap VarLen.
             const backing = comptime @field(@import("get.zig").tableFor(c.name).backing, c.name);
 
             // Repeat the two return cases, first with two `comptime` checks,
@@ -507,8 +507,8 @@ pub fn OffsetLen(
 
         pub fn minBitsConfig(
             backing: *BackingArray,
-            len_tracking: *BackingLenTracking,
-        ) config.Table.Field.OffsetLen {
+            len_tracking: *LenTracking,
+        ) config.Field {
             if (comptime embedded_len != 0) {
                 @compileError("embedded_len != 0 is not supported for minBitsConfig");
             }
@@ -566,8 +566,8 @@ pub fn OffsetLen(
     };
 }
 
-pub fn OffsetMap(comptime T: type, comptime Offset: type) type {
-    return std.HashMapUnmanaged([]const T, Offset, struct {
+pub fn SliceMap(comptime T: type, comptime V: type) type {
+    return std.HashMapUnmanaged([]const T, V, struct {
         pub fn hash(self: @This(), s: []const T) u64 {
             _ = self;
             var hasher = std.hash.Wyhash.init(718259503);
@@ -584,7 +584,7 @@ pub fn OffsetMap(comptime T: type, comptime Offset: type) type {
 
 // Note: this can only be used for types where the max value isn't a valid
 // value, which is the case for all optional types in `config.default`
-pub fn PackedOptional(comptime c: config.Table.Field) type {
+pub fn Optional(comptime c: config.Field) type {
     const T = @typeInfo(c.type).optional.child;
     const max = std.math.maxInt(T);
 
@@ -595,7 +595,7 @@ pub fn PackedOptional(comptime c: config.Table.Field) type {
 
         pub const @"null" = Self{ .data = max };
 
-        pub fn fromOptional(opt: ?T) Self {
+        pub fn init(opt: ?T) Self {
             if (opt) |value| {
                 std.debug.assert(value != max);
                 return .{ .data = value };
