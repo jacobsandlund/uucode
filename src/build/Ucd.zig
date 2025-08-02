@@ -180,87 +180,33 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     try parseEmojiData(allocator, &ucd.emoji_data);
 
     if (config.updating_ucd) {
-        const expected_name = VarLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name);
-        const expected_decomposition_mapping = VarLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping);
-        const expected_numeric_value_numeric = VarLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric);
-        const expected_unicode_1_name = VarLenData.unicode_1_name.minBitsConfig(&ucd.backing.unicode_1_name, &tracking.unicode_1_name);
-        const expected_case_folding_full = VarLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full);
-        const expected_default_config: config.Table = .{
-            .stages = .auto,
-            .fields = &.{
-                expected_name,
-                expected_decomposition_mapping,
-                expected_numeric_value_numeric,
-                expected_unicode_1_name,
-                expected_case_folding_full,
-            },
+        const fields = [_]config.Field.Runtime{
+            VarLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name),
+            VarLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping),
+            VarLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric),
+            VarLenData.unicode_1_name.minBitsConfig(&ucd.backing.unicode_1_name, &tracking.unicode_1_name),
+            VarLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full),
         };
 
-        if (!expected_default_config.eql(&config.default)) {
-            std.debug.panic(
-                \\
-                \\ Update default config in `config.zig` with the following:
-                \\
-                \\
-                \\pub const default = types.TableConfig{{
-                \\    .stages = .auto,
-                \\    .fields = fields: {{
-                \\        var f = std.BoundedArray(types.TableConfig.Field, all_fields.len){{}};
-                \\        f.appendSliceAssumeCapacity(&.{{
-                \\            .{{ .offset_len = .{{
-                \\                .name = "name",
-                \\                .max_len = {},
-                \\                .max_offset = {},
-                \\                .embedded_len = {},
-                \\            }} }},
-                \\            .{{ .offset_len = .{{
-                \\                .name = "decomposition_mapping",
-                \\                .max_len = {},
-                \\                .max_offset = {},
-                \\                .embedded_len = {},
-                \\            }} }},
-                \\            .{{ .offset_len = .{{
-                \\                .name = "numeric_value_numeric",
-                \\                .max_len = {},
-                \\                .max_offset = {},
-                \\                .embedded_len = {},
-                \\            }} }},
-                \\            .{{ .offset_len = .{{
-                \\                .name = "unicode_1_name",
-                \\                .max_len = {},
-                \\                .max_offset = {},
-                \\                .embedded_len = {},
-                \\            }} }},
-                \\            .{{ .offset_len = .{{
-                \\                .name = "case_folding_full",
-                \\                .max_len = {},
-                \\                .max_offset = {},
-                \\                .embedded_len = {},
-                \\            }} }},
-                \\        }});
-                \\
-                \\        break :fields f;
-                \\    }},
-                \\}};
-                \\
-                \\
-            , .{
-                expected_name.max_len,
-                expected_name.max_offset,
-                expected_name.embedded_len,
-                expected_decomposition_mapping.max_len,
-                expected_decomposition_mapping.max_offset,
-                expected_decomposition_mapping.embedded_len,
-                expected_numeric_value_numeric.max_len,
-                expected_numeric_value_numeric.max_offset,
-                expected_numeric_value_numeric.embedded_len,
-                expected_unicode_1_name.max_len,
-                expected_unicode_1_name.max_offset,
-                expected_unicode_1_name.embedded_len,
-                expected_case_folding_full.max_len,
-                expected_case_folding_full.max_offset,
-                expected_case_folding_full.embedded_len,
-            });
+        const defaults = comptime [_]config.Field.Runtime{
+            config.default.field("name").runtime(.{}),
+            config.default.field("decomposition_mapping").runtime(.{}),
+            config.default.field("numeric_value_numeric").runtime(.{}),
+            config.default.field("unicode_1_name").runtime(.{}),
+            config.default.field("case_folding_full").runtime(.{}),
+        };
+
+        for (fields, defaults) |f, d| {
+            if (!d.eql(f)) {
+                const writer = std.io.getStdOut().writer();
+                try writer.writeAll(
+                    \\
+                    \\ Update default config in `config.zig` with the correct field config:
+                    \\
+                    \\
+                );
+                try f.write(writer);
+            }
         }
     }
 

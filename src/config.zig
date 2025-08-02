@@ -15,6 +15,57 @@ pub const Field = struct {
     max_offset: usize = 0,
     embedded_len: usize = 0,
 
+    pub const Runtime = struct {
+        name: []const u8,
+        type: []const u8,
+        max_len: usize,
+        max_offset: usize,
+        embedded_len: usize,
+
+        pub fn eql(a: Runtime, b: Runtime) bool {
+            return a.max_len == b.max_len and
+                a.max_offset == b.max_offset and
+                a.embedded_len == b.embedded_len and
+                std.mem.eql(u8, a.type, b.type) and
+                std.mem.eql(u8, a.name, b.name);
+        }
+
+        pub fn write(self: Runtime, writer: anytype) !void {
+            try writer.print(
+                \\.{{
+                \\    .name = "{s}",
+                \\    .type = {s},
+                \\    .max_len = {},
+                \\    .max_offset = {},
+                \\    .embedded_len = {},
+                \\}},
+                \\
+            , .{
+                self.name,
+                self.type,
+                self.max_len,
+                self.max_offset,
+                self.embedded_len,
+            });
+        }
+    };
+
+    pub fn runtime(self: Field, overrides: anytype) Runtime {
+        var result: Runtime = .{
+            .name = self.name,
+            .type = @typeName(self.type),
+            .max_len = self.max_len,
+            .max_offset = self.max_offset,
+            .embedded_len = self.embedded_len,
+        };
+
+        inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| {
+            @field(result, f.name) = @field(overrides, f.name);
+        }
+
+        return result;
+    }
+
     pub fn isVarLen(self: Field) bool {
         return @typeInfo(self.type) == .pointer;
     }
@@ -27,14 +78,6 @@ pub const Field = struct {
         }
 
         return result;
-    }
-
-    pub fn eql(a: Field, b: Field) bool {
-        return a.type == b.type and
-            a.max_len == b.max_len and
-            a.max_offset == b.max_offset and
-            a.embedded_len == b.embedded_len and
-            std.mem.eql(u8, a.name, b.name);
     }
 };
 
@@ -56,23 +99,6 @@ pub const Table = struct {
             stage2: usize,
             data: usize,
         };
-
-        pub fn eql(self: Stages, other: Stages) bool {
-            switch (self) {
-                .len => |self_len| {
-                    switch (other) {
-                        .len => |other_len| {
-                            return self_len.data == other_len.data and self_len.stage2 == other_len.stage2 and self_len.stage1 == other_len.stage1;
-                        },
-                        else => return false,
-                    }
-                },
-                else => {
-                    const StagesTagType = @typeInfo(Stages).@"union".tag_type.?;
-                    return @as(StagesTagType, self) == @as(StagesTagType, other);
-                },
-            }
-        }
     };
 
     pub fn hasField(self: *const Table, name: []const u8) bool {
@@ -90,20 +116,6 @@ pub const Table = struct {
             }
         } else @compileError("Field '" ++ name ++ "' not found in Table");
     }
-
-    pub fn eql(self: *const Table, other: *const Table) bool {
-        if (self.fields.len != other.fields.len or !self.stages.eql(other.stages)) {
-            return false;
-        }
-
-        for (self.fields.slice(), other.fields.slice()) |a, b| {
-            if (!a.eql(b)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
 };
 
 //pub const Extension = struct {
@@ -118,7 +130,7 @@ pub const Table = struct {
 //
 //    pub fn field(self: *const Table, name: []const u8) Field {
 //        return for (self.fields.slice()) |f| {
-//            if (std.mem.eql(u8, f.name(), name)) {
+//          if (std.mem.eql(u8, f.name(), name)) {
 //                break f;
 //            }
 //        } else std.debug.panic("Field '{s}' not found in Table", .{name});

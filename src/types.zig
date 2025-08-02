@@ -359,7 +359,7 @@ pub fn Table(comptime c: config.Table) type {
     });
 }
 
-pub fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
+fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
     return packed struct {
         bits: Bits,
 
@@ -420,6 +420,7 @@ pub fn VarLen(
 
         pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
 
+        pub const BufferForEmbedded = [embedded_len]T;
         pub const BackingArray = std.BoundedArray(T, max_offset);
         pub const OffsetMap = SliceMap(T, Offset);
         pub const LenTracking: type = [max_len]Offset;
@@ -471,7 +472,7 @@ pub fn VarLen(
 
         pub fn slice(
             self: *const Self,
-            buffer: []T,
+            buffer_for_embedded: []T,
         ) []const T {
             // Note: while it would be better for modularity to pass `backing`
             // in, this makes for a nicer API without having to wrap VarLen.
@@ -480,11 +481,11 @@ pub fn VarLen(
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
             if (comptime embedded_len == max_len) {
-                return self.data.embedded.slice(buffer, self.len);
+                return self.data.embedded.slice(buffer_for_embedded, self.len);
             } else if (comptime embedded_len == 0) {
                 return backing.constSlice()[self.data.offset .. self.data.offset + self.len];
             } else if (self.len <= embedded_len) {
-                return self.data.embedded.slice(buffer, self.len);
+                return self.data.embedded.slice(buffer_for_embedded, self.len);
             } else {
                 return backing.constSlice()[self.data.offset .. self.data.offset + self.len];
             }
@@ -508,7 +509,7 @@ pub fn VarLen(
         pub fn minBitsConfig(
             backing: *BackingArray,
             len_tracking: *LenTracking,
-        ) config.Field {
+        ) config.Field.Runtime {
             if (comptime embedded_len != 0) {
                 @compileError("embedded_len != 0 is not supported for minBitsConfig");
             }
@@ -519,12 +520,11 @@ pub fn VarLen(
                 if (len_tracking[i] != 0) {
                     break;
                 }
-            } else return .{
-                .name = c.name,
+            } else return c.runtime(.{
                 .max_len = 0,
                 .max_offset = 0,
                 .embedded_len = 0,
-            };
+            });
 
             const actual_max_len = i + 1;
             const item_bits = @bitSizeOf(T);
@@ -556,12 +556,11 @@ pub fn VarLen(
 
             std.debug.assert(current_max_offset == backing.len);
 
-            return .{
-                .name = c.name,
+            return c.runtime(.{
                 .max_len = actual_max_len,
                 .max_offset = best_max_offset,
                 .embedded_len = best_embedded_len,
-            };
+            });
         }
     };
 }

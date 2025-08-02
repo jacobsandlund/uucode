@@ -330,7 +330,22 @@ pub fn writeTable(
             } else if (emoji_data.is_extended_pictographic) {
                 data.grapheme_break = .extended_pictographic;
             } else {
-                data.grapheme_break = original_grapheme_break;
+                data.grapheme_break = switch (original_grapheme_break) {
+                    .other => .other,
+                    .prepend => .prepend,
+                    .cr => .cr,
+                    .lf => .lf,
+                    .control => .control,
+                    .extend => .extend,
+                    .regional_indicator => .regional_indicator,
+                    .spacingmark => .spacingmark,
+                    .l => .l,
+                    .v => .v,
+                    .t => .t,
+                    .lv => .lv,
+                    .lvt => .lvt,
+                    .zwj => .zwj,
+                };
             }
         }
 
@@ -389,17 +404,13 @@ pub fn writeTable(
             max_offset = @field(ucd.backing, f.name).len;
         }
 
-        try writer.print(
-            \\            .{{
-            \\                .name = "{s}",
-            \\                .type = {},
-            \\                .max_len = {},
-            \\                .max_offset = {},
-            \\                .embedded_len = {},
-            \\            }},
-            \\
-        , .{ f.name, f.type, f.max_len, max_offset, f.embedded_len });
+        if (!config.updating_ucd and f.max_offset != max_offset) {
+            std.debug.panic("Field '{s}' configured with max_offset {d} but the actual max offset is {d}. Reconfigure with actual ({d})", .{ f.name, f.max_offset, max_offset, max_offset });
+        }
+
+        try f.runtime(.{}).write(writer);
     }
+
     try writer.writeAll(
         \\        },
         \\    }){
@@ -470,6 +481,10 @@ pub fn writeTable(
         \\    },
         \\
     );
+
+    if (config.updating_ucd) {
+        @panic("Updating Ucd -- tables not configured to actully run. flip `updating_ucd` to false and run again");
+    }
 }
 
 test {
