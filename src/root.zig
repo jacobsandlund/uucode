@@ -1,7 +1,10 @@
 const std = @import("std");
 const getpkg = @import("get.zig");
-const testing = std.testing;
 const types = @import("types.zig");
+const testing = std.testing;
+
+// Expose extension API as `uucode.x`
+pub const x = @import("x");
 
 pub const get = getpkg.get;
 const tableFor = getpkg.tableFor;
@@ -293,4 +296,9 @@ test "get" {
 test "get an extension field" {
     try testing.expectEqual(0, get("0", 65).foo);
     try testing.expectEqual(3, get("0", 0).foo);
+}
+
+test "uucode.x" {
+    try testing.expectEqual(0, x.foo(65));
+    try testing.expectEqual(3, x.foo(0));
 }
