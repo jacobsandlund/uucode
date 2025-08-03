@@ -290,7 +290,7 @@ test "get" {
     try testing.expect(!d1.is_lowercase);
 }
 
-test "get x_" {
-    try testing.expectEqual(0, get("0", 65).x_foo);
-    try testing.expectEqual(3, get("0", 0).x_foo);
+test "get an extension field" {
+    try testing.expectEqual(0, get("0", 65).foo);
+    try testing.expectEqual(3, get("0", 0).foo);
 }

@@ -209,19 +209,108 @@ fn Field(c: config.Field) type {
     };
 }
 
+pub fn AllData(comptime c: config.Table) type {
+    var fields: [c.allFieldsLenBound()]std.builtin.Type.StructField = undefined;
+    var i: usize = 0;
+
+    // Add extension fields:
+    for (c.extensions) |x| {
+        for (x.fields) |xf| {
+            for (fields[0..i]) |existing| {
+                if (std.mem.eql(u8, existing.name, xf.name)) {
+                    @compileError("Extension field '" ++ xf.name ++ "' already exists in table");
+                }
+            }
+
+            fields[i] = .{
+                .name = xf.name,
+                .type = Field(xf),
+                .default_value_ptr = null,
+                .is_comptime = false,
+                .alignment = 0, // Required for packed structs
+            };
+            i += 1;
+        }
+    }
+
+    const extension_fields_len = i;
+
+    for (c.fields, 0..) |cf, c_i| {
+        const F = Field(cf);
+
+        for (c.fields[0..c_i]) |existing| {
+            if (std.mem.eql(u8, existing.name, cf.name)) {
+                @compileError("Field '" ++ cf.name ++ "' already exists in table");
+            }
+        }
+
+        // If a field isn't in `default` it's an extension field, which
+        // should've been added above.
+        if (!config.default.hasField(cf.name)) {
+            const in_extension = for (fields[0..extension_fields_len]) |xf| {
+                if (std.mem.eql(u8, xf.name, cf.name)) break true;
+            } else false;
+
+            if (!in_extension) {
+                @compileError("Table field '" ++ cf.name ++ "' not found in any of the table's extensions");
+            }
+
+            continue;
+        }
+
+        fields[i] = .{
+            .name = cf.name,
+            .type = F,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = 0, // Required for packed structs
+        };
+        i += 1;
+    }
+
+    // Add extension inputs:
+    for (c.extensions) |x| {
+        loop_inputs: for (x.inputs) |input| {
+            for (fields[0..i]) |existing| {
+                if (std.mem.eql(u8, existing.name, input)) {
+                    continue :loop_inputs;
+                }
+            }
+
+            fields[i] = .{
+                .name = input,
+                .type = Field(config.default.field(input)),
+                .default_value_ptr = null,
+                .is_comptime = false,
+                .alignment = 0, // Required for packed structs
+            };
+            i += 1;
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = fields[0..i],
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+
 pub fn Table(comptime c: config.Table) type {
     @setEvalBranchQuota(10_000);
     var data_fields: [c.fields.len + 1]std.builtin.Type.StructField = undefined;
-    var data_bit_size: usize = 0;
     var backing_arrays: [c.fields.len]std.builtin.Type.StructField = undefined;
     var backing_len: usize = 0;
+    var data_bit_size: usize = 0;
 
-    for (c.fields, 0..) |f, i| {
-        const F = Field(f);
+    for (c.fields, 0..) |cf, i| {
+        const F = Field(cf);
 
-        if (f.isVarLen()) {
+        if (cf.isVarLen()) {
             backing_arrays[backing_len] = .{
-                .name = f.name,
+                .name = cf.name,
                 .type = F.BackingArray,
                 .default_value_ptr = null,
                 .is_comptime = false,
@@ -231,7 +320,7 @@ pub fn Table(comptime c: config.Table) type {
         }
 
         data_fields[i] = .{
-            .name = f.name,
+            .name = cf.name,
             .type = F,
             .default_value_ptr = null,
             .is_comptime = false,

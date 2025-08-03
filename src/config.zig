@@ -4,7 +4,7 @@ const types = @import("types.zig");
 pub const max_code_point: u21 = 0x10FFFF;
 pub const code_point_range_end: u21 = max_code_point + 1;
 
-pub const updating_ucd = false;
+pub const is_updating_ucd = false;
 
 pub const Field = struct {
     name: [:0]const u8,
@@ -70,10 +70,6 @@ pub const Field = struct {
         return @typeInfo(self.type) == .pointer;
     }
 
-    pub fn isExtension(self: Field) bool {
-        return std.mem.eql(u8, self.name[0..2], "x_");
-    }
-
     pub fn override(self: Field, overrides: anytype) Field {
         var result = self;
 
@@ -86,9 +82,9 @@ pub const Field = struct {
 };
 
 pub const Table = struct {
-    stages: Stages,
+    stages: Stages = .auto,
+    extensions: []const Extension = &.{},
     fields: []const Field,
-    extensions: []const Extension,
 
     pub const Stages = union(enum) {
         // TODO: support two stage tables (and actually support auto)
@@ -105,6 +101,14 @@ pub const Table = struct {
         };
     };
 
+    pub fn hasField(self: *const Table, name: []const u8) bool {
+        return for (self.fields) |f| {
+            if (std.mem.eql(u8, f.name, name)) {
+                break true;
+            }
+        } else false;
+    }
+
     pub fn field(self: *const Table, name: []const u8) Field {
         return for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
@@ -112,12 +116,24 @@ pub const Table = struct {
             }
         } else @compileError("Field '" ++ name ++ "' not found in Table");
     }
+
+    // This returns an upper bound on the number of unique fields +
+    // extension ipnuts + extension fields.
+    pub fn allFieldsLenBound(self: *const Table) usize {
+        var bound: usize = self.fields.len;
+        for (self.extensions) |x| {
+            bound += x.inputs.len;
+            bound += x.fields.len;
+        }
+
+        return bound;
+    }
 };
 
 pub const Extension = struct {
+    inputs: []const []const u8,
     fields: []const Field,
-    input_fields: []const []const u8,
-    compute: *const fn (cp: u21, input_data: anytype, data: anytype) void,
+    compute: *const fn (cp: u21, data: anytype) void,
 
     pub fn field(self: *const Extension, name: []const u8) Field {
         return for (self.fields) |f| {
@@ -127,8 +143,6 @@ pub const Extension = struct {
 };
 
 pub const default = Table{
-    .stages = .auto,
-    .extensions = &.{},
     .fields = &.{
         // UnicodeData fields
         .{
@@ -269,8 +283,6 @@ const updating_ucd_fields = brk: {
     break :brk fields;
 };
 
-pub const updating_ucd_config = Table{
-    .stages = .auto,
-    .extensions = &.{},
+pub const updating_ucd = Table{
     .fields = &updating_ucd_fields,
 };

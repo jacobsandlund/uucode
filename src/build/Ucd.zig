@@ -26,38 +26,57 @@ const config = @import("config.zig");
 
 const table_configs = &@import("build_config").tables;
 
-const all_fields = blk: {
+const ucd_config_fields = blk: {
     var fields: [config.default.fields.len]config.Field = undefined;
     var i: usize = 0;
+    var input_var_lens: [config.default.fields.len][]const u8 = undefined;
+    var ivl_i: usize = 0;
 
     for (table_configs) |tc| {
-        for (tc.fields) |f| {
-            if (f.isExtension()) continue;
+        table_fields: for (tc.fields) |f| {
+            // If a field isn't in `default` it's an extension field
+            if (!config.default.hasField(f.name)) continue :table_fields;
 
-            // Accessing default field will panic if it doesn't exist
-            _ = config.default.field(f.name);
-
-            for (fields[0..i]) |existing| {
-                if (std.mem.eql(u8, existing.name, f.name)) {
-                    @compileError("Field '" ++ f.name ++ "' already exists in table config");
+            if (f.isVarLen()) {
+                for (fields[0..i]) |existing| {
+                    if (std.mem.eql(u8, existing.name, f.name)) {
+                        @compileError("Variable length field '" ++ f.name ++ "' already exists in another table, but this is not supported.");
+                    }
                 }
             }
 
             fields[i] = f;
             i += 1;
         }
+
+        for (tc.extensions) |x| {
+            loop_inputs: for (x.inputs) |input| {
+                for (config.default.fields) |f| {
+                    if (f.isVarLen() and std.mem.eql(u8, f.name, input)) {
+                        input_var_lens[ivl_i] = input;
+                        ivl_i += 1;
+                        continue :loop_inputs;
+                    }
+                }
+            }
+        }
     }
 
-    loop_fields: for (config.default.fields) |f| {
+    default_fields: for (config.default.fields) |f| {
         @setEvalBranchQuota(5_000);
-
         for (fields[0..i]) |existing| {
             if (std.mem.eql(u8, existing.name, f.name)) {
-                continue :loop_fields;
+                continue :default_fields;
             }
         }
 
-        if (f.isVarLen()) {
+        if (f.isVarLen() and
+            for (input_var_lens[0..ivl_i]) |input| {
+                if (std.mem.eql(u8, input, f.name)) {
+                    break true;
+                }
+            } else false)
+        {
             // When varlen fields aren't present, we configure this so the
             // values get thrown away.
             fields[i] = config.default.field(f.name).override(.{
@@ -75,14 +94,12 @@ const all_fields = blk: {
 };
 
 const ucd_config = blk: {
-    if (config.updating_ucd) {
-        break :blk config.updating_ucd_config;
+    if (config.is_updating_ucd) {
+        break :blk config.updating_ucd;
     }
 
     break :blk config.Table{
-        .stages = .auto,
-        .extensions = &.{},
-        .fields = &all_fields,
+        .fields = &ucd_config_fields,
     };
 };
 
@@ -185,7 +202,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     try parseGraphemeBreakProperty(allocator, &ucd.original_grapheme_break);
     try parseEmojiData(allocator, &ucd.emoji_data);
 
-    if (config.updating_ucd) {
+    if (config.is_updating_ucd) {
         const fields = [_]config.Field.Runtime{
             VarLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name),
             VarLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping),

@@ -25,7 +25,7 @@ echo
 echo "Explicitly add any new files to start parsing to the list of .gitignore"
 echo "exceptions."
 echo
-echo "Next, flip the 'updating_ucd' flag in 'src/config.zig' to true, and"
+echo "Next, flip the 'is_updating_ucd' flag in 'src/config.zig' to true, and"
 echo "'zig build test' once, updating the 'default' config if it needs"
-echo "changing, before flipping 'updating_ucd' back to false."
+echo "changing, before flipping 'is_updating_ucd' back to false."
 echo
