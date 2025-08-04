@@ -97,18 +97,19 @@ pub fn build(b: *std.Build) void {
 
     b.addNamedLazyPath("tables.zig", tables_path);
 
-    const lib = createLibMod(b, target, optimize, tables_path, x_root_path);
+    const mod = createLibMod(b, target, optimize, tables_path, x_root_path);
 
     // b.addModule with an existing module
-    _ = b.modules.put(b.dupe("uucode"), lib) catch @panic("OOM");
+    _ = b.modules.put(b.dupe("uucode"), mod.lib) catch @panic("OOM");
+    _ = b.modules.put(b.dupe("x"), mod.x) catch @panic("OOM");
 
     const test_build_config_path = b.addWriteFiles().add("test_build_config.zig", test_build_config_zig);
     const test_x_root_path = b.addWriteFiles().add("test_x_root.zig", test_x_root_zig);
     const t = buildTables(b, test_build_config_path);
-    const test_lib_mod = createLibMod(b, target, optimize, t.tables_path, test_x_root_path);
+    const test_mod = createLibMod(b, target, optimize, t.tables_path, test_x_root_path);
 
     const src_tests = b.addTest(.{
-        .root_module = test_lib_mod,
+        .root_module = test_mod.lib,
     });
 
     const build_tests = b.addTest(.{
@@ -141,12 +142,7 @@ const test_build_config_zig =
     \\const x = config.Extension{
     \\    .inputs = &.{"grapheme_break"},
     \\    .compute = &computeFoo,
-    \\    .fields = &.{
-    \\        .{
-    \\            .name = "foo",
-    \\            .type = u8,
-    \\        },
-    \\    },
+    \\    .fields = &.{.extension("foo", u8)},
     \\};
     \\
     \\pub const tables = [_]config.Table{
@@ -178,12 +174,10 @@ const test_build_config_zig =
 
 const test_x_root_zig =
     \\const get = @import("get.zig");
-    \\const tableFor = get.tableFor;
-    \\const getData = get.getData;
     \\
     \\pub fn foo(cp: u21) u8 {
-    \\    const table = comptime tableFor("foo");
-    \\    return getData(table, cp).foo;
+    \\    const table = comptime get.tableFor("foo");
+    \\    return get.data(table, cp).foo;
     \\}
     \\
 ;
@@ -194,7 +188,7 @@ fn createLibMod(
     optimize: std.builtin.OptimizeMode,
     tables_path: std.Build.LazyPath,
     x_root_path: std.Build.LazyPath,
-) *std.Build.Module {
+) struct { lib: *std.Build.Module, x: *std.Build.Module } {
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/config.zig"),
         .target = target,
@@ -245,7 +239,10 @@ fn createLibMod(
     lib_mod.addImport("types.zig", types_mod);
     lib_mod.addImport("get.zig", get_mod);
 
-    return lib_mod;
+    return .{
+        .lib = lib_mod,
+        .x = x_mod,
+    };
 }
 
 fn buildTables(

@@ -50,6 +50,13 @@ pub const Field = struct {
         }
     };
 
+    pub fn extension(name: [:0]const u8, comptime T: type) Field {
+        return .{
+            .name = name,
+            .type = T,
+        };
+    }
+
     pub fn runtime(self: Field, overrides: anytype) Runtime {
         var result: Runtime = .{
             .name = self.name,
@@ -64,6 +71,11 @@ pub const Field = struct {
         }
 
         return result;
+    }
+
+    pub fn eql(a: Field, b: Field) bool {
+        // Use runtime `eql` just to be lazy
+        return a.runtime(.{}).eql(b.runtime(.{}));
     }
 
     pub fn isVarLen(self: Field) bool {

@@ -211,6 +211,7 @@ fn Field(c: config.Field) type {
 
 pub fn AllData(comptime c: config.Table) type {
     var fields: [c.allFieldsLenBound()]std.builtin.Type.StructField = undefined;
+    var x_fields: [c.allFieldsLenBound()]config.Field = undefined;
     var i: usize = 0;
 
     // Add extension fields:
@@ -222,6 +223,7 @@ pub fn AllData(comptime c: config.Table) type {
                 }
             }
 
+            x_fields[i] = xf;
             fields[i] = .{
                 .name = xf.name,
                 .type = Field(xf),
@@ -247,11 +249,15 @@ pub fn AllData(comptime c: config.Table) type {
         // If a field isn't in `default` it's an extension field, which
         // should've been added above.
         if (!config.default.hasField(cf.name)) {
-            const in_extension = for (fields[0..extension_fields_len]) |xf| {
-                if (std.mem.eql(u8, xf.name, cf.name)) break true;
-            } else false;
+            const x_field: ?config.Field = for (x_fields[0..extension_fields_len]) |xf| {
+                if (std.mem.eql(u8, xf.name, cf.name)) break xf;
+            } else null;
 
-            if (!in_extension) {
+            if (x_field) |xf| {
+                if (!xf.eql(cf)) {
+                    @compileError("Table field '" ++ cf.name ++ "' does not match the field in the extension");
+                }
+            } else {
                 @compileError("Table field '" ++ cf.name ++ "' not found in any of the table's extensions");
             }
 
