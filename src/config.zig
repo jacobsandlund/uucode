@@ -143,7 +143,7 @@ pub const Table = struct {
 };
 
 pub const Extension = struct {
-    inputs: []const []const u8,
+    inputs: []const [:0]const u8,
     fields: []const Field,
     compute: *const fn (cp: u21, data: anytype) void,
 
