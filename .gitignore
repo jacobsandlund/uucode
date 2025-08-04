@@ -1,12 +1,2 @@
 .zig-cache/
 zig-out/
-
-# The ucd files are all downloaded by bin/update-ucd.sh, but we explicitly only
-# add what we use.
-ucd/
-!ucd/UnicodeData.txt
-!ucd/CaseFolding.txt
-!ucd/DerivedCoreProperties.txt
-!ucd/extracted/DerivedEastAsianWidth.txt
-!ucd/auxiliary/GraphemeBreakProperty.txt
-!ucd/emoji/emoji-data.txt
