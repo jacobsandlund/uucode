@@ -92,7 +92,13 @@ pub fn build(b: *std.Build) void {
 
             break :path_blk b.addWriteFiles().add("build_config.zig", build_config_zig);
         };
-        break :tables_blk buildTables(b, build_config_path).tables_path;
+
+        const t = buildTables(b, build_config_path);
+
+        // b.addModule with an existing module
+        _ = b.modules.put(b.dupe("build_config"), t.build_config_mod) catch @panic("OOM");
+
+        break :tables_blk t.tables_path;
     };
 
     b.addNamedLazyPath("tables.zig", tables_path);
@@ -247,7 +253,11 @@ fn createLibMod(
 fn buildTables(
     b: *std.Build,
     build_config_path: std.Build.LazyPath,
-) struct { build_tables_mod: *std.Build.Module, tables_path: std.Build.LazyPath } {
+) struct {
+    build_config_mod: *std.Build.Module,
+    build_tables_mod: *std.Build.Module,
+    tables_path: std.Build.LazyPath,
+} {
     const target = b.graph.host;
 
     const config_mod = b.createModule(.{
@@ -285,5 +295,9 @@ fn buildTables(
     const run_build_tables_exe = b.addRunArtifact(build_tables_exe);
     const tables_path = run_build_tables_exe.addOutputFileArg("tables.zig");
 
-    return .{ .build_tables_mod = build_tables_mod, .tables_path = tables_path };
+    return .{
+        .build_config_mod = build_config_mod,
+        .build_tables_mod = build_tables_mod,
+        .tables_path = tables_path,
+    };
 }
