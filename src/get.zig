@@ -29,6 +29,10 @@ pub fn tableFor(comptime field: []const u8) TableFor(field) {
     unreachable;
 }
 
+pub fn Field(comptime field: []const u8) type {
+    return @FieldType(DataFor(tableFor(field)), field);
+}
+
 // TODO: benchmark if needing an explicit `inline`
 // TODO: support two stage (stage1 and data) tables
 pub fn data(comptime table: anytype, cp: u21) DataFor(table) {

@@ -492,7 +492,6 @@ fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
 pub fn VarLen(
     comptime c: config.Field,
 ) type {
-    const T = @typeInfo(c.type).pointer.child;
     const max_len = c.max_len;
     const max_offset = c.max_offset;
     const embedded_len = c.embedded_len;
@@ -509,6 +508,7 @@ pub fn VarLen(
         len: Len,
 
         const Self = @This();
+        pub const T = @typeInfo(c.type).pointer.child;
         const EmbeddedArray = PackedArray(T, embedded_len);
         pub const Offset = std.math.IntFittingRange(0, max_offset);
         const Len = std.math.IntFittingRange(0, max_len);
@@ -679,13 +679,12 @@ pub fn SliceMap(comptime T: type, comptime V: type) type {
 // Note: this can only be used for types where the max value isn't a valid
 // value, which is the case for all optional types in `config.default`
 pub fn Optional(comptime c: config.Field) type {
-    const T = @typeInfo(c.type).optional.child;
-    const max = std.math.maxInt(T);
-
     return packed struct {
         data: T,
 
         const Self = @This();
+        pub const T = @typeInfo(c.type).optional.child;
+        const max = std.math.maxInt(T);
 
         pub const @"null" = Self{ .data = max };
 
