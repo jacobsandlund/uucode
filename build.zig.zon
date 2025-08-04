@@ -5,6 +5,7 @@
     .minimum_zig_version = "0.14.0",
     .paths = .{
         "LICENSE",
+        "README.md",
         "build.zig",
         "build.zig.zon",
         "src",
