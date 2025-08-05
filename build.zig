@@ -109,6 +109,7 @@ pub fn build(b: *std.Build) void {
 
     // b.addModule with an existing module
     _ = b.modules.put(b.dupe("uucode"), mod.lib) catch @panic("OOM");
+    _ = b.modules.put(b.dupe("get"), mod.get) catch @panic("OOM");
     _ = b.modules.put(b.dupe("x"), mod.x) catch @panic("OOM");
 
     const test_build_config_path = b.addWriteFiles().add("test_build_config.zig", test_build_config_zig);
@@ -195,7 +196,11 @@ fn createLibMod(
     optimize: std.builtin.OptimizeMode,
     tables_path: std.Build.LazyPath,
     x_root_path: std.Build.LazyPath,
-) struct { lib: *std.Build.Module, x: *std.Build.Module } {
+) struct {
+    lib: *std.Build.Module,
+    get: *std.Build.Module,
+    x: *std.Build.Module,
+} {
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/config.zig"),
         .target = target,
@@ -248,6 +253,7 @@ fn createLibMod(
 
     return .{
         .lib = lib_mod,
+        .get = get_mod,
         .x = x_mod,
     };
 }
