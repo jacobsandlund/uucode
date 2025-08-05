@@ -97,8 +97,8 @@ pub fn build(b: *std.Build) void {
 
         // b.addModule with an existing module
         _ = b.modules.put(b.dupe("build_config"), t.build_config) catch @panic("OOM");
-        _ = b.modules.put(b.dupe("config"), t.config) catch @panic("OOM");
-        _ = b.modules.put(b.dupe("types"), t.types) catch @panic("OOM");
+        _ = b.modules.put(b.dupe("config.zig"), t.config) catch @panic("OOM");
+        _ = b.modules.put(b.dupe("types.zig"), t.types) catch @panic("OOM");
 
         break :tables_blk t.tables;
     };
@@ -109,7 +109,7 @@ pub fn build(b: *std.Build) void {
 
     // b.addModule with an existing module
     _ = b.modules.put(b.dupe("uucode"), mod.lib) catch @panic("OOM");
-    _ = b.modules.put(b.dupe("get"), mod.get) catch @panic("OOM");
+    _ = b.modules.put(b.dupe("get.zig"), mod.get) catch @panic("OOM");
     _ = b.modules.put(b.dupe("x"), mod.x) catch @panic("OOM");
 
     const test_build_config_path = b.addWriteFiles().add("test_build_config.zig", test_build_config_zig);
@@ -134,7 +134,7 @@ pub fn build(b: *std.Build) void {
 }
 
 const test_build_config_zig =
-    \\const config = @import("config");
+    \\const config = @import("config.zig");
     \\const d = config.default;
     \\
     \\fn computeFoo(cp: u21, data: anytype) void {
@@ -181,7 +181,7 @@ const test_build_config_zig =
 ;
 
 const test_x_root_zig =
-    \\const get = @import("get");
+    \\const get = @import("get.zig");
     \\
     \\pub fn foo(cp: u21) u8 {
     \\    const table = comptime get.tableFor("foo");
@@ -237,7 +237,7 @@ fn createLibMod(
         .target = target,
         .optimize = optimize,
     });
-    x_mod.addImport("get", get_mod);
+    x_mod.addImport("get.zig", get_mod);
 
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
@@ -287,8 +287,8 @@ fn buildTables(
         .root_source_file = build_config_path,
         .target = target,
     });
-    build_config_mod.addImport("types", types_mod);
-    build_config_mod.addImport("config", config_mod);
+    build_config_mod.addImport("types.zig", types_mod);
+    build_config_mod.addImport("config.zig", config_mod);
 
     // Generate tables.zig with build_config
     const build_tables_mod = b.createModule(.{
