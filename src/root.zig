@@ -258,6 +258,13 @@ pub fn isExtendedPictographic(cp: u21) bool {
     return data(table, cp).is_extended_pictographic;
 }
 
+// Block field
+
+pub fn block(cp: u21) types.Block {
+    const table = comptime tableFor("block");
+    return data(table, cp).block;
+}
+
 test {
     // TODO: "tables" will need to have data for every field
     //std.testing.refAllDecls(@This());

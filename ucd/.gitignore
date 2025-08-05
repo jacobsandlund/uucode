@@ -7,7 +7,7 @@ BidiBrackets.txt
 BidiCharacterTest.txt
 BidiMirroring.txt
 BidiTest.txt
-Blocks.txt
+# Blocks.txt
 CJKRadicals.txt
 # CaseFolding.txt (used)
 CompositionExclusions.txt

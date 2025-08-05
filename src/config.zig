@@ -248,6 +248,9 @@ pub const default = Table{
 
         // GraphemeBreak field (derived)
         .{ .name = "grapheme_break", .type = types.GraphemeBreak },
+
+        // Block field
+        .{ .name = "block", .type = types.Block },
     },
 };
 

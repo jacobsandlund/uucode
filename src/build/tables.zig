@@ -156,6 +156,7 @@ pub fn writeTable(
         const east_asian_width = ucd.east_asian_width.get(cp) orelse types.EastAsianWidth.neutral;
         const original_grapheme_break = ucd.original_grapheme_break.get(cp) orelse types.OriginalGraphemeBreak.other;
         const emoji_data = ucd.emoji_data.get(cp) orelse types.EmojiData{};
+        const block_value = ucd.blocks.get(cp) orelse types.Block.no_block;
 
         var a: AllData = undefined;
 
@@ -294,6 +295,11 @@ pub fn writeTable(
         // EastAsianWidth field
         if (@hasField(AllData, "east_asian_width")) {
             a.east_asian_width = east_asian_width;
+        }
+
+        // Block field
+        if (@hasField(AllData, "block")) {
+            a.block = block_value;
         }
 
         // OriginalGraphemeBreak field
