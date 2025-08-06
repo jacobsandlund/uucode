@@ -29,10 +29,6 @@ pub fn tableFor(comptime field: []const u8) TableFor(field) {
     unreachable;
 }
 
-fn DataField(comptime field: []const u8) type {
-    return @FieldType(DataFor(tableFor(field)), field);
-}
-
 // TODO: benchmark if needing an explicit `inline`
 // TODO: support two stage (stage1 and data) tables
 fn data(comptime table: anytype, cp: u21) DataFor(table) {
@@ -48,12 +44,48 @@ pub fn getPacked(comptime table_index: []const u8, cp: u21) DataFor(@field(table
     return data(table, cp);
 }
 
-pub fn Field(comptime field: []const u8) type {
-    const D = DataField(field);
+const FieldEnum = blk: {
+    var fields_len: usize = 0;
+    for (tables) |table| {
+        // subtract 1 for _padding
+        fields_len += @typeInfo(DataFor(table)).@"struct".fields.len - 1;
+    }
+
+    var fields: [fields_len]std.builtin.Type.EnumField = undefined;
+    var i: usize = 0;
+
+    for (tables) |table| {
+        for (@typeInfo(DataFor(table)).@"struct".fields) |f| {
+            if (std.mem.eql(u8, f.name, "_padding")) continue;
+
+            fields[i] = .{
+                .name = f.name,
+                .value = i,
+            };
+            i += 1;
+        }
+    }
+
+    break :blk @Type(.{
+        .@"enum" = .{
+            .tag_type = std.math.IntFittingRange(0, fields_len - 1),
+            .fields = &fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_exhaustive = true,
+        },
+    });
+};
+
+fn DataField(comptime field: []const u8) type {
+    return @FieldType(DataFor(tableFor(field)), field);
+}
+
+pub fn Field(comptime field: FieldEnum) type {
+    const D = DataField(@tagName(field));
     switch (@typeInfo(D)) {
         .@"struct", .@"enum", .@"union", .@"opaque" => {
             if (@hasDecl(D, "optional")) {
-                if (D.default_to_cp)
+                if (D.defaults_to_cp)
                     return D.T
                 else
                     return ?D.T;
@@ -65,15 +97,16 @@ pub fn Field(comptime field: []const u8) type {
     }
 }
 
-pub fn get(comptime field: []const u8, cp: u21) Field(field) {
-    const D = DataField(field);
-    const table = comptime tableFor(field);
-    const d = @field(data(table, cp), field);
+pub fn get(comptime field: FieldEnum, cp: u21) Field(field) {
+    const f = @tagName(field);
+    const D = DataField(f);
+    const table = comptime tableFor(f);
+    const d = @field(data(table, cp), f);
 
     switch (@typeInfo(D)) {
         .@"struct", .@"enum", .@"union", .@"opaque" => {
             if (@hasDecl(D, "optional")) {
-                if (D.default_to_cp) {
+                if (D.defaults_to_cp) {
                     return d.optional() orelse cp;
                 } else {
                     return d.optional();

@@ -18,7 +18,7 @@ pub const Field = struct {
     embedded_len: usize = 0,
 
     // For u21 fields backed by Optional
-    default_to_cp: bool = false,
+    defaults_to_cp: bool = false,
 
     pub const Runtime = struct {
         name: []const u8,
@@ -26,13 +26,13 @@ pub const Field = struct {
         max_len: usize,
         max_offset: usize,
         embedded_len: usize,
-        default_to_cp: bool,
+        defaults_to_cp: bool,
 
         pub fn eql(a: Runtime, b: Runtime) bool {
             return a.max_len == b.max_len and
                 a.max_offset == b.max_offset and
                 a.embedded_len == b.embedded_len and
-                a.default_to_cp == b.default_to_cp and
+                a.defaults_to_cp == b.defaults_to_cp and
                 std.mem.eql(u8, a.type, b.type) and
                 std.mem.eql(u8, a.name, b.name);
         }
@@ -45,7 +45,7 @@ pub const Field = struct {
                 \\    .max_len = {},
                 \\    .max_offset = {},
                 \\    .embedded_len = {},
-                \\    .default_to_cp = {},
+                \\    .defaults_to_cp = {},
                 \\}},
                 \\
             , .{
@@ -54,7 +54,7 @@ pub const Field = struct {
                 self.max_len,
                 self.max_offset,
                 self.embedded_len,
-                self.default_to_cp,
+                self.defaults_to_cp,
             });
         }
     };
@@ -73,7 +73,7 @@ pub const Field = struct {
             .max_len = self.max_len,
             .max_offset = self.max_offset,
             .embedded_len = self.embedded_len,
-            .default_to_cp = self.default_to_cp,
+            .defaults_to_cp = self.defaults_to_cp,
         };
 
         inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| {
@@ -211,7 +211,7 @@ pub const default = Table{
         .{
             .name = "case_folding_simple",
             .type = ?u21,
-            .default_to_cp = true,
+            .defaults_to_cp = true,
         },
         .{ .name = "case_folding_turkish", .type = ?u21 },
         .{

@@ -1026,7 +1026,7 @@ pub fn Optional(comptime c: config.Field) type {
 
         const Self = @This();
 
-        pub const default_to_cp = c.default_to_cp;
+        pub const defaults_to_cp = c.defaults_to_cp;
         pub const T = @typeInfo(c.type).optional.child;
 
         const max = std.math.maxInt(T);

@@ -13,27 +13,27 @@ test {
 
 test "name" {
     var buffer = [_]u8{0} ** 88;
-    try testing.expect(std.mem.eql(u8, get("name", 65).slice(&buffer), "LATIN CAPITAL LETTER A"));
+    try testing.expect(std.mem.eql(u8, get(.name, 65).slice(&buffer), "LATIN CAPITAL LETTER A"));
 }
 
 test "is_alphabetic" {
-    try testing.expect(get("is_alphabetic", 65)); // 'A'
-    try testing.expect(get("is_alphabetic", 97)); // 'a'
-    try testing.expect(!get("is_alphabetic", 0));
+    try testing.expect(get(.is_alphabetic, 65)); // 'A'
+    try testing.expect(get(.is_alphabetic, 97)); // 'a'
+    try testing.expect(!get(.is_alphabetic, 0));
 }
 
 test "case_folding_simple" {
-    try testing.expectEqual(97, get("case_folding_simple", 65)); // 'a'
-    try testing.expectEqual(97, get("case_folding_simple", 97)); // 'a'
+    try testing.expectEqual(97, get(.case_folding_simple, 65)); // 'a'
+    try testing.expectEqual(97, get(.case_folding_simple, 97)); // 'a'
 }
 
 test "simple_uppercase_mapping" {
-    try testing.expectEqual(65, get("simple_uppercase_mapping", 97)); // 'a'
-    try testing.expectEqual(null, get("simple_uppercase_mapping", 65)); // 'A'
+    try testing.expectEqual(65, get(.simple_uppercase_mapping, 97)); // 'a'
+    try testing.expectEqual(null, get(.simple_uppercase_mapping, 65)); // 'A'
 }
 
 test "generalCategory" {
-    try testing.expect(get("general_category", 65) == .Lu); // 'A'
+    try testing.expect(get(.general_category, 65) == .Lu); // 'A'
 }
 
 test "getPacked" {
@@ -44,6 +44,6 @@ test "getPacked" {
 }
 
 test "get an extension field" {
-    try testing.expectEqual(0, get("foo", 65));
-    try testing.expectEqual(3, get("foo", 0));
+    try testing.expectEqual(0, get(.foo, 65));
+    try testing.expectEqual(3, get(.foo, 0));
 }
