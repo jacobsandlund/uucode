@@ -28,18 +28,6 @@ pub fn build(b: *std.Build) void {
         "Path to build config zig file",
     );
 
-    const x_root_zig = b.option(
-        []const u8,
-        "x_root.zig",
-        "Source code for `uucode.x` (extension API)",
-    ) orelse "";
-
-    const x_root_path = b.option(
-        std.Build.LazyPath,
-        "x_root_path",
-        "Path to `uucode.x` (extension API) source code",
-    ) orelse b.addWriteFiles().add("x_root.zig", x_root_zig);
-
     const tables_path_opt = b.option(std.Build.LazyPath, "tables.zig", "Built tables source file");
 
     const tables_path = tables_path_opt orelse tables_blk: {
@@ -105,20 +93,17 @@ pub fn build(b: *std.Build) void {
 
     b.addNamedLazyPath("tables.zig", tables_path);
 
-    const mod = createLibMod(b, target, optimize, tables_path, x_root_path);
+    const lib_mod = createLibMod(b, target, optimize, tables_path);
 
     // b.addModule with an existing module
-    _ = b.modules.put(b.dupe("uucode"), mod.lib) catch @panic("OOM");
-    _ = b.modules.put(b.dupe("get.zig"), mod.get) catch @panic("OOM");
-    _ = b.modules.put(b.dupe("x"), mod.x) catch @panic("OOM");
+    _ = b.modules.put(b.dupe("uucode"), lib_mod) catch @panic("OOM");
 
     const test_build_config_path = b.addWriteFiles().add("test_build_config.zig", test_build_config_zig);
-    const test_x_root_path = b.addWriteFiles().add("test_x_root.zig", test_x_root_zig);
     const t = buildTables(b, test_build_config_path);
-    const test_mod = createLibMod(b, target, optimize, t.tables, test_x_root_path);
+    const test_lib_mod = createLibMod(b, target, optimize, t.tables);
 
     const src_tests = b.addTest(.{
-        .root_module = test_mod.lib,
+        .root_module = test_lib_mod,
     });
 
     const build_tests = b.addTest(.{
@@ -133,74 +118,12 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_build_tests.step);
 }
 
-const test_build_config_zig =
-    \\const config = @import("config.zig");
-    \\const d = config.default;
-    \\
-    \\fn computeFoo(cp: u21, data: anytype) void {
-    \\    _ = cp;
-    \\    const foo: u8 = switch (data.grapheme_break) {
-    \\        .other => 0,
-    \\        .control => 3,
-    \\        else => 10,
-    \\    };
-    \\
-    \\    data.foo = foo;
-    \\}
-    \\
-    \\const x = config.Extension{
-    \\    .inputs = &.{"grapheme_break"},
-    \\    .compute = &computeFoo,
-    \\    .fields = &.{.extension("foo", u8)},
-    \\};
-    \\
-    \\pub const tables = [_]config.Table{
-    \\    .{
-    \\        .stages = .auto,
-    \\        .extensions = &.{x},
-    \\        .fields = &.{
-    \\            x.field("foo"),
-    \\            d.field("case_folding_simple"),
-    \\            d.field("name").override(.{
-    \\                .embedded_len = 15,
-    \\                .max_offset = 986664,
-    \\            }),
-    \\         },
-    \\    },
-    \\    .{
-    \\        .stages = .auto,
-    \\        .extensions = &.{},
-    \\        .fields = &.{
-    \\            d.field("is_alphabetic"),
-    \\            d.field("is_lowercase"),
-    \\            d.field("is_uppercase"),
-    \\         },
-    \\    },
-    \\};
-    \\
-;
-
-const test_x_root_zig =
-    \\const get = @import("get.zig");
-    \\
-    \\pub fn foo(cp: u21) u8 {
-    \\    const table = comptime get.tableFor("foo");
-    \\    return get.data(table, cp).foo;
-    \\}
-    \\
-;
-
 fn createLibMod(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     tables_path: std.Build.LazyPath,
-    x_root_path: std.Build.LazyPath,
-) struct {
-    lib: *std.Build.Module,
-    get: *std.Build.Module,
-    x: *std.Build.Module,
-} {
+) *std.Build.Module {
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/config.zig"),
         .target = target,
@@ -232,30 +155,18 @@ fn createLibMod(
     get_mod.addImport("tables", tables_mod);
     types_mod.addImport("get.zig", get_mod);
 
-    const x_mod = b.createModule(.{
-        .root_source_file = x_root_path,
-        .target = target,
-        .optimize = optimize,
-    });
-    x_mod.addImport("get.zig", get_mod);
-
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    lib_mod.addImport("x", x_mod);
     lib_mod.addImport("config.zig", config_mod);
     lib_mod.addImport("tables", tables_mod);
     lib_mod.addImport("types.zig", types_mod);
     lib_mod.addImport("get.zig", get_mod);
 
-    return .{
-        .lib = lib_mod,
-        .get = get_mod,
-        .x = x_mod,
-    };
+    return lib_mod;
 }
 
 fn buildTables(
@@ -313,3 +224,52 @@ fn buildTables(
         .tables = tables_path,
     };
 }
+
+const test_build_config_zig =
+    \\const config = @import("config.zig");
+    \\const d = config.default;
+    \\
+    \\fn computeFoo(cp: u21, data: anytype) void {
+    \\    _ = cp;
+    \\    const foo: u8 = switch (data.grapheme_break) {
+    \\        .other => 0,
+    \\        .control => 3,
+    \\        else => 10,
+    \\    };
+    \\
+    \\    data.foo = foo;
+    \\}
+    \\
+    \\const x = config.Extension{
+    \\    .inputs = &.{"grapheme_break"},
+    \\    .compute = &computeFoo,
+    \\    .fields = &.{.extension("foo", u8)},
+    \\};
+    \\
+    \\pub const tables = [_]config.Table{
+    \\    .{
+    \\        .stages = .auto,
+    \\        .extensions = &.{x},
+    \\        .fields = &.{
+    \\            d.field("simple_uppercase_mapping"),
+    \\            x.field("foo"),
+    \\            d.field("general_category"),
+    \\            d.field("case_folding_simple"),
+    \\            d.field("name").override(.{
+    \\                .embedded_len = 15,
+    \\                .max_offset = 986664,
+    \\            }),
+    \\         },
+    \\    },
+    \\    .{
+    \\        .stages = .auto,
+    \\        .extensions = &.{},
+    \\        .fields = &.{
+    \\            d.field("is_alphabetic"),
+    \\            d.field("is_lowercase"),
+    \\            d.field("is_uppercase"),
+    \\         },
+    \\    },
+    \\};
+    \\
+;
