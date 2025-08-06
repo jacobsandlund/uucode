@@ -88,62 +88,11 @@ pub const NumericType = enum(u2) {
     numeric,
 };
 
-pub fn UnicodeData(comptime c: config.Table) type {
-    return struct {
-        name: Field(c.field("name")),
-        general_category: Field(c.field("general_category")),
-        canonical_combining_class: Field(c.field("canonical_combining_class")),
-        bidi_class: Field(c.field("bidi_class")),
-        decomposition_type: Field(c.field("decomposition_type")),
-        decomposition_mapping: Field(c.field("decomposition_mapping")),
-        numeric_type: Field(c.field("numeric_type")),
-        numeric_value_decimal: Field(c.field("numeric_value_decimal")),
-        numeric_value_digit: Field(c.field("numeric_value_digit")),
-        numeric_value_numeric: Field(c.field("numeric_value_numeric")),
-        is_bidi_mirrored: Field(c.field("is_bidi_mirrored")),
-        unicode_1_name: Field(c.field("unicode_1_name")),
-        simple_uppercase_mapping: Field(c.field("simple_uppercase_mapping")),
-        simple_lowercase_mapping: Field(c.field("simple_lowercase_mapping")),
-        simple_titlecase_mapping: Field(c.field("simple_titlecase_mapping")),
-    };
-}
-
-pub fn CaseFolding(comptime c: config.Table) type {
-    return struct {
-        case_folding_simple: Field(c.field("case_folding_simple")),
-        case_folding_turkish: Field(c.field("case_folding_turkish")),
-        case_folding_full: Field(c.field("case_folding_full")),
-    };
-}
-
 pub const IndicConjunctBreak = enum(u2) {
     none,
     linker,
     consonant,
     extend,
-};
-
-pub const DerivedCoreProperties = struct {
-    is_math: bool = false,
-    is_alphabetic: bool = false,
-    is_lowercase: bool = false,
-    is_uppercase: bool = false,
-    is_cased: bool = false,
-    is_case_ignorable: bool = false,
-    changes_when_lowercased: bool = false,
-    changes_when_uppercased: bool = false,
-    changes_when_titlecased: bool = false,
-    changes_when_casefolded: bool = false,
-    changes_when_casemapped: bool = false,
-    is_id_start: bool = false,
-    is_id_continue: bool = false,
-    is_xid_start: bool = false,
-    is_xid_continue: bool = false,
-    is_default_ignorable_code_point: bool = false,
-    is_grapheme_extend: bool = false,
-    is_grapheme_base: bool = false,
-    is_grapheme_link: bool = false,
-    indic_conjunct_break: IndicConjunctBreak = .none,
 };
 
 pub const EastAsianWidth = enum(u3) {
@@ -534,6 +483,57 @@ pub const Block = enum(u9) {
     znamenny_musical_notation,
 };
 
+pub fn UnicodeData(comptime c: config.Table) type {
+    return struct {
+        name: Field(c.field(.name)),
+        general_category: Field(c.field(.general_category)),
+        canonical_combining_class: Field(c.field(.canonical_combining_class)),
+        bidi_class: Field(c.field(.bidi_class)),
+        decomposition_type: Field(c.field(.decomposition_type)),
+        decomposition_mapping: Field(c.field(.decomposition_mapping)),
+        numeric_type: Field(c.field(.numeric_type)),
+        numeric_value_decimal: Field(c.field(.numeric_value_decimal)),
+        numeric_value_digit: Field(c.field(.numeric_value_digit)),
+        numeric_value_numeric: Field(c.field(.numeric_value_numeric)),
+        is_bidi_mirrored: Field(c.field(.is_bidi_mirrored)),
+        unicode_1_name: Field(c.field(.unicode_1_name)),
+        simple_uppercase_mapping: Field(c.field(.simple_uppercase_mapping)),
+        simple_lowercase_mapping: Field(c.field(.simple_lowercase_mapping)),
+        simple_titlecase_mapping: Field(c.field(.simple_titlecase_mapping)),
+    };
+}
+
+pub fn CaseFolding(comptime c: config.Table) type {
+    return struct {
+        case_folding_simple: Field(c.field(.case_folding_simple)),
+        case_folding_turkish: Field(c.field(.case_folding_turkish)),
+        case_folding_full: Field(c.field(.case_folding_full)),
+    };
+}
+
+pub const DerivedCoreProperties = struct {
+    is_math: bool = false,
+    is_alphabetic: bool = false,
+    is_lowercase: bool = false,
+    is_uppercase: bool = false,
+    is_cased: bool = false,
+    is_case_ignorable: bool = false,
+    changes_when_lowercased: bool = false,
+    changes_when_uppercased: bool = false,
+    changes_when_titlecased: bool = false,
+    changes_when_casefolded: bool = false,
+    changes_when_casemapped: bool = false,
+    is_id_start: bool = false,
+    is_id_continue: bool = false,
+    is_xid_start: bool = false,
+    is_xid_continue: bool = false,
+    is_default_ignorable_code_point: bool = false,
+    is_grapheme_extend: bool = false,
+    is_grapheme_base: bool = false,
+    is_grapheme_link: bool = false,
+    indic_conjunct_break: IndicConjunctBreak = .none,
+};
+
 pub const EmojiData = struct {
     is_emoji: bool = false,
     has_emoji_presentation: bool = false,
@@ -552,8 +552,13 @@ fn Field(c: config.Field) type {
 }
 
 pub fn AllData(comptime c: config.Table) type {
-    var fields: [c.allFieldsLenBound()]std.builtin.Type.StructField = undefined;
-    var x_fields: [c.allFieldsLenBound()]config.Field = undefined;
+    var fields_len_bound: usize = c.fields.len;
+    for (c.extensions) |x| {
+        fields_len_bound += x.inputs.len;
+        fields_len_bound += x.fields.len;
+    }
+    var fields: [fields_len_bound]std.builtin.Type.StructField = undefined;
+    var x_fields: [fields_len_bound]config.Field = undefined;
     var i: usize = 0;
 
     // Add extension fields:
@@ -625,14 +630,21 @@ pub fn AllData(comptime c: config.Table) type {
                 }
             }
 
-            fields[i] = .{
-                .name = input,
-                .type = Field(config.default.field(input)),
-                .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = 0, // Required for packed structs
-            };
-            i += 1;
+            for (config.default.fields) |f| {
+                if (std.mem.eql(u8, f.name, input)) {
+                    fields[i] = .{
+                        .name = input,
+                        .type = Field(f),
+                        .default_value_ptr = null,
+                        .is_comptime = false,
+                        .alignment = 0, // Required for packed structs
+                    };
+                    i += 1;
+                    continue :loop_inputs;
+                }
+            }
+
+            @compileError("Input '" ++ input ++ "' not found in default config or extension");
         }
     }
 

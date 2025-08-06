@@ -81,7 +81,7 @@ const ucd_config_fields = blk: {
         {
             // When varlen fields aren't present, we configure this so the
             // values get thrown away.
-            fields[i] = config.default.field(f.name).override(.{
+            fields[i] = f.override(.{
                 .embedded_len = 0,
                 .max_offset = 0,
             });
@@ -217,11 +217,11 @@ pub fn init(allocator: std.mem.Allocator) !Self {
         };
 
         const defaults = comptime [_]config.Field.Runtime{
-            config.default.field("name").runtime(.{}),
-            config.default.field("decomposition_mapping").runtime(.{}),
-            config.default.field("numeric_value_numeric").runtime(.{}),
-            config.default.field("unicode_1_name").runtime(.{}),
-            config.default.field("case_folding_full").runtime(.{}),
+            config.default.field(.name).runtime(.{}),
+            config.default.field(.decomposition_mapping).runtime(.{}),
+            config.default.field(.numeric_value_numeric).runtime(.{}),
+            config.default.field(.unicode_1_name).runtime(.{}),
+            config.default.field(.case_folding_full).runtime(.{}),
         };
 
         for (fields, defaults) |f, d| {

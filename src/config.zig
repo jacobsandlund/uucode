@@ -103,6 +103,28 @@ pub const Field = struct {
     }
 };
 
+fn FieldEnum(comptime fields: []const Field) type {
+    @setEvalBranchQuota(5000);
+
+    var enum_fields: [fields.len]std.builtin.Type.EnumField = undefined;
+
+    for (fields, 0..) |f, i| {
+        enum_fields[i] = .{
+            .name = f.name,
+            .value = i,
+        };
+    }
+
+    return @Type(.{
+        .@"enum" = .{
+            .tag_type = std.math.IntFittingRange(0, fields.len - 1),
+            .fields = &enum_fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_exhaustive = true,
+        },
+    });
+}
+
 pub const Table = struct {
     stages: Stages = .auto,
     extensions: []const Extension = &.{},
@@ -131,24 +153,14 @@ pub const Table = struct {
         } else false;
     }
 
-    pub fn field(self: *const Table, name: []const u8) Field {
+    pub fn field(comptime self: *const Table, field_enum: FieldEnum(self.fields)) Field {
+        const name = @tagName(field_enum);
+
         return for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
                 break f;
             }
         } else @compileError("Field '" ++ name ++ "' not found in Table");
-    }
-
-    // This returns an upper bound on the number of unique fields +
-    // extension ipnuts + extension fields.
-    pub fn allFieldsLenBound(self: *const Table) usize {
-        var bound: usize = self.fields.len;
-        for (self.extensions) |x| {
-            bound += x.inputs.len;
-            bound += x.fields.len;
-        }
-
-        return bound;
     }
 };
 
@@ -157,9 +169,13 @@ pub const Extension = struct {
     fields: []const Field,
     compute: *const fn (cp: u21, data: anytype) void,
 
-    pub fn field(self: *const Extension, name: []const u8) Field {
+    pub fn field(comptime self: *const Extension, field_enum: FieldEnum(self.fields)) Field {
+        const name = @tagName(field_enum);
+
         return for (self.fields) |f| {
-            break f;
+            if (std.mem.eql(u8, f.name, name)) {
+                break f;
+            }
         } else @compileError("Field '" ++ name ++ "' not found in Extension");
     }
 };
