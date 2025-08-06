@@ -304,9 +304,9 @@ fn parseUnicodeData(
     var next_cp: u21 = 0x0000;
     const default_data = UnicodeData{
         .name = .empty,
-        .general_category = types.GeneralCategory.Cn, // Other, not assigned
+        .general_category = types.GeneralCategory.other_not_assigned,
         .canonical_combining_class = 0,
-        .bidi_class = types.BidiClass.L,
+        .bidi_class = types.BidiClass.left_to_right,
         .decomposition_type = types.DecompositionType.default,
         .decomposition_mapping = .empty,
         .numeric_type = types.NumericType.none,
@@ -359,12 +359,12 @@ fn parseUnicodeData(
         const simple_titlecase_mapping_str = parts.next().?; // Field 14
 
         const name = if (std.mem.endsWith(u8, name_str, "First>")) name_str["<".len..(name_str.len - ", First>".len)] else name_str;
-        const general_category = std.meta.stringToEnum(types.GeneralCategory, general_category_str) orelse {
+        const general_category = general_category_map.get(general_category_str) orelse {
             std.log.err("Unknown general category: {s}", .{general_category_str});
             unreachable;
         };
 
-        const bidi_class = std.meta.stringToEnum(types.BidiClass, bidi_class_str) orelse {
+        const bidi_class = bidi_class_map.get(bidi_class_str) orelse {
             std.log.err("Unknown bidi class: {s}", .{bidi_class_str});
             unreachable;
         };
@@ -471,6 +471,65 @@ fn parseUnicodeData(
         ucd.unicode_data[next_cp] = default_data;
     }
 }
+
+const general_category_map = std.StaticStringMap(types.GeneralCategory).initComptime(.{
+    .{ "Lu", .letter_uppercase },
+    .{ "Ll", .letter_lowercase },
+    .{ "Lt", .letter_titlecase },
+    .{ "Lm", .letter_modifier },
+    .{ "Lo", .letter_other },
+    .{ "Mn", .mark_nonspacing },
+    .{ "Mc", .mark_spacing_combining },
+    .{ "Me", .mark_enclosing },
+    .{ "Nd", .number_decimal_digit },
+    .{ "Nl", .number_letter },
+    .{ "No", .number_other },
+    .{ "Pc", .punctuation_connector },
+    .{ "Pd", .punctuation_dash },
+    .{ "Ps", .punctuation_open },
+    .{ "Pe", .punctuation_close },
+    .{ "Pi", .punctuation_initial_quote },
+    .{ "Pf", .punctuation_final_quote },
+    .{ "Po", .punctuation_other },
+    .{ "Sm", .symbol_math },
+    .{ "Sc", .symbol_currency },
+    .{ "Sk", .symbol_modifier },
+    .{ "So", .symbol_other },
+    .{ "Zs", .separator_space },
+    .{ "Zl", .separator_line },
+    .{ "Zp", .separator_paragraph },
+    .{ "Cc", .other_control },
+    .{ "Cf", .other_format },
+    .{ "Cs", .other_surrogate },
+    .{ "Co", .other_private_use },
+    .{ "Cn", .other_not_assigned },
+});
+
+const bidi_class_map = std.StaticStringMap(types.BidiClass).initComptime(.{
+    .{ "L", .left_to_right },
+    .{ "LRE", .left_to_right_embedding },
+    .{ "LRO", .left_to_right_override },
+    .{ "R", .right_to_left },
+    .{ "AL", .right_to_left_arabic },
+    .{ "RLE", .right_to_left_embedding },
+    .{ "RLO", .right_to_left_override },
+    .{ "PDF", .pop_directional_format },
+    .{ "EN", .european_number },
+    .{ "ES", .european_number_separator },
+    .{ "ET", .european_number_terminator },
+    .{ "AN", .arabic_number },
+    .{ "CS", .common_number_separator },
+    .{ "NSM", .nonspacing_mark },
+    .{ "BN", .boundary_neutral },
+    .{ "B", .paragraph_separator },
+    .{ "S", .segment_separator },
+    .{ "WS", .whitespace },
+    .{ "ON", .other_neutrals },
+    .{ "LRI", .left_to_right_isolate },
+    .{ "RLI", .right_to_left_isolate },
+    .{ "FSI", .first_strong_isolate },
+    .{ "PDI", .pop_directional_isolate },
+});
 
 fn parseCaseFolding(
     allocator: std.mem.Allocator,

@@ -33,7 +33,7 @@ test "simple_uppercase_mapping" {
 }
 
 test "generalCategory" {
-    try testing.expect(get(.general_category, 65) == .Lu); // 'A'
+    try testing.expect(get(.general_category, 65) == .letter_uppercase); // 'A'
 }
 
 test "getPacked" {

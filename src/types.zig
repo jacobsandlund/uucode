@@ -2,62 +2,62 @@ const std = @import("std");
 const config = @import("config.zig");
 
 pub const GeneralCategory = enum(u5) {
-    Lu, // Letter, uppercase
-    Ll, // Letter, lowercase
-    Lt, // Letter, titlecase
-    Lm, // Letter, modifier
-    Lo, // Letter, other
-    Mn, // Mark, nonspacing
-    Mc, // Mark, spacing combining
-    Me, // Mark, enclosing
-    Nd, // Number, decimal digit
-    Nl, // Number, letter
-    No, // Number, other
-    Pc, // Punctuation, connector
-    Pd, // Punctuation, dash
-    Ps, // Punctuation, open
-    Pe, // Punctuation, close
-    Pi, // Punctuation, initial quote
-    Pf, // Punctuation, final quote
-    Po, // Punctuation, other
-    Sm, // Symbol, math
-    Sc, // Symbol, currency
-    Sk, // Symbol, modifier
-    So, // Symbol, other
-    Zs, // Separator, space
-    Zl, // Separator, line
-    Zp, // Separator, paragraph
-    Cc, // Other, control
-    Cf, // Other, format
-    Cs, // Other, surrogate
-    Co, // Other, private use
-    Cn, // Other, not assigned
+    letter_uppercase, // Lu
+    letter_lowercase, // Ll
+    letter_titlecase, // Lt
+    letter_modifier, // Lm
+    letter_other, // Lo
+    mark_nonspacing, // Mn
+    mark_spacing_combining, // Mc
+    mark_enclosing, // Me
+    number_decimal_digit, // Nd
+    number_letter, // Nl
+    number_other, // No
+    punctuation_connector, // Pc
+    punctuation_dash, // Pd
+    punctuation_open, // Ps
+    punctuation_close, // Pe
+    punctuation_initial_quote, // Pi
+    punctuation_final_quote, // Pf
+    punctuation_other, // Po
+    symbol_math, // Sm
+    symbol_currency, // Sc
+    symbol_modifier, // Sk
+    symbol_other, // So
+    separator_space, // Zs
+    separator_line, // Zl
+    separator_paragraph, // Zp
+    other_control, // Cc
+    other_format, // Cf
+    other_surrogate, // Cs
+    other_private_use, // Co
+    other_not_assigned, // Cn
 };
 
 pub const BidiClass = enum(u5) {
-    L, // Left-to-Right
-    LRE, // Left-to-Right Embedding
-    LRO, // Left-to-Right Override
-    R, // Right-to-Left
-    AL, // Right-to-Left Arabic
-    RLE, // Right-to-Left Embedding
-    RLO, // Right-to-Left Override
-    PDF, // Pop Directional Format
-    EN, // European Number
-    ES, // European Number Separator
-    ET, // European Number Terminator
-    AN, // Arabic Number
-    CS, // Common Number Separator
-    NSM, // Nonspacing Mark
-    BN, // Boundary Neutral
-    B, // Paragraph Separator
-    S, // Segment Separator
-    WS, // Whitespace
-    ON, // Other Neutrals
-    LRI, // Left-to-Right Isolate
-    RLI, // Right-to-Left Isolate
-    FSI, // First Strong Isolate
-    PDI, // Pop Directional Isolate
+    left_to_right, // L
+    left_to_right_embedding, // LRE
+    left_to_right_override, // LRO
+    right_to_left, // R
+    right_to_left_arabic, // AL
+    right_to_left_embedding, // RLE
+    right_to_left_override, // RLO
+    pop_directional_format, // PDF
+    european_number, // EN
+    european_number_separator, // ES
+    european_number_terminator, // ET
+    arabic_number, // AN
+    common_number_separator, // CS
+    nonspacing_mark, // NSM
+    boundary_neutral, // BN
+    paragraph_separator, // B
+    segment_separator, // S
+    whitespace, // WS
+    other_neutrals, // ON
+    left_to_right_isolate, // LRI
+    right_to_left_isolate, // RLI
+    first_strong_isolate, // FSI
+    pop_directional_isolate, // PDI
 };
 
 pub const DecompositionType = enum(u5) {
