@@ -29,6 +29,24 @@ pub fn tableFor(comptime field: []const u8) TableFor(field) {
     unreachable;
 }
 
+fn GetTable(comptime table_name: []const u8) type {
+    for (tables) |table| {
+        if (std.mem.eql(u8, table.name, table_name)) {
+            return @TypeOf(table);
+        }
+    }
+
+    @compileError("Table '" ++ table_name ++ "' not found in tables");
+}
+
+fn getTable(comptime table_name: []const u8) GetTable(table_name) {
+    for (tables) |table| {
+        if (std.mem.eql(u8, table.name, table_name)) {
+            return table;
+        }
+    }
+}
+
 // TODO: benchmark if needing an explicit `inline`
 // TODO: support two stage (stage1 and data) tables
 fn data(comptime table: anytype, cp: u21) DataFor(table) {
@@ -39,8 +57,8 @@ fn data(comptime table: anytype, cp: u21) DataFor(table) {
     return table.data[data_idx];
 }
 
-pub fn getPacked(comptime table_index: []const u8, cp: u21) DataFor(@field(tables, table_index)) {
-    const table = @field(tables, table_index);
+pub fn getPacked(comptime table_name: []const u8, cp: u21) DataFor(getTable(table_name)) {
+    const table = comptime getTable(table_name);
     return data(table, cp);
 }
 

@@ -103,29 +103,8 @@ pub const Field = struct {
     }
 };
 
-fn FieldEnum(comptime fields: []const Field) type {
-    @setEvalBranchQuota(5000);
-
-    var enum_fields: [fields.len]std.builtin.Type.EnumField = undefined;
-
-    for (fields, 0..) |f, i| {
-        enum_fields[i] = .{
-            .name = f.name,
-            .value = i,
-        };
-    }
-
-    return @Type(.{
-        .@"enum" = .{
-            .tag_type = std.math.IntFittingRange(0, fields.len - 1),
-            .fields = &enum_fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_exhaustive = true,
-        },
-    });
-}
-
 pub const Table = struct {
+    name: ?[]const u8 = null,
     stages: Stages = .auto,
     extensions: []const Extension = &.{},
     fields: []const Field,
@@ -153,9 +132,7 @@ pub const Table = struct {
         } else false;
     }
 
-    pub fn field(comptime self: *const Table, field_enum: FieldEnum(self.fields)) Field {
-        const name = @tagName(field_enum);
-
+    pub fn field(comptime self: *const Table, name: []const u8) Field {
         return for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
                 break f;
@@ -169,9 +146,7 @@ pub const Extension = struct {
     fields: []const Field,
     compute: *const fn (cp: u21, data: anytype) void,
 
-    pub fn field(comptime self: *const Extension, field_enum: FieldEnum(self.fields)) Field {
-        const name = @tagName(field_enum);
-
+    pub fn field(comptime self: *const Extension, name: []const u8) Field {
         return for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
                 break f;

@@ -497,38 +497,38 @@ pub const Block = enum(u9) {
 
 pub fn UnicodeData(comptime c: config.Table) type {
     return struct {
-        name: Field(c.field(.name)),
-        general_category: Field(c.field(.general_category)),
-        canonical_combining_class: Field(c.field(.canonical_combining_class)),
-        bidi_class: Field(c.field(.bidi_class)),
-        decomposition_type: Field(c.field(.decomposition_type)),
-        decomposition_mapping: Field(c.field(.decomposition_mapping)),
-        numeric_type: Field(c.field(.numeric_type)),
-        numeric_value_decimal: Field(c.field(.numeric_value_decimal)),
-        numeric_value_digit: Field(c.field(.numeric_value_digit)),
-        numeric_value_numeric: Field(c.field(.numeric_value_numeric)),
-        is_bidi_mirrored: Field(c.field(.is_bidi_mirrored)),
-        unicode_1_name: Field(c.field(.unicode_1_name)),
-        simple_uppercase_mapping: Field(c.field(.simple_uppercase_mapping)),
-        simple_lowercase_mapping: Field(c.field(.simple_lowercase_mapping)),
-        simple_titlecase_mapping: Field(c.field(.simple_titlecase_mapping)),
+        name: Field(c.field("name")),
+        general_category: Field(c.field("general_category")),
+        canonical_combining_class: Field(c.field("canonical_combining_class")),
+        bidi_class: Field(c.field("bidi_class")),
+        decomposition_type: Field(c.field("decomposition_type")),
+        decomposition_mapping: Field(c.field("decomposition_mapping")),
+        numeric_type: Field(c.field("numeric_type")),
+        numeric_value_decimal: Field(c.field("numeric_value_decimal")),
+        numeric_value_digit: Field(c.field("numeric_value_digit")),
+        numeric_value_numeric: Field(c.field("numeric_value_numeric")),
+        is_bidi_mirrored: Field(c.field("is_bidi_mirrored")),
+        unicode_1_name: Field(c.field("unicode_1_name")),
+        simple_uppercase_mapping: Field(c.field("simple_uppercase_mapping")),
+        simple_lowercase_mapping: Field(c.field("simple_lowercase_mapping")),
+        simple_titlecase_mapping: Field(c.field("simple_titlecase_mapping")),
     };
 }
 
 pub fn CaseFolding(comptime c: config.Table) type {
     return struct {
-        case_folding_simple: Field(c.field(.case_folding_simple)),
-        case_folding_turkish: Field(c.field(.case_folding_turkish)),
-        case_folding_full: Field(c.field(.case_folding_full)),
+        case_folding_simple: Field(c.field("case_folding_simple")),
+        case_folding_turkish: Field(c.field("case_folding_turkish")),
+        case_folding_full: Field(c.field("case_folding_full")),
     };
 }
 
 pub fn SpecialCasing(comptime c: config.Table) type {
     return struct {
-        special_lowercase_mapping: Field(c.field(.special_lowercase_mapping)),
-        special_titlecase_mapping: Field(c.field(.special_titlecase_mapping)),
-        special_uppercase_mapping: Field(c.field(.special_uppercase_mapping)),
-        special_casing_condition: Field(c.field(.special_casing_condition)),
+        special_lowercase_mapping: Field(c.field("special_lowercase_mapping")),
+        special_titlecase_mapping: Field(c.field("special_titlecase_mapping")),
+        special_uppercase_mapping: Field(c.field("special_uppercase_mapping")),
+        special_casing_condition: Field(c.field("special_casing_condition")),
     };
 }
 
@@ -651,21 +651,14 @@ pub fn AllData(comptime c: config.Table) type {
                 }
             }
 
-            for (config.default.fields) |f| {
-                if (std.mem.eql(u8, f.name, input)) {
-                    fields[i] = .{
-                        .name = input,
-                        .type = Field(f),
-                        .default_value_ptr = null,
-                        .is_comptime = false,
-                        .alignment = 0, // Required for packed structs
-                    };
-                    i += 1;
-                    continue :loop_inputs;
-                }
-            }
-
-            @compileError("Input '" ++ input ++ "' not found in default config or extension");
+            fields[i] = .{
+                .name = input,
+                .type = Field(config.default.field(input)),
+                .default_value_ptr = null,
+                .is_comptime = false,
+                .alignment = 0, // Required for packed structs
+            };
+            i += 1;
         }
     }
 
@@ -754,7 +747,14 @@ pub fn Table(comptime c: config.Table) type {
         },
     });
 
-    var table_fields: [4]std.builtin.Type.StructField = .{
+    var table_fields: [5]std.builtin.Type.StructField = .{
+        .{
+            .name = "name",
+            .type = []const u8,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(?[]const u8),
+        },
         .{
             .name = "backing",
             .type = BackingArrays,
@@ -772,7 +772,7 @@ pub fn Table(comptime c: config.Table) type {
         undefined,
         undefined,
     };
-    var table_fields_len: usize = 2;
+    var table_fields_len: usize = 3;
 
     if (len.stage2 > 0) {
         const DataOffset = std.math.IntFittingRange(0, len.data);

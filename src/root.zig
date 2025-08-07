@@ -38,7 +38,11 @@ test "generalCategory" {
 }
 
 test "getPacked" {
-    const d1 = getPacked("1", 65);
+    const d0 = getPacked("0", 65);
+    try testing.expect(d0.general_category == .letter_uppercase);
+    try testing.expect(d0.case_folding_simple.optional().? == 97);
+
+    const d1 = getPacked("checks", 65);
     try testing.expect(d1.is_alphabetic);
     try testing.expect(d1.is_uppercase);
     try testing.expect(!d1.is_lowercase);

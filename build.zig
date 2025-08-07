@@ -251,25 +251,26 @@ const test_build_config_zig =
     \\        .stages = .auto,
     \\        .extensions = &.{x},
     \\        .fields = &.{
-    \\            d.field(.simple_uppercase_mapping),
-    \\            x.field(.foo),
-    \\            d.field(.general_category),
-    \\            d.field(.case_folding_simple),
-    \\            d.field(.name).override(.{
+    \\            d.field("simple_uppercase_mapping"),
+    \\            x.field("foo"),
+    \\            d.field("general_category"),
+    \\            d.field("case_folding_simple"),
+    \\            d.field("name").override(.{
     \\                .embedded_len = 15,
     \\                .max_offset = 986664,
     \\            }),
     \\         },
     \\    },
     \\    .{
+    \\        .name = "checks",
     \\        .stages = .auto,
     \\        .extensions = &.{},
     \\        .fields = &.{
-    \\            d.field(.is_alphabetic),
-    \\            d.field(.is_lowercase),
-    \\            d.field(.is_uppercase),
-    \\            d.field(.special_casing_condition),
-    \\            d.field(.special_lowercase_mapping),
+    \\            d.field("is_alphabetic"),
+    \\            d.field("is_lowercase"),
+    \\            d.field("is_uppercase"),
+    \\            d.field("special_casing_condition"),
+    \\            d.field("special_lowercase_mapping"),
     \\         },
     \\    },
     \\};

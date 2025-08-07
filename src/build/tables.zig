@@ -54,6 +54,7 @@ pub fn main() !void {
 
         try writeTable(
             table_config,
+            i,
             arena_alloc,
             &ucd,
             writer,
@@ -124,6 +125,7 @@ const BlockMap = std.HashMapUnmanaged(Block, u16, struct {
 
 pub fn writeTable(
     comptime table_config: config.Table,
+    table_index: usize,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
     writer: anytype,
@@ -465,6 +467,22 @@ pub fn writeTable(
     try writer.writeAll(
         \\        },
         \\    }){
+        \\
+    );
+
+    if (table_config.name) |name| {
+        try writer.print(
+            \\        .name = "{s}",
+            \\
+        , .{name});
+    } else {
+        try writer.print(
+            \\        .name = "{d}",
+            \\
+        , .{table_index});
+    }
+
+    try writer.writeAll(
         \\        .backing = .{
         \\
     );

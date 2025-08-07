@@ -221,15 +221,15 @@ pub fn init(allocator: std.mem.Allocator) !Self {
         };
 
         const defaults = comptime [_]config.Field.Runtime{
-            config.default.field(.name).runtime(.{}),
-            config.default.field(.decomposition_mapping).runtime(.{}),
-            config.default.field(.numeric_value_numeric).runtime(.{}),
-            config.default.field(.unicode_1_name).runtime(.{}),
-            config.default.field(.case_folding_full).runtime(.{}),
-            config.default.field(.special_lowercase_mapping).runtime(.{}),
-            config.default.field(.special_titlecase_mapping).runtime(.{}),
-            config.default.field(.special_uppercase_mapping).runtime(.{}),
-            config.default.field(.special_casing_condition).runtime(.{}),
+            config.default.field("name").runtime(.{}),
+            config.default.field("decomposition_mapping").runtime(.{}),
+            config.default.field("numeric_value_numeric").runtime(.{}),
+            config.default.field("unicode_1_name").runtime(.{}),
+            config.default.field("case_folding_full").runtime(.{}),
+            config.default.field("special_lowercase_mapping").runtime(.{}),
+            config.default.field("special_titlecase_mapping").runtime(.{}),
+            config.default.field("special_uppercase_mapping").runtime(.{}),
+            config.default.field("special_casing_condition").runtime(.{}),
         };
 
         for (fields, defaults) |f, d| {
