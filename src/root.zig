@@ -5,6 +5,7 @@ pub const ascii = @import("ascii.zig");
 const testing = std.testing;
 
 pub const get = getpkg.get;
+pub const getX = getpkg.getX;
 pub const getPacked = getpkg.getPacked;
 
 test {
@@ -49,8 +50,8 @@ test "getPacked" {
 }
 
 test "get an extension field" {
-    try testing.expectEqual(0, get(.foo, 65));
-    try testing.expectEqual(3, get(.foo, 0));
+    try testing.expectEqual(0, getX(.foo, 65));
+    try testing.expectEqual(3, getX(.foo, 0));
 }
 
 test "special_casing_condition" {

@@ -17,6 +17,7 @@ fn TableFor(comptime field: []const u8) type {
             return @TypeOf(table);
         }
     }
+
     @compileError("Table not found for field: " ++ field);
 }
 
@@ -26,6 +27,7 @@ pub fn tableFor(comptime field: []const u8) TableFor(field) {
             return table;
         }
     }
+
     unreachable;
 }
 
@@ -98,8 +100,8 @@ fn DataField(comptime field: []const u8) type {
     return @FieldType(DataFor(tableFor(field)), field);
 }
 
-pub fn Field(comptime field: FieldEnum) type {
-    const D = DataField(@tagName(field));
+pub fn Field(comptime field: []const u8) type {
+    const D = DataField(field);
     switch (@typeInfo(D)) {
         .@"struct", .@"enum", .@"union", .@"opaque" => {
             if (@hasDecl(D, "optional")) {
@@ -115,11 +117,10 @@ pub fn Field(comptime field: FieldEnum) type {
     }
 }
 
-pub fn get(comptime field: FieldEnum, cp: u21) Field(field) {
-    const f = @tagName(field);
-    const D = DataField(f);
-    const table = comptime tableFor(f);
-    const d = @field(data(table, cp), f);
+inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
+    const D = DataField(name);
+    const table = comptime tableFor(name);
+    const d = @field(data(table, cp), name);
 
     switch (@typeInfo(D)) {
         .@"struct", .@"enum", .@"union", .@"opaque" => {
@@ -135,6 +136,99 @@ pub fn get(comptime field: FieldEnum, cp: u21) Field(field) {
         },
         else => return d,
     }
+}
+
+// Note: `getX` is only needed because `get` uses a known field enum so that
+// the LSP can complete the field names, and for user extensions we wouldn't
+// know all the field names. If the LSP ever gets smart enough to figure out
+// all the field names, we can replace `get` with `getX` and lose the hardcoded
+// `KnownFieldsForLsp`.
+pub fn getX(comptime field: FieldEnum, cp: u21) Field(@tagName(field)) {
+    return getWithName(@tagName(field), cp);
+}
+
+pub const KnownFieldsForLsp = enum {
+    // UnicodeData fields
+    name,
+    general_category,
+    canonical_combining_class,
+    bidi_class,
+    decomposition_type,
+    decomposition_mapping,
+    numeric_type,
+    numeric_value_decimal,
+    numeric_value_digit,
+    numeric_value_numeric,
+    is_bidi_mirrored,
+    unicode_1_name,
+    simple_uppercase_mapping,
+    simple_lowercase_mapping,
+    simple_titlecase_mapping,
+
+    // CaseFolding fields
+    case_folding_simple,
+    case_folding_turkish,
+    case_folding_full,
+
+    // SpecialCasing fields
+    special_lowercase_mapping,
+    special_titlecase_mapping,
+    special_uppercase_mapping,
+    special_casing_condition,
+
+    // DerivedCoreProperties fields
+    is_math,
+    is_alphabetic,
+    is_lowercase,
+    is_uppercase,
+    is_cased,
+    is_case_ignorable,
+    changes_when_lowercased,
+    changes_when_uppercased,
+    changes_when_titlecased,
+    changes_when_casefolded,
+    changes_when_casemapped,
+    is_id_start,
+    is_id_continue,
+    is_xid_start,
+    is_xid_continue,
+    is_default_ignorable_code_point,
+    is_grapheme_extend,
+    is_grapheme_base,
+    is_grapheme_link,
+    indic_conjunct_break,
+
+    // EastAsianWidth field
+    east_asian_width,
+
+    // OriginalGraphemeBreak field
+    original_grapheme_break,
+
+    // EmojiData fields
+    is_emoji,
+    has_emoji_presentation,
+    is_emoji_modifier,
+    is_emoji_modifier_base,
+    is_emoji_component,
+    is_extended_pictographic,
+
+    // GraphemeBreak field (derived)
+    grapheme_break,
+
+    // Block field
+    block,
+
+    // uucode.x fields
+    wcwidth,
+};
+
+// Note: I tried using a union with members that are the known types, and using
+// @FieldType(KnownFieldsForLspUnion, field) but the LSP was still unable to
+// figure out the type. It seems like the only way to get the LSP to know the
+// type would be having dedicated `get` functions for each field, but I don't
+// want to go that route.
+pub fn get(comptime field: KnownFieldsForLsp, cp: u21) Field(@tagName(field)) {
+    return getWithName(@tagName(field), cp);
 }
 
 // TODO: figure out how to get the build to test this file (tests are in root.zig)
