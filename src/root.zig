@@ -1,6 +1,7 @@
 const std = @import("std");
 const getpkg = @import("get.zig");
 const types = @import("types.zig");
+pub const ascii = @import("ascii.zig");
 const testing = std.testing;
 
 pub const get = getpkg.get;
