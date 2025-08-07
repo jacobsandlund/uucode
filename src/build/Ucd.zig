@@ -1,25 +1,5 @@
 //! This File is Layer 1 of the architecture (see /AGENT.md), processing
 //! the Unicode Character Database (UCD) files (see https://www.unicode.org/reports/tr44/).
-//!
-//! The following files are processed, with general structure:
-//!
-//! - UnicodeData.txt
-//!   - keyed by code point
-//! - CaseFolding.txt
-//!   - keyed by code point
-//! - DerivedCoreProperties.txt
-//!   - multiple non-disjoint sections
-//!   - keyed by code point(s) (range)
-//! - extracted/DerivedEastAsianWidth.txt
-//!   - @missing ranges overlap with main section code points
-//!   - keyed by code point(s) (range)
-//! - auxiliary/GraphemeBreakProperty.txt
-//!   - keyed by code point(s) (range)
-//! - emoji/emoji-data.txt
-//!   - multiple non-disjoint sections
-//!   - keyed by code point(s) (range)
-//! - Blocks.txt
-//!   - keyed by code points (range)
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -107,9 +87,11 @@ const ucd_config = blk: {
 
 const UnicodeData = types.UnicodeData(ucd_config);
 const CaseFolding = types.CaseFolding(ucd_config);
+const SpecialCasing = types.SpecialCasing(ucd_config);
 
 unicode_data: []UnicodeData,
 case_folding: std.AutoHashMapUnmanaged(u21, CaseFolding),
+special_casing: std.AutoHashMapUnmanaged(u21, SpecialCasing),
 derived_core_properties: std.AutoHashMapUnmanaged(u21, types.DerivedCoreProperties),
 east_asian_width: std.AutoHashMapUnmanaged(u21, types.EastAsianWidth),
 original_grapheme_break: std.AutoHashMapUnmanaged(u21, types.OriginalGraphemeBreak),
@@ -125,6 +107,10 @@ const VarLenData = struct {
     const numeric_value_numeric = @FieldType(UnicodeData, "numeric_value_numeric");
     const unicode_1_name = @FieldType(UnicodeData, "unicode_1_name");
     const case_folding_full = @FieldType(CaseFolding, "case_folding_full");
+    const special_lowercase_mapping = @FieldType(SpecialCasing, "special_lowercase_mapping");
+    const special_titlecase_mapping = @FieldType(SpecialCasing, "special_titlecase_mapping");
+    const special_uppercase_mapping = @FieldType(SpecialCasing, "special_uppercase_mapping");
+    const special_casing_condition = @FieldType(SpecialCasing, "special_casing_condition");
 };
 
 const BackingArrays = struct {
@@ -133,6 +119,10 @@ const BackingArrays = struct {
     numeric_value_numeric: VarLenData.numeric_value_numeric.BackingArray,
     unicode_1_name: VarLenData.unicode_1_name.BackingArray,
     case_folding_full: VarLenData.case_folding_full.BackingArray,
+    special_lowercase_mapping: VarLenData.special_lowercase_mapping.BackingArray,
+    special_titlecase_mapping: VarLenData.special_titlecase_mapping.BackingArray,
+    special_uppercase_mapping: VarLenData.special_uppercase_mapping.BackingArray,
+    special_casing_condition: VarLenData.special_casing_condition.BackingArray,
 };
 
 const OffsetMaps = struct {
@@ -141,6 +131,10 @@ const OffsetMaps = struct {
     numeric_value_numeric: VarLenData.numeric_value_numeric.OffsetMap,
     unicode_1_name: VarLenData.unicode_1_name.OffsetMap,
     case_folding_full: VarLenData.case_folding_full.OffsetMap,
+    special_lowercase_mapping: VarLenData.special_lowercase_mapping.OffsetMap,
+    special_titlecase_mapping: VarLenData.special_titlecase_mapping.OffsetMap,
+    special_uppercase_mapping: VarLenData.special_uppercase_mapping.OffsetMap,
+    special_casing_condition: VarLenData.special_casing_condition.OffsetMap,
 };
 
 const LenTracking = struct {
@@ -149,6 +143,10 @@ const LenTracking = struct {
     numeric_value_numeric: VarLenData.numeric_value_numeric.LenTracking,
     unicode_1_name: VarLenData.unicode_1_name.LenTracking,
     case_folding_full: VarLenData.case_folding_full.LenTracking,
+    special_lowercase_mapping: VarLenData.special_lowercase_mapping.LenTracking,
+    special_titlecase_mapping: VarLenData.special_titlecase_mapping.LenTracking,
+    special_uppercase_mapping: VarLenData.special_uppercase_mapping.LenTracking,
+    special_casing_condition: VarLenData.special_casing_condition.LenTracking,
 };
 
 pub fn init(allocator: std.mem.Allocator) !Self {
@@ -157,6 +155,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     var ucd = Self{
         .unicode_data = undefined,
         .case_folding = .{},
+        .special_casing = .{},
         .derived_core_properties = .{},
         .east_asian_width = .{},
         .original_grapheme_break = .{},
@@ -201,6 +200,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
 
     try parseUnicodeData(allocator, &ucd, &maps, &tracking);
     try parseCaseFolding(allocator, &ucd, &maps, &tracking);
+    try parseSpecialCasing(allocator, &ucd, &maps, &tracking);
     try parseDerivedCoreProperties(allocator, &ucd.derived_core_properties);
     try parseEastAsianWidth(allocator, &ucd.east_asian_width);
     try parseGraphemeBreakProperty(allocator, &ucd.original_grapheme_break);
@@ -214,6 +214,10 @@ pub fn init(allocator: std.mem.Allocator) !Self {
             VarLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric),
             VarLenData.unicode_1_name.minBitsConfig(&ucd.backing.unicode_1_name, &tracking.unicode_1_name),
             VarLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full),
+            VarLenData.special_lowercase_mapping.minBitsConfig(&ucd.backing.special_lowercase_mapping, &tracking.special_lowercase_mapping),
+            VarLenData.special_titlecase_mapping.minBitsConfig(&ucd.backing.special_titlecase_mapping, &tracking.special_titlecase_mapping),
+            VarLenData.special_uppercase_mapping.minBitsConfig(&ucd.backing.special_uppercase_mapping, &tracking.special_uppercase_mapping),
+            VarLenData.special_casing_condition.minBitsConfig(&ucd.backing.special_casing_condition, &tracking.special_casing_condition),
         };
 
         const defaults = comptime [_]config.Field.Runtime{
@@ -222,11 +226,15 @@ pub fn init(allocator: std.mem.Allocator) !Self {
             config.default.field(.numeric_value_numeric).runtime(.{}),
             config.default.field(.unicode_1_name).runtime(.{}),
             config.default.field(.case_folding_full).runtime(.{}),
+            config.default.field(.special_lowercase_mapping).runtime(.{}),
+            config.default.field(.special_titlecase_mapping).runtime(.{}),
+            config.default.field(.special_uppercase_mapping).runtime(.{}),
+            config.default.field(.special_casing_condition).runtime(.{}),
         };
 
         for (fields, defaults) |f, d| {
             if (!d.eql(f)) {
-                const writer = std.io.getStdOut().writer();
+                const writer = std.io.getStdErr().writer();
                 try writer.writeAll(
                     \\
                     \\ Update default config in `config.zig` with the correct field config:
@@ -247,6 +255,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
 pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
     allocator.free(self.unicode_data);
     self.case_folding.deinit(allocator);
+    self.special_casing.deinit(allocator);
     self.derived_core_properties.deinit(allocator);
     self.east_asian_width.deinit(allocator);
     self.original_grapheme_break.deinit(allocator);
@@ -413,7 +422,13 @@ fn parseUnicodeData(
                     mapping_len += 1;
                 }
 
-                decomposition_mapping = try .fromSlice(allocator, &ucd.backing.decomposition_mapping, &maps.decomposition_mapping, &tracking.decomposition_mapping, temp_mapping[0..mapping_len]);
+                decomposition_mapping = try .fromSlice(
+                    allocator,
+                    &ucd.backing.decomposition_mapping,
+                    &maps.decomposition_mapping,
+                    &tracking.decomposition_mapping,
+                    temp_mapping[0..mapping_len],
+                );
             }
         }
 
@@ -437,11 +452,23 @@ fn parseUnicodeData(
             };
         } else if (numeric_numeric_str.len > 0) {
             numeric_type = types.NumericType.numeric;
-            numeric_value_numeric = try .fromSlice(allocator, &ucd.backing.numeric_value_numeric, &maps.numeric_value_numeric, &tracking.numeric_value_numeric, numeric_numeric_str);
+            numeric_value_numeric = try .fromSlice(
+                allocator,
+                &ucd.backing.numeric_value_numeric,
+                &maps.numeric_value_numeric,
+                &tracking.numeric_value_numeric,
+                numeric_numeric_str,
+            );
         }
 
         const unicode_data = UnicodeData{
-            .name = try .fromSlice(allocator, &ucd.backing.name, &maps.name, &tracking.name, name),
+            .name = try .fromSlice(
+                allocator,
+                &ucd.backing.name,
+                &maps.name,
+                &tracking.name,
+                name,
+            ),
             .general_category = general_category,
             .canonical_combining_class = canonical_combining_class,
             .bidi_class = bidi_class,
@@ -452,7 +479,13 @@ fn parseUnicodeData(
             .numeric_value_digit = .init(numeric_value_digit),
             .numeric_value_numeric = numeric_value_numeric,
             .is_bidi_mirrored = is_bidi_mirrored,
-            .unicode_1_name = try .fromSlice(allocator, &ucd.backing.unicode_1_name, &maps.unicode_1_name, &tracking.unicode_1_name, unicode_1_name),
+            .unicode_1_name = try .fromSlice(
+                allocator,
+                &ucd.backing.unicode_1_name,
+                &maps.unicode_1_name,
+                &tracking.unicode_1_name,
+                unicode_1_name,
+            ),
             .simple_uppercase_mapping = .init(simple_uppercase_mapping),
             .simple_lowercase_mapping = .init(simple_lowercase_mapping),
             .simple_titlecase_mapping = .init(simple_titlecase_mapping),
@@ -590,7 +623,13 @@ fn parseCaseFolding(
             },
             'F' => {
                 std.debug.assert(mapping_len > 1);
-                result.value_ptr.case_folding_full = try .fromSlice(allocator, &ucd.backing.case_folding_full, &maps.case_folding_full, &tracking.case_folding_full, mapping[0..mapping_len]);
+                result.value_ptr.case_folding_full = try .fromSlice(
+                    allocator,
+                    &ucd.backing.case_folding_full,
+                    &maps.case_folding_full,
+                    &tracking.case_folding_full,
+                    mapping[0..mapping_len],
+                );
             },
             'T' => {
                 std.debug.assert(mapping_len == 1);
@@ -600,6 +639,138 @@ fn parseCaseFolding(
         }
     }
 }
+
+fn parseSpecialCasing(
+    allocator: std.mem.Allocator,
+    ucd: *Self,
+    maps: *OffsetMaps,
+    tracking: *LenTracking,
+) !void {
+    const file_path = "ucd/SpecialCasing.txt";
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = stripComment(line);
+        if (trimmed.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, trimmed, ';');
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const cp = try parseCodePoint(cp_str);
+
+        const lower_str = std.mem.trim(u8, parts.next().?, " \t");
+        const title_str = std.mem.trim(u8, parts.next().?, " \t");
+        const upper_str = std.mem.trim(u8, parts.next().?, " \t");
+
+        // Parse the optional condition list
+        var conditions: [2]types.SpecialCasingCondition = undefined;
+        var conditions_len: u8 = 0;
+        if (parts.next()) |condition_str| {
+            const trimmed_conditions = std.mem.trim(u8, condition_str, " \t");
+            if (trimmed_conditions.len > 0) {
+                var condition_parts = std.mem.splitScalar(u8, trimmed_conditions, ' ');
+                while (condition_parts.next()) |condition_part| {
+                    const trimmed_condition = std.mem.trim(u8, condition_part, " \t");
+                    if (trimmed_condition.len == 0) continue;
+                    if (conditions_len >= 2) {
+                        std.log.err("SpecialCasing has more than 2 conditions at codepoint {X}: {s}", .{ cp, trimmed_conditions });
+                        unreachable;
+                    }
+                    const condition = special_casing_condition_map.get(trimmed_condition) orelse types.SpecialCasingCondition.none;
+                    conditions[conditions_len] = condition;
+                    conditions_len += 1;
+                }
+            }
+        }
+
+        // Parse mappings
+        var lower_mapping: [3]u21 = undefined;
+        var lower_mapping_len: u8 = 0;
+        var lower_parts = std.mem.splitScalar(u8, lower_str, ' ');
+        while (lower_parts.next()) |part| {
+            if (part.len == 0) continue;
+            if (lower_mapping_len >= 3) {
+                std.log.err("SpecialCasing lower mapping has more than 3 code points at codepoint {X}: {s}", .{ cp, lower_str });
+                unreachable;
+            }
+            lower_mapping[lower_mapping_len] = try parseCodePoint(part);
+            lower_mapping_len += 1;
+        }
+
+        var title_mapping: [3]u21 = undefined;
+        var title_mapping_len: u8 = 0;
+        var title_parts = std.mem.splitScalar(u8, title_str, ' ');
+        while (title_parts.next()) |part| {
+            if (part.len == 0) continue;
+            if (title_mapping_len >= 3) {
+                std.log.err("SpecialCasing title mapping has more than 3 code points at codepoint {X}: {s}", .{ cp, title_str });
+                unreachable;
+            }
+            title_mapping[title_mapping_len] = try parseCodePoint(part);
+            title_mapping_len += 1;
+        }
+
+        var upper_mapping: [3]u21 = undefined;
+        var upper_mapping_len: u8 = 0;
+        var upper_parts = std.mem.splitScalar(u8, upper_str, ' ');
+        while (upper_parts.next()) |part| {
+            if (part.len == 0) continue;
+            if (upper_mapping_len >= 3) {
+                std.log.err("SpecialCasing upper mapping has more than 3 code points at codepoint {X}: {s}", .{ cp, upper_str });
+                unreachable;
+            }
+            upper_mapping[upper_mapping_len] = try parseCodePoint(part);
+            upper_mapping_len += 1;
+        }
+
+        try ucd.special_casing.put(allocator, cp, .{
+            .special_lowercase_mapping = try .fromSlice(
+                allocator,
+                &ucd.backing.special_lowercase_mapping,
+                &maps.special_lowercase_mapping,
+                &tracking.special_lowercase_mapping,
+                lower_mapping[0..lower_mapping_len],
+            ),
+            .special_titlecase_mapping = try .fromSlice(
+                allocator,
+                &ucd.backing.special_titlecase_mapping,
+                &maps.special_titlecase_mapping,
+                &tracking.special_titlecase_mapping,
+                title_mapping[0..title_mapping_len],
+            ),
+            .special_uppercase_mapping = try .fromSlice(
+                allocator,
+                &ucd.backing.special_uppercase_mapping,
+                &maps.special_uppercase_mapping,
+                &tracking.special_uppercase_mapping,
+                upper_mapping[0..upper_mapping_len],
+            ),
+            .special_casing_condition = try .fromSlice(
+                allocator,
+                &ucd.backing.special_casing_condition,
+                &maps.special_casing_condition,
+                &tracking.special_casing_condition,
+                conditions[0..conditions_len],
+            ),
+        });
+    }
+}
+
+const special_casing_condition_map = std.StaticStringMap(types.SpecialCasingCondition).initComptime(.{
+    .{ "Final_Sigma", .final_sigma },
+    .{ "After_Soft_Dotted", .after_soft_dotted },
+    .{ "More_Above", .more_above },
+    .{ "After_I", .after_i },
+    .{ "Not_Before_Dot", .not_before_dot },
+    .{ "lt", .lt },
+    .{ "tr", .tr },
+    .{ "az", .az },
+});
 
 fn parseDerivedCoreProperties(
     allocator: std.mem.Allocator,

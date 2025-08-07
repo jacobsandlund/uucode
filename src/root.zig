@@ -48,3 +48,23 @@ test "get an extension field" {
     try testing.expectEqual(0, get(.foo, 65));
     try testing.expectEqual(3, get(.foo, 0));
 }
+
+test "special_casing_condition" {
+    var buffer: [1]types.SpecialCasingCondition = undefined;
+    const conditions1 = get(.special_casing_condition, 65).slice(&buffer); // 'A'
+    try testing.expectEqual(0, conditions1.len);
+
+    // Greek Capital Sigma (U+03A3) which has Final_Sigma condition
+    const conditions = get(.special_casing_condition, 0x03A3).slice(&buffer);
+    try testing.expectEqual(1, conditions.len);
+    try testing.expectEqual(types.SpecialCasingCondition.final_sigma, conditions[0]);
+}
+
+test "special_lowercase_mapping" {
+    var mapping_buffer: [0]u21 = undefined;
+
+    // Greek Capital Sigma (U+03A3) which has Final_Sigma condition
+    const mapping = get(.special_lowercase_mapping, 0x03A3).slice(&mapping_buffer);
+    try testing.expectEqual(1, mapping.len);
+    try testing.expectEqual(0x03C2, mapping[0]); // Should map to Greek Small Letter Final Sigma
+}

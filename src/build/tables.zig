@@ -12,7 +12,7 @@ const buffer_size = 100_000_000;
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
-    const table_configs: []const config.Table = if (config.is_updating_ucd) &.{config.updating_ucd_config} else &@import("build_config").tables;
+    const table_configs: []const config.Table = if (config.is_updating_ucd) &.{config.updating_ucd} else &@import("build_config").tables;
 
     const buffer = try std.heap.page_allocator.alloc(u8, buffer_size);
     defer std.heap.page_allocator.free(buffer);
@@ -152,6 +152,7 @@ pub fn writeTable(
     while (cp < config.code_point_range_end) : (cp += 1) {
         const unicode_data = ucd.unicode_data[cp];
         const case_folding = ucd.case_folding.get(cp);
+        const special_casing = ucd.special_casing.get(cp);
         const derived_core_properties = ucd.derived_core_properties.get(cp) orelse types.DerivedCoreProperties{};
         const east_asian_width = ucd.east_asian_width.get(cp) orelse types.EastAsianWidth.neutral;
         const original_grapheme_break = ucd.original_grapheme_break.get(cp) orelse types.OriginalGraphemeBreak.other;
@@ -227,6 +228,36 @@ pub fn writeTable(
                 a.case_folding_full = cf.case_folding_full;
             } else {
                 a.case_folding_full = .empty;
+            }
+        }
+
+        // SpecialCasing fields
+        if (@hasField(AllData, "special_lowercase_mapping")) {
+            if (special_casing) |sc| {
+                a.special_lowercase_mapping = sc.special_lowercase_mapping;
+            } else {
+                a.special_lowercase_mapping = .empty;
+            }
+        }
+        if (@hasField(AllData, "special_titlecase_mapping")) {
+            if (special_casing) |sc| {
+                a.special_titlecase_mapping = sc.special_titlecase_mapping;
+            } else {
+                a.special_titlecase_mapping = .empty;
+            }
+        }
+        if (@hasField(AllData, "special_uppercase_mapping")) {
+            if (special_casing) |sc| {
+                a.special_uppercase_mapping = sc.special_uppercase_mapping;
+            } else {
+                a.special_uppercase_mapping = .empty;
+            }
+        }
+        if (@hasField(AllData, "special_casing_condition")) {
+            if (special_casing) |sc| {
+                a.special_casing_condition = sc.special_casing_condition;
+            } else {
+                a.special_casing_condition = .empty;
             }
         }
 

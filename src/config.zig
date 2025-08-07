@@ -238,6 +238,39 @@ pub const default = Table{
             .embedded_len = 0,
         },
 
+        // SpecialCasing fields
+        .{
+            .name = "special_lowercase_mapping",
+            .type = []const u21,
+            .max_len = 3,
+            .max_offset = 94,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "special_titlecase_mapping",
+            .type = []const u21,
+            .max_len = 3,
+            .max_offset = 140,
+            .embedded_len = 0,
+            .defaults_to_cp = false,
+        },
+        .{
+            .name = "special_uppercase_mapping",
+            .type = []const u21,
+            .max_len = 3,
+            .max_offset = 167,
+            .embedded_len = 0,
+            .defaults_to_cp = false,
+        },
+        .{
+            .name = "special_casing_condition",
+            .type = []const types.SpecialCasingCondition,
+            .max_len = 2,
+            .max_offset = 12,
+            .embedded_len = 1,
+            .defaults_to_cp = false,
+        },
+
         // DerivedCoreProperties fields
         .{ .name = "is_math", .type = bool },
         .{ .name = "is_alphabetic", .type = bool },
@@ -288,23 +321,39 @@ const updating_ucd_fields = brk: {
     var fields: [default.fields.len]Field = undefined;
 
     const offset_len_fields = [_]Field{
-        default.field("name").override(.{
+        default.field(.name).override(.{
             .max_len = 200,
             .max_offset = 2_000_000,
         }),
-        default.field("decomposition_mapping").override(.{
+        default.field(.decomposition_mapping).override(.{
             .max_len = 40,
             .max_offset = 16_000,
         }),
-        default.field("numeric_value_numeric").override(.{
+        default.field(.numeric_value_numeric).override(.{
             .max_len = 30,
             .max_offset = 4000,
         }),
-        default.field("unicode_1_name").override(.{
+        default.field(.unicode_1_name).override(.{
             .max_len = 120,
             .max_offset = 100_000,
         }),
-        default.field("case_folding_full").override(.{
+        default.field(.case_folding_full).override(.{
+            .max_len = 9,
+            .max_offset = 500,
+        }),
+        default.field(.special_lowercase_mapping).override(.{
+            .max_len = 9,
+            .max_offset = 1000,
+        }),
+        default.field(.special_titlecase_mapping).override(.{
+            .max_len = 9,
+            .max_offset = 1000,
+        }),
+        default.field(.special_uppercase_mapping).override(.{
+            .max_len = 9,
+            .max_offset = 1000,
+        }),
+        default.field(.special_casing_condition).override(.{
             .max_len = 9,
             .max_offset = 500,
         }),

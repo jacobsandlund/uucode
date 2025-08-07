@@ -141,6 +141,18 @@ pub const GraphemeBreak = enum(u5) {
     extended_pictographic,
 };
 
+pub const SpecialCasingCondition = enum(u4) {
+    none,
+    final_sigma,
+    after_soft_dotted,
+    more_above,
+    after_i,
+    not_before_dot,
+    lt,
+    tr,
+    az,
+};
+
 pub const Block = enum(u9) {
     adlam,
     aegean_numbers,
@@ -511,6 +523,15 @@ pub fn CaseFolding(comptime c: config.Table) type {
     };
 }
 
+pub fn SpecialCasing(comptime c: config.Table) type {
+    return struct {
+        special_lowercase_mapping: Field(c.field(.special_lowercase_mapping)),
+        special_titlecase_mapping: Field(c.field(.special_titlecase_mapping)),
+        special_uppercase_mapping: Field(c.field(.special_uppercase_mapping)),
+        special_casing_condition: Field(c.field(.special_casing_condition)),
+    };
+}
+
 pub const DerivedCoreProperties = struct {
     is_math: bool = false,
     is_alphabetic: bool = false,
@@ -813,6 +834,8 @@ fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
         bits: Bits,
 
         const Self = @This();
+        const is_enum = @typeInfo(T) == .@"enum";
+        const Int = if (is_enum) @typeInfo(T).@"enum".tag_type else T;
         const item_bits = @bitSizeOf(T);
         const Bits = std.meta.Int(.unsigned, item_bits * capacity);
         const ShiftBits = std.math.Log2Int(Bits);
@@ -824,19 +847,28 @@ fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
             // primarily avoiding an issue where `item_bits` is actually too
             // big to be a valid shift value, and zig can't tell that `i` would
             // never be anything other than 0.
-            if (comptime capacity == 1) return .{ .bits = @as(Bits, s[0]) };
+            if (comptime capacity == 1) return .{
+                .bits = @as(Bits, if (is_enum) @intFromEnum(s[0]) else s[0]),
+            };
 
             std.debug.assert(s.len <= capacity);
             var bits: Bits = 0;
             for (s, 0..) |item, i| {
-                bits |= @as(Bits, item) << item_bits * @as(ShiftBits, @intCast(i));
+                bits |= @as(
+                    Bits,
+                    if (is_enum) @intFromEnum(item) else item,
+                ) << item_bits * @as(ShiftBits, @intCast(i));
             }
             return .{ .bits = bits };
         }
 
         pub fn slice(self: Self, buffer: []T, len: usize) []T {
             inline for (0..capacity) |i| {
-                buffer[i] = @as(T, @truncate(self.bits >> item_bits * i));
+                const item: Int = @truncate(self.bits >> item_bits * i);
+                buffer[i] = @as(
+                    T,
+                    if (is_enum) @enumFromInt(item) else item,
+                );
             }
             return buffer[0..len];
         }

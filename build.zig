@@ -268,6 +268,8 @@ const test_build_config_zig =
     \\            d.field(.is_alphabetic),
     \\            d.field(.is_lowercase),
     \\            d.field(.is_uppercase),
+    \\            d.field(.special_casing_condition),
+    \\            d.field(.special_lowercase_mapping),
     \\         },
     \\    },
     \\};
