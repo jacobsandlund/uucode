@@ -565,10 +565,11 @@ pub const EmojiData = struct {
 };
 
 fn Field(c: config.Field) type {
-    return switch (@typeInfo(c.type)) {
-        .pointer => VarLen(c),
+    return switch (c.kind()) {
+        .var_len => VarLen(c),
+        .shift => Shift(c),
         .optional => Optional(c),
-        else => c.type,
+        .basic => c.type,
     };
 }
 
@@ -682,7 +683,7 @@ pub fn Table(comptime c: config.Table) type {
     for (c.fields, 0..) |cf, i| {
         const F = Field(cf);
 
-        if (cf.isVarLen()) {
+        if (cf.kind() == .var_len) {
             backing_arrays[backing_len] = .{
                 .name = cf.name,
                 .type = F.BackingArray,
@@ -906,7 +907,6 @@ pub fn VarLen(
         pub const OffsetMap = SliceMap(T, Offset);
         pub const LenTracking: type = [max_len]Offset;
 
-        // TODO: also track range of type T, to determine a min T
         pub fn fromSlice(
             allocator: std.mem.Allocator,
             backing: *BackingArray,
@@ -1046,6 +1046,25 @@ pub fn VarLen(
     };
 }
 
+pub const ShiftTracking = struct {
+    max_shift_down: u21 = 0,
+    max_shift_up: u21 = 0,
+
+    pub fn track(tracking: *ShiftTracking, cp: u21, d: u21) void {
+        if (cp < d) {
+            const shift = d - cp;
+            if (tracking.max_shift_up < shift) {
+                tracking.max_shift_up = shift;
+            }
+        } else if (cp > d) {
+            const shift = cp - d;
+            if (tracking.max_shift_down < shift) {
+                tracking.max_shift_down = shift;
+            }
+        }
+    }
+};
+
 pub fn SliceMap(comptime T: type, comptime V: type) type {
     return std.HashMapUnmanaged([]const T, V, struct {
         pub fn hash(self: @This(), s: []const T) u64 {
@@ -1070,16 +1089,15 @@ pub fn Optional(comptime c: config.Field) type {
 
         const Self = @This();
 
-        pub const defaults_to_cp = c.defaults_to_cp;
         pub const T = @typeInfo(c.type).optional.child;
 
-        const max = std.math.maxInt(T);
+        const null_data = std.math.maxInt(T);
 
-        pub const @"null" = Self{ .data = max };
+        pub const @"null" = Self{ .data = null_data };
 
         pub fn init(opt: ?T) Self {
             if (opt) |value| {
-                std.debug.assert(value != max);
+                std.debug.assert(value != null_data);
                 return .{ .data = value };
             } else {
                 return .null;
@@ -1087,11 +1105,81 @@ pub fn Optional(comptime c: config.Field) type {
         }
 
         pub fn optional(self: Self) ?T {
-            if (self.data != max) {
-                return self.data;
-            } else {
+            if (self.data == null_data) {
                 return null;
+            } else {
+                return self.data;
             }
+        }
+    };
+}
+
+pub fn Shift(comptime c: config.Field) type {
+    const invert_shift = c.max_shift_up == 0;
+
+    return packed struct {
+        data: Int,
+
+        const Self = @This();
+
+        pub const T = u21;
+        pub const is_optional = @typeInfo(c.type) == .optional;
+
+        const is_optional_offset: isize = @intFromBool(is_optional);
+        const from = if (invert_shift) 0 else -@as(isize, c.max_shift_down);
+        const to = (if (invert_shift) c.max_shift_down else c.max_shift_up) + is_optional_offset;
+        const Int = std.math.IntFittingRange(from, to);
+
+        // Only valid if `is_optional`
+        const null_data: Int = @intCast(to);
+        pub const @"null" = Self{ .data = null_data };
+
+        pub const no_shift = Self{ .data = 0 };
+
+        pub fn init(cp: u21, d: u21) Self {
+            if (comptime invert_shift) {
+                return Self{ .data = cp - d };
+            } else {
+                return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
+            }
+        }
+
+        pub fn initTracked(cp: u21, d: u21, tracking: *ShiftTracking) Self {
+            tracking.track(cp, d);
+            return .init(cp, d);
+        }
+
+        pub fn initOptionalTracked(cp: u21, o: ?u21, tracking: *ShiftTracking) Self {
+            if (o) |d| {
+                return .initTracked(cp, d, tracking);
+            } else {
+                return .null;
+            }
+        }
+
+        pub fn value(self: Self, cp: u21) u21 {
+            if (comptime invert_shift) {
+                return cp - self.data;
+            } else {
+                return @intCast(@as(isize, cp) + @as(isize, self.data));
+            }
+        }
+
+        pub fn optional(self: Self, cp: u21) ?u21 {
+            if (self.data == null_data) {
+                return null;
+            } else {
+                return self.value(cp);
+            }
+        }
+
+        pub fn minBitsConfig(
+            shift_tracking: *ShiftTracking,
+        ) config.Field.Runtime {
+            return c.runtime(.{
+                .max_shift_down = shift_tracking.max_shift_down,
+                .max_shift_up = shift_tracking.max_shift_up,
+            });
         }
     };
 }

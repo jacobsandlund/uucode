@@ -41,7 +41,7 @@ test "generalCategory" {
 test "getPacked" {
     const d0 = getPacked("0", 65);
     try testing.expect(d0.general_category == .letter_uppercase);
-    try testing.expect(d0.case_folding_simple.optional().? == 97);
+    try testing.expect(d0.case_folding_simple.optional(65).? == 97);
 
     const d1 = getPacked("checks", 65);
     try testing.expect(d1.is_alphabetic);

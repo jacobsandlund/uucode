@@ -19,7 +19,7 @@ const ucd_config_fields = blk: {
             // If a field isn't in `default` it's an extension field
             if (!config.default.hasField(f.name)) continue :table_fields;
 
-            if (f.isVarLen()) {
+            if (f.kind() == .var_len) {
                 for (fields[0..i]) |existing| {
                     if (std.mem.eql(u8, existing.name, f.name)) {
                         @compileError("Variable length field '" ++ f.name ++ "' already exists in another table, but this is not supported.");
@@ -34,7 +34,7 @@ const ucd_config_fields = blk: {
         for (tc.extensions) |x| {
             loop_inputs: for (x.inputs) |input| {
                 for (config.default.fields) |f| {
-                    if (f.isVarLen() and std.mem.eql(u8, f.name, input)) {
+                    if (f.kind() == .var_len and std.mem.eql(u8, f.name, input)) {
                         input_var_lens[ivl_i] = input;
                         ivl_i += 1;
                         continue :loop_inputs;
@@ -52,7 +52,7 @@ const ucd_config_fields = blk: {
             }
         }
 
-        if (f.isVarLen() and
+        if (f.kind() == .var_len and
             for (input_var_lens[0..ivl_i]) |input| {
                 if (std.mem.eql(u8, input, f.name)) {
                     break true;
@@ -113,6 +113,14 @@ const VarLenData = struct {
     const special_casing_condition = @FieldType(SpecialCasing, "special_casing_condition");
 };
 
+const ShiftData = struct {
+    const simple_uppercase_mapping = @FieldType(UnicodeData, "simple_uppercase_mapping");
+    const simple_lowercase_mapping = @FieldType(UnicodeData, "simple_lowercase_mapping");
+    const simple_titlecase_mapping = @FieldType(UnicodeData, "simple_titlecase_mapping");
+    const case_folding_simple = @FieldType(CaseFolding, "case_folding_simple");
+    const case_folding_turkish = @FieldType(CaseFolding, "case_folding_turkish");
+};
+
 const BackingArrays = struct {
     name: VarLenData.name.BackingArray,
     decomposition_mapping: VarLenData.decomposition_mapping.BackingArray,
@@ -147,6 +155,14 @@ const LenTracking = struct {
     special_titlecase_mapping: VarLenData.special_titlecase_mapping.LenTracking,
     special_uppercase_mapping: VarLenData.special_uppercase_mapping.LenTracking,
     special_casing_condition: VarLenData.special_casing_condition.LenTracking,
+};
+
+const ShiftTracking = struct {
+    simple_uppercase_mapping: types.ShiftTracking = .{},
+    simple_lowercase_mapping: types.ShiftTracking = .{},
+    simple_titlecase_mapping: types.ShiftTracking = .{},
+    case_folding_simple: types.ShiftTracking = .{},
+    case_folding_turkish: types.ShiftTracking = .{},
 };
 
 pub fn init(allocator: std.mem.Allocator) !Self {
@@ -188,7 +204,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
         }
     }
 
-    var tracking = blk: {
+    var len_tracking = blk: {
         var lt: LenTracking = undefined;
         inline for (@typeInfo(LenTracking).@"struct".fields) |field| {
             const field_info = @typeInfo(field.type);
@@ -198,9 +214,11 @@ pub fn init(allocator: std.mem.Allocator) !Self {
         break :blk lt;
     };
 
-    try parseUnicodeData(allocator, &ucd, &maps, &tracking);
-    try parseCaseFolding(allocator, &ucd, &maps, &tracking);
-    try parseSpecialCasing(allocator, &ucd, &maps, &tracking);
+    var shift_tracking: ShiftTracking = .{};
+
+    try parseUnicodeData(allocator, &ucd, &maps, &len_tracking, &shift_tracking);
+    try parseCaseFolding(allocator, &ucd, &maps, &len_tracking, &shift_tracking);
+    try parseSpecialCasing(allocator, &ucd, &maps, &len_tracking);
     try parseDerivedCoreProperties(allocator, &ucd.derived_core_properties);
     try parseEastAsianWidth(allocator, &ucd.east_asian_width);
     try parseGraphemeBreakProperty(allocator, &ucd.original_grapheme_break);
@@ -209,15 +227,57 @@ pub fn init(allocator: std.mem.Allocator) !Self {
 
     if (config.is_updating_ucd) {
         const fields = [_]config.Field.Runtime{
-            VarLenData.name.minBitsConfig(&ucd.backing.name, &tracking.name),
-            VarLenData.decomposition_mapping.minBitsConfig(&ucd.backing.decomposition_mapping, &tracking.decomposition_mapping),
-            VarLenData.numeric_value_numeric.minBitsConfig(&ucd.backing.numeric_value_numeric, &tracking.numeric_value_numeric),
-            VarLenData.unicode_1_name.minBitsConfig(&ucd.backing.unicode_1_name, &tracking.unicode_1_name),
-            VarLenData.case_folding_full.minBitsConfig(&ucd.backing.case_folding_full, &tracking.case_folding_full),
-            VarLenData.special_lowercase_mapping.minBitsConfig(&ucd.backing.special_lowercase_mapping, &tracking.special_lowercase_mapping),
-            VarLenData.special_titlecase_mapping.minBitsConfig(&ucd.backing.special_titlecase_mapping, &tracking.special_titlecase_mapping),
-            VarLenData.special_uppercase_mapping.minBitsConfig(&ucd.backing.special_uppercase_mapping, &tracking.special_uppercase_mapping),
-            VarLenData.special_casing_condition.minBitsConfig(&ucd.backing.special_casing_condition, &tracking.special_casing_condition),
+            VarLenData.name.minBitsConfig(
+                &ucd.backing.name,
+                &len_tracking.name,
+            ),
+            VarLenData.decomposition_mapping.minBitsConfig(
+                &ucd.backing.decomposition_mapping,
+                &len_tracking.decomposition_mapping,
+            ),
+            VarLenData.numeric_value_numeric.minBitsConfig(
+                &ucd.backing.numeric_value_numeric,
+                &len_tracking.numeric_value_numeric,
+            ),
+            VarLenData.unicode_1_name.minBitsConfig(
+                &ucd.backing.unicode_1_name,
+                &len_tracking.unicode_1_name,
+            ),
+            VarLenData.case_folding_full.minBitsConfig(
+                &ucd.backing.case_folding_full,
+                &len_tracking.case_folding_full,
+            ),
+            VarLenData.special_lowercase_mapping.minBitsConfig(
+                &ucd.backing.special_lowercase_mapping,
+                &len_tracking.special_lowercase_mapping,
+            ),
+            VarLenData.special_titlecase_mapping.minBitsConfig(
+                &ucd.backing.special_titlecase_mapping,
+                &len_tracking.special_titlecase_mapping,
+            ),
+            VarLenData.special_uppercase_mapping.minBitsConfig(
+                &ucd.backing.special_uppercase_mapping,
+                &len_tracking.special_uppercase_mapping,
+            ),
+            VarLenData.special_casing_condition.minBitsConfig(
+                &ucd.backing.special_casing_condition,
+                &len_tracking.special_casing_condition,
+            ),
+            ShiftData.simple_uppercase_mapping.minBitsConfig(
+                &shift_tracking.simple_uppercase_mapping,
+            ),
+            ShiftData.simple_lowercase_mapping.minBitsConfig(
+                &shift_tracking.simple_lowercase_mapping,
+            ),
+            ShiftData.simple_titlecase_mapping.minBitsConfig(
+                &shift_tracking.simple_titlecase_mapping,
+            ),
+            ShiftData.case_folding_simple.minBitsConfig(
+                &shift_tracking.case_folding_simple,
+            ),
+            ShiftData.case_folding_turkish.minBitsConfig(
+                &shift_tracking.case_folding_turkish,
+            ),
         };
 
         const defaults = comptime [_]config.Field.Runtime{
@@ -230,6 +290,11 @@ pub fn init(allocator: std.mem.Allocator) !Self {
             config.default.field("special_titlecase_mapping").runtime(.{}),
             config.default.field("special_uppercase_mapping").runtime(.{}),
             config.default.field("special_casing_condition").runtime(.{}),
+            config.default.field("simple_uppercase_mapping").runtime(.{}),
+            config.default.field("simple_lowercase_mapping").runtime(.{}),
+            config.default.field("simple_titlecase_mapping").runtime(.{}),
+            config.default.field("case_folding_simple").runtime(.{}),
+            config.default.field("case_folding_turkish").runtime(.{}),
         };
 
         for (fields, defaults) |f, d| {
@@ -290,7 +355,8 @@ fn parseUnicodeData(
     allocator: std.mem.Allocator,
     ucd: *Self,
     maps: *OffsetMaps,
-    tracking: *LenTracking,
+    len_tracking: *LenTracking,
+    shift_tracking: *ShiftTracking,
 ) !void {
     const file_path = "ucd/UnicodeData.txt";
 
@@ -426,7 +492,7 @@ fn parseUnicodeData(
                     allocator,
                     &ucd.backing.decomposition_mapping,
                     &maps.decomposition_mapping,
-                    &tracking.decomposition_mapping,
+                    &len_tracking.decomposition_mapping,
                     temp_mapping[0..mapping_len],
                 );
             }
@@ -456,7 +522,7 @@ fn parseUnicodeData(
                 allocator,
                 &ucd.backing.numeric_value_numeric,
                 &maps.numeric_value_numeric,
-                &tracking.numeric_value_numeric,
+                &len_tracking.numeric_value_numeric,
                 numeric_numeric_str,
             );
         }
@@ -466,7 +532,7 @@ fn parseUnicodeData(
                 allocator,
                 &ucd.backing.name,
                 &maps.name,
-                &tracking.name,
+                &len_tracking.name,
                 name,
             ),
             .general_category = general_category,
@@ -483,12 +549,24 @@ fn parseUnicodeData(
                 allocator,
                 &ucd.backing.unicode_1_name,
                 &maps.unicode_1_name,
-                &tracking.unicode_1_name,
+                &len_tracking.unicode_1_name,
                 unicode_1_name,
             ),
-            .simple_uppercase_mapping = .init(simple_uppercase_mapping),
-            .simple_lowercase_mapping = .init(simple_lowercase_mapping),
-            .simple_titlecase_mapping = .init(simple_titlecase_mapping),
+            .simple_uppercase_mapping = .initOptionalTracked(
+                cp,
+                simple_uppercase_mapping,
+                &shift_tracking.simple_uppercase_mapping,
+            ),
+            .simple_lowercase_mapping = .initOptionalTracked(
+                cp,
+                simple_lowercase_mapping,
+                &shift_tracking.simple_lowercase_mapping,
+            ),
+            .simple_titlecase_mapping = .initOptionalTracked(
+                cp,
+                simple_titlecase_mapping,
+                &shift_tracking.simple_titlecase_mapping,
+            ),
         };
 
         // Handle range entries with "First>" and "Last>"
@@ -568,7 +646,8 @@ fn parseCaseFolding(
     allocator: std.mem.Allocator,
     ucd: *Self,
     maps: *OffsetMaps,
-    tracking: *LenTracking,
+    len_tracking: *LenTracking,
+    shift_tracking: *ShiftTracking,
 ) !void {
     const file_path = "ucd/CaseFolding.txt";
 
@@ -610,8 +689,8 @@ fn parseCaseFolding(
         const result = try ucd.case_folding.getOrPut(allocator, cp);
         if (!result.found_existing) {
             result.value_ptr.* = CaseFolding{
-                .case_folding_simple = .null,
-                .case_folding_turkish = .null,
+                .case_folding_simple = .no_shift,
+                .case_folding_turkish = .no_shift,
                 .case_folding_full = undefined,
             };
         }
@@ -619,7 +698,11 @@ fn parseCaseFolding(
         switch (status) {
             'S', 'C' => {
                 std.debug.assert(mapping_len == 1);
-                result.value_ptr.case_folding_simple = .{ .data = mapping[0] };
+                result.value_ptr.case_folding_simple = .initTracked(
+                    cp,
+                    mapping[0],
+                    &shift_tracking.case_folding_simple,
+                );
             },
             'F' => {
                 std.debug.assert(mapping_len > 1);
@@ -627,13 +710,17 @@ fn parseCaseFolding(
                     allocator,
                     &ucd.backing.case_folding_full,
                     &maps.case_folding_full,
-                    &tracking.case_folding_full,
+                    &len_tracking.case_folding_full,
                     mapping[0..mapping_len],
                 );
             },
             'T' => {
                 std.debug.assert(mapping_len == 1);
-                result.value_ptr.case_folding_turkish = .{ .data = mapping[0] };
+                result.value_ptr.case_folding_turkish = .initTracked(
+                    cp,
+                    mapping[0],
+                    &shift_tracking.case_folding_turkish,
+                );
             },
             else => unreachable,
         }
@@ -644,7 +731,7 @@ fn parseSpecialCasing(
     allocator: std.mem.Allocator,
     ucd: *Self,
     maps: *OffsetMaps,
-    tracking: *LenTracking,
+    len_tracking: *LenTracking,
 ) !void {
     const file_path = "ucd/SpecialCasing.txt";
 
@@ -733,28 +820,28 @@ fn parseSpecialCasing(
                 allocator,
                 &ucd.backing.special_lowercase_mapping,
                 &maps.special_lowercase_mapping,
-                &tracking.special_lowercase_mapping,
+                &len_tracking.special_lowercase_mapping,
                 lower_mapping[0..lower_mapping_len],
             ),
             .special_titlecase_mapping = try .fromSlice(
                 allocator,
                 &ucd.backing.special_titlecase_mapping,
                 &maps.special_titlecase_mapping,
-                &tracking.special_titlecase_mapping,
+                &len_tracking.special_titlecase_mapping,
                 title_mapping[0..title_mapping_len],
             ),
             .special_uppercase_mapping = try .fromSlice(
                 allocator,
                 &ucd.backing.special_uppercase_mapping,
                 &maps.special_uppercase_mapping,
-                &tracking.special_uppercase_mapping,
+                &len_tracking.special_uppercase_mapping,
                 upper_mapping[0..upper_mapping_len],
             ),
             .special_casing_condition = try .fromSlice(
                 allocator,
                 &ucd.backing.special_casing_condition,
                 &maps.special_casing_condition,
-                &tracking.special_casing_condition,
+                &len_tracking.special_casing_condition,
                 conditions[0..conditions_len],
             ),
         });

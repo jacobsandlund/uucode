@@ -10,29 +10,30 @@ pub const Field = struct {
     name: [:0]const u8,
     type: type,
 
-    // TODO: maybe make the rest a union?
+    // For Shift fields
+    max_shift_down: u21 = 0,
+    max_shift_up: u21 = 0,
 
     // For VarLen fields
     max_len: usize = 0,
     max_offset: usize = 0,
     embedded_len: usize = 0,
 
-    // For u21 fields backed by Optional
-    defaults_to_cp: bool = false,
-
     pub const Runtime = struct {
         name: []const u8,
         type: []const u8,
+        max_shift_down: u21,
+        max_shift_up: u21,
         max_len: usize,
         max_offset: usize,
         embedded_len: usize,
-        defaults_to_cp: bool,
 
         pub fn eql(a: Runtime, b: Runtime) bool {
-            return a.max_len == b.max_len and
+            return a.max_shift_down == b.max_shift_down and
+                a.max_shift_up == b.max_shift_up and
+                a.max_len == b.max_len and
                 a.max_offset == b.max_offset and
                 a.embedded_len == b.embedded_len and
-                a.defaults_to_cp == b.defaults_to_cp and
                 std.mem.eql(u8, a.type, b.type) and
                 std.mem.eql(u8, a.name, b.name);
         }
@@ -42,22 +43,57 @@ pub const Field = struct {
                 \\.{{
                 \\    .name = "{s}",
                 \\    .type = {s},
-                \\    .max_len = {},
-                \\    .max_offset = {},
-                \\    .embedded_len = {},
-                \\    .defaults_to_cp = {},
-                \\}},
                 \\
-            , .{
-                self.name,
-                self.type,
-                self.max_len,
-                self.max_offset,
-                self.embedded_len,
-                self.defaults_to_cp,
-            });
+            , .{ self.name, self.type });
+            if (self.max_shift_down != 0 or self.max_shift_up != 0) {
+                try writer.print(
+                    \\    .max_shift_down = {},
+                    \\    .max_shift_up = {},
+                    \\
+                , .{ self.max_shift_down, self.max_shift_up });
+            }
+            if (self.max_len != 0) {
+                try writer.print(
+                    \\    .max_len = {},
+                    \\    .max_offset = {},
+                    \\    .embedded_len = {},
+                    \\
+                , .{ self.max_len, self.max_offset, self.embedded_len });
+            }
+
+            try writer.writeAll(
+                \\},
+                \\
+            );
         }
     };
+
+    pub const Kind = enum {
+        basic,
+        var_len,
+        shift,
+        optional,
+    };
+
+    pub fn kind(self: Field) Kind {
+        switch (@typeInfo(self.type)) {
+            .pointer => return .var_len,
+            .optional => |o| {
+                if (o.child == u21) {
+                    return .shift;
+                } else {
+                    return .optional;
+                }
+            },
+            else => {
+                if (self.type == u21) {
+                    return .shift;
+                } else {
+                    return .basic;
+                }
+            },
+        }
+    }
 
     pub fn extension(name: [:0]const u8, comptime T: type) Field {
         return .{
@@ -70,10 +106,11 @@ pub const Field = struct {
         var result: Runtime = .{
             .name = self.name,
             .type = @typeName(self.type),
+            .max_shift_down = self.max_shift_down,
+            .max_shift_up = self.max_shift_up,
             .max_len = self.max_len,
             .max_offset = self.max_offset,
             .embedded_len = self.embedded_len,
-            .defaults_to_cp = self.defaults_to_cp,
         };
 
         inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| {
@@ -86,10 +123,6 @@ pub const Field = struct {
     pub fn eql(a: Field, b: Field) bool {
         // Use runtime `eql` just to be lazy
         return a.runtime(.{}).eql(b.runtime(.{}));
-    }
-
-    pub fn isVarLen(self: Field) bool {
-        return @typeInfo(self.type) == .pointer;
     }
 
     pub fn override(self: Field, overrides: anytype) Field {
@@ -194,17 +227,38 @@ pub const default = Table{
             .max_offset = 49956,
             .embedded_len = 0,
         },
-        .{ .name = "simple_uppercase_mapping", .type = ?u21 },
-        .{ .name = "simple_lowercase_mapping", .type = ?u21 },
-        .{ .name = "simple_titlecase_mapping", .type = ?u21 },
+        .{
+            .name = "simple_uppercase_mapping",
+            .type = ?u21,
+            .max_shift_down = 38864,
+            .max_shift_up = 42561,
+        },
+        .{
+            .name = "simple_lowercase_mapping",
+            .type = ?u21,
+            .max_shift_down = 42561,
+            .max_shift_up = 38864,
+        },
+        .{
+            .name = "simple_titlecase_mapping",
+            .type = ?u21,
+            .max_shift_down = 38864,
+            .max_shift_up = 42561,
+        },
 
         // CaseFolding fields
         .{
             .name = "case_folding_simple",
-            .type = ?u21,
-            .defaults_to_cp = true,
+            .type = u21,
+            .max_shift_down = 42561,
+            .max_shift_up = 35267,
         },
-        .{ .name = "case_folding_turkish", .type = ?u21 },
+        .{
+            .name = "case_folding_turkish",
+            .type = u21,
+            .max_shift_down = 199,
+            .max_shift_up = 232,
+        },
         .{
             .name = "case_folding_full",
             .type = []const u21,
@@ -227,7 +281,6 @@ pub const default = Table{
             .max_len = 3,
             .max_offset = 140,
             .embedded_len = 0,
-            .defaults_to_cp = false,
         },
         .{
             .name = "special_uppercase_mapping",
@@ -235,7 +288,6 @@ pub const default = Table{
             .max_len = 3,
             .max_offset = 167,
             .embedded_len = 0,
-            .defaults_to_cp = false,
         },
         .{
             .name = "special_casing_condition",
@@ -243,8 +295,16 @@ pub const default = Table{
             .max_len = 2,
             .max_offset = 12,
             .embedded_len = 1,
-            .defaults_to_cp = false,
         },
+
+        // TODO:
+        //.{
+        //    .name = "full_lowercase_mapping",
+        //    .type = []const u21,
+        //    .max_len = 3,
+        //    .max_offset = 94,
+        //    .embedded_len = 0,
+        //},
 
         // DerivedCoreProperties fields
         .{ .name = "is_math", .type = bool },
@@ -295,57 +355,83 @@ pub const default = Table{
 const updating_ucd_fields = brk: {
     var fields: [default.fields.len]Field = undefined;
 
-    const offset_len_fields = [_]Field{
-        default.field(.name).override(.{
+    const var_len_or_shift_fields = [_]Field{
+        // VarLen
+        default.field("name").override(.{
             .max_len = 200,
             .max_offset = 2_000_000,
         }),
-        default.field(.decomposition_mapping).override(.{
+        default.field("decomposition_mapping").override(.{
             .max_len = 40,
             .max_offset = 16_000,
         }),
-        default.field(.numeric_value_numeric).override(.{
+        default.field("numeric_value_numeric").override(.{
             .max_len = 30,
             .max_offset = 4000,
         }),
-        default.field(.unicode_1_name).override(.{
+        default.field("unicode_1_name").override(.{
             .max_len = 120,
             .max_offset = 100_000,
         }),
-        default.field(.case_folding_full).override(.{
+        default.field("case_folding_full").override(.{
             .max_len = 9,
             .max_offset = 500,
         }),
-        default.field(.special_lowercase_mapping).override(.{
+        default.field("special_lowercase_mapping").override(.{
             .max_len = 9,
             .max_offset = 1000,
         }),
-        default.field(.special_titlecase_mapping).override(.{
+        default.field("special_titlecase_mapping").override(.{
             .max_len = 9,
             .max_offset = 1000,
         }),
-        default.field(.special_uppercase_mapping).override(.{
+        default.field("special_uppercase_mapping").override(.{
             .max_len = 9,
             .max_offset = 1000,
         }),
-        default.field(.special_casing_condition).override(.{
+        default.field("special_casing_condition").override(.{
             .max_len = 9,
             .max_offset = 500,
+        }),
+
+        // Shift
+        default.field("simple_uppercase_mapping").override(.{
+            .max_shift_down = max_code_point,
+            .max_shift_up = max_code_point,
+        }),
+        default.field("simple_lowercase_mapping").override(.{
+            .max_shift_down = max_code_point,
+            .max_shift_up = max_code_point,
+        }),
+        default.field("simple_titlecase_mapping").override(.{
+            .max_shift_down = max_code_point,
+            .max_shift_up = max_code_point,
+        }),
+        default.field("case_folding_simple").override(.{
+            .max_shift_down = max_code_point,
+            .max_shift_up = max_code_point,
+        }),
+        default.field("case_folding_turkish").override(.{
+            .max_shift_down = max_code_point,
+            .max_shift_up = max_code_point,
         }),
     };
 
-    for (offset_len_fields, 0..) |f, i| {
+    for (var_len_or_shift_fields, 0..) |f, i| {
         fields[i] = f.override(.{
             .embedded_len = 0,
         });
     }
 
-    var i = offset_len_fields.len;
+    var i = var_len_or_shift_fields.len;
 
     for (default.fields) |f| {
-        if (!f.isVarLen()) {
-            fields[i] = f;
-            i += 1;
+        switch (f.kind()) {
+            .basic, .optional => {
+                fields[i] = f;
+                i += 1;
+            },
+            else => {},
         }
     }
 

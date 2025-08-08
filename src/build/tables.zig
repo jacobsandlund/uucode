@@ -215,14 +215,14 @@ pub fn writeTable(
             if (case_folding) |cf| {
                 a.case_folding_simple = cf.case_folding_simple;
             } else {
-                a.case_folding_simple = .null;
+                a.case_folding_simple = .no_shift;
             }
         }
         if (@hasField(AllData, "case_folding_turkish")) {
             if (case_folding) |cf| {
                 a.case_folding_turkish = cf.case_folding_turkish;
             } else {
-                a.case_folding_turkish = .null;
+                a.case_folding_turkish = .no_shift;
             }
         }
         if (@hasField(AllData, "case_folding_full")) {

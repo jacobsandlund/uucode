@@ -104,11 +104,10 @@ pub fn Field(comptime field: []const u8) type {
     const D = DataField(field);
     switch (@typeInfo(D)) {
         .@"struct", .@"enum", .@"union", .@"opaque" => {
-            if (@hasDecl(D, "optional")) {
-                if (D.defaults_to_cp)
-                    return D.T
-                else
-                    return ?D.T;
+            if (@hasDecl(D, "optional") and (!@hasDecl(D, "is_optional") or D.is_optional)) {
+                return ?D.T;
+            } else if (@hasDecl(D, "value")) {
+                return D.T;
             } else {
                 return D;
             }
@@ -124,12 +123,12 @@ inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
 
     switch (@typeInfo(D)) {
         .@"struct", .@"enum", .@"union", .@"opaque" => {
-            if (@hasDecl(D, "optional")) {
-                if (D.defaults_to_cp) {
-                    return d.optional() orelse cp;
-                } else {
-                    return d.optional();
-                }
+            if (@hasDecl(D, "is_optional") and D.is_optional) {
+                return d.optional(cp);
+            } else if (@hasDecl(D, "optional") and !@hasDecl(D, "is_optional")) {
+                return d.optional();
+            } else if (@hasDecl(D, "value")) {
+                return d.value(cp);
             } else {
                 return d;
             }
