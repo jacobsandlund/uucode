@@ -10,32 +10,68 @@ pub const Field = struct {
     name: [:0]const u8,
     type: type,
 
-    // For Shift fields
-    max_shift_down: u21 = 0,
-    max_shift_up: u21 = 0,
+    // For Shift + VarLen fields
+    cp_packing: CpPacking = .direct,
+    shift_low: isize = 0,
+    shift_high: isize = 0,
 
     // For VarLen fields
     max_len: usize = 0,
     max_offset: usize = 0,
     embedded_len: usize = 0,
 
+    pub const CpPacking = enum {
+        direct,
+        shift, // Shift only
+        sentinel_for_eql, // VarLen only
+        shift_single_item, // VarLen only
+    };
+
     pub const Runtime = struct {
         name: []const u8,
         type: []const u8,
-        max_shift_down: u21,
-        max_shift_up: u21,
+        cp_packing: CpPacking,
+        shift_low: isize,
+        shift_high: isize,
         max_len: usize,
         max_offset: usize,
         embedded_len: usize,
 
         pub fn eql(a: Runtime, b: Runtime) bool {
-            return a.max_shift_down == b.max_shift_down and
-                a.max_shift_up == b.max_shift_up and
+            return a.cp_packing == b.cp_packing and
+                a.shift_low == b.shift_low and
+                a.shift_high == b.shift_high and
                 a.max_len == b.max_len and
                 a.max_offset == b.max_offset and
                 a.embedded_len == b.embedded_len and
                 std.mem.eql(u8, a.type, b.type) and
                 std.mem.eql(u8, a.name, b.name);
+        }
+
+        pub fn compareActual(self: Runtime, actual: Runtime) bool {
+            var is_okay = true;
+
+            if (self.shift_low != actual.shift_low) {
+                std.log.err("Config for field '{s}' does not match actual. Set .shift_low = {d}, // change from {d}", .{ self.name, actual.shift_low, self.shift_low });
+                is_okay = false;
+            }
+
+            if (self.shift_high != actual.shift_high) {
+                std.log.err("Config for field '{s}' does not match actual. Set .shift_high = {d}, // change from {d}", .{ self.name, actual.shift_high, self.shift_high });
+                is_okay = false;
+            }
+
+            if (self.max_len != actual.max_len) {
+                std.log.err("Config for field '{s}' does not match actual. Set .max_len = {d}, // change from {d}", .{ self.name, actual.max_len, self.max_len });
+                is_okay = false;
+            }
+
+            if (self.max_offset != actual.max_offset) {
+                std.log.err("Config for field '{s}' does not match actual. Set .max_offset = {d}, // change from {d}", .{ self.name, actual.max_offset, self.max_offset });
+                is_okay = false;
+            }
+
+            return is_okay;
         }
 
         pub fn write(self: Runtime, writer: anytype) !void {
@@ -45,12 +81,13 @@ pub const Field = struct {
                 \\    .type = {s},
                 \\
             , .{ self.name, self.type });
-            if (self.max_shift_down != 0 or self.max_shift_up != 0) {
+            if (self.cp_packing != .direct) {
                 try writer.print(
-                    \\    .max_shift_down = {},
-                    \\    .max_shift_up = {},
+                    \\    .cp_packing = .{s},
+                    \\    .shift_low = {},
+                    \\    .shift_high = {},
                     \\
-                , .{ self.max_shift_down, self.max_shift_up });
+                , .{ @tagName(self.cp_packing), self.shift_low, self.shift_high });
             }
             if (self.max_len != 0) {
                 try writer.print(
@@ -78,18 +115,18 @@ pub const Field = struct {
     pub fn kind(self: Field) Kind {
         switch (@typeInfo(self.type)) {
             .pointer => return .var_len,
-            .optional => |o| {
-                if (o.child == u21) {
-                    return .shift;
-                } else {
-                    return .optional;
+            .optional => {
+                switch (self.cp_packing) {
+                    .direct => return .optional,
+                    .shift => return .shift,
+                    else => @compileError("Optional field with invalid cp_packing: must be .direct or .shift"),
                 }
             },
             else => {
-                if (self.type == u21) {
-                    return .shift;
-                } else {
-                    return .basic;
+                switch (self.cp_packing) {
+                    .direct => return .basic,
+                    .shift => return .shift,
+                    else => @compileError("Non-optional field with invalid cp_packing: must be .direct or .shift"),
                 }
             },
         }
@@ -106,8 +143,9 @@ pub const Field = struct {
         var result: Runtime = .{
             .name = self.name,
             .type = @typeName(self.type),
-            .max_shift_down = self.max_shift_down,
-            .max_shift_up = self.max_shift_up,
+            .cp_packing = self.cp_packing,
+            .shift_low = self.shift_low,
+            .shift_high = self.shift_high,
             .max_len = self.max_len,
             .max_offset = self.max_offset,
             .embedded_len = self.embedded_len,
@@ -129,6 +167,32 @@ pub const Field = struct {
         var result = self;
 
         inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| {
+            if (!is_updating_ucd and (std.mem.eql(u8, f.name, "name") or
+                std.mem.eql(u8, f.name, "type") or
+                std.mem.eql(u8, f.name, "shift_low") or
+                std.mem.eql(u8, f.name, "shift_high") or
+                std.mem.eql(u8, f.name, "max_len")))
+            {
+                @compileError("Cannot override field '" ++ f.name ++ "'");
+            } else if (std.mem.eql(u8, f.name, "cp_packing")) {
+                switch (self.cp_packing) {
+                    .shift => {
+                        switch (overrides.cp_packing) {
+                            .sentinel_for_eql, .shift_single_item => {
+                                @panic("Cannot override shift with shift_single_item or sentinel_for_eql");
+                            },
+                            else => {},
+                        }
+                    },
+                    .sentinel_for_eql, .shift_single_item => {
+                        if (overrides.cp_packing == .shift) {
+                            @panic("Cannot override shift_single_item or sentinel_for_eql with shift");
+                        }
+                    },
+                    else => {},
+                }
+            }
+
             @field(result, f.name) = @field(overrides, f.name);
         }
 
@@ -178,6 +242,8 @@ pub const Extension = struct {
     inputs: []const [:0]const u8,
     fields: []const Field,
     compute: *const fn (cp: u21, data: anytype) void,
+
+    // TODO: support computed types for VarLen and Shift with tracking
 
     pub fn field(comptime self: *const Extension, name: []const u8) Field {
         return for (self.fields) |f| {
@@ -230,37 +296,63 @@ pub const default = Table{
         .{
             .name = "simple_uppercase_mapping",
             .type = ?u21,
-            .max_shift_down = 38864,
-            .max_shift_up = 42561,
+            .cp_packing = .shift,
+            .shift_low = -38864,
+            .shift_high = 42561,
         },
         .{
             .name = "simple_lowercase_mapping",
             .type = ?u21,
-            .max_shift_down = 42561,
-            .max_shift_up = 38864,
+            .cp_packing = .shift,
+            .shift_low = -42561,
+            .shift_high = 38864,
         },
         .{
             .name = "simple_titlecase_mapping",
             .type = ?u21,
-            .max_shift_down = 38864,
-            .max_shift_up = 42561,
+            .cp_packing = .shift,
+            .shift_low = -38864,
+            .shift_high = 42561,
         },
 
         // CaseFolding fields
         .{
             .name = "case_folding_simple",
             .type = u21,
-            .max_shift_down = 42561,
-            .max_shift_up = 35267,
-        },
-        .{
-            .name = "case_folding_turkish",
-            .type = u21,
-            .max_shift_down = 199,
-            .max_shift_up = 232,
+            .cp_packing = .shift,
+            .shift_low = -42561,
+            .shift_high = 35267,
         },
         .{
             .name = "case_folding_full",
+            .type = []const u21,
+            .max_len = 3,
+            .max_offset = 160,
+            .embedded_len = 0,
+            .cp_packing = .shift_single_item,
+            .shift_low = -42561,
+            .shift_high = 35267,
+        },
+        .{
+            .name = "case_folding_turkish_only",
+            .type = []const u21,
+            .max_len = 1,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "case_folding_common_only",
+            .type = []const u21,
+            .max_len = 1,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "case_folding_simple_only",
+            .type = []const u21,
+            .max_len = 1,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "case_folding_full_only",
             .type = []const u21,
             .max_len = 3,
             .max_offset = 160,
@@ -271,13 +363,19 @@ pub const default = Table{
         .{
             .name = "special_lowercase_mapping",
             .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = -199,
+            .shift_high = 232,
             .max_len = 3,
-            .max_offset = 94,
+            .max_offset = 13,
             .embedded_len = 0,
         },
         .{
             .name = "special_titlecase_mapping",
             .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = -199,
+            .shift_high = 232,
             .max_len = 3,
             .max_offset = 140,
             .embedded_len = 0,
@@ -285,6 +383,9 @@ pub const default = Table{
         .{
             .name = "special_uppercase_mapping",
             .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = -199,
+            .shift_high = 232,
             .max_len = 3,
             .max_offset = 167,
             .embedded_len = 0,
@@ -293,18 +394,71 @@ pub const default = Table{
             .name = "special_casing_condition",
             .type = []const types.SpecialCasingCondition,
             .max_len = 2,
-            .max_offset = 12,
+            .max_offset = 6,
             .embedded_len = 1,
         },
 
-        // TODO:
-        //.{
-        //    .name = "full_lowercase_mapping",
-        //    .type = []const u21,
-        //    .max_len = 3,
-        //    .max_offset = 94,
-        //    .embedded_len = 0,
-        //},
+        // Case mappings
+        .{
+            .name = "lowercase_mapping",
+            .type = []const u21,
+            .max_len = 3,
+            .max_offset = 160,
+            .embedded_len = 0,
+            .cp_packing = .shift_single_item,
+            .shift_low = -42561,
+            .shift_high = 42561,
+        },
+        .{
+            .name = "uppercase_mapping",
+            .type = []const u21,
+            .max_len = 3,
+            .max_offset = 160,
+            .embedded_len = 0,
+            .cp_packing = .shift_single_item,
+            .shift_low = -42561,
+            .shift_high = 42561,
+        },
+        .{
+            .name = "titlecase_mapping",
+            .type = []const u21,
+            .max_len = 3,
+            .max_offset = 160,
+            .embedded_len = 0,
+            .cp_packing = .shift_single_item,
+            .shift_low = -42561,
+            .shift_high = 42561,
+        },
+        //        .{
+        //            .name = "lowercase_conditional_mapping",
+        //            .type = []const u21,
+        //            .max_len = 3,
+        //            .max_offset = 160,
+        //            .embedded_len = 0,
+        //            .cp_packing = .shift_single_item,
+        //            .shift_low = -42561,
+        //            .shift_high = 42561,
+        //        },
+        //        .{
+        //            .name = "uppercase_conditional_mapping",
+        //            .type = []const u21,
+        //            .max_len = 3,
+        //            .max_offset = 160,
+        //            .embedded_len = 0,
+        //            .cp_packing = .shift_single_item,
+        //            .shift_low = -42561,
+        //            .shift_high = 42561,
+        //        },
+        //        .{
+        //            .name = "titlecase_conditional_mapping",
+        //            .type = []const u21,
+        //            .max_len = 3,
+        //            .max_offset = 160,
+        //            .embedded_len = 0,
+        //            .cp_packing = .shift_single_item,
+        //            .shift_low = -42561,
+        //            .shift_high = 42561,
+        //        },
 
         // DerivedCoreProperties fields
         .{ .name = "is_math", .type = bool },
@@ -353,10 +507,10 @@ pub const default = Table{
 };
 
 const updating_ucd_fields = brk: {
+    @setEvalBranchQuota(5_000);
     var fields: [default.fields.len]Field = undefined;
 
     const var_len_or_shift_fields = [_]Field{
-        // VarLen
         default.field("name").override(.{
             .max_len = 200,
             .max_offset = 2_000_000,
@@ -373,7 +527,30 @@ const updating_ucd_fields = brk: {
             .max_len = 120,
             .max_offset = 100_000,
         }),
+        default.field("simple_uppercase_mapping").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
+        }),
+        default.field("simple_lowercase_mapping").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
+        }),
+        default.field("simple_titlecase_mapping").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
+        }),
+        default.field("case_folding_simple").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
+        }),
         default.field("case_folding_full").override(.{
+            .max_len = 9,
+            .max_offset = 500,
+        }),
+        default.field("case_folding_turkish_only"),
+        default.field("case_folding_common_only"),
+        default.field("case_folding_simple_only"),
+        default.field("case_folding_full_only").override(.{
             .max_len = 9,
             .max_offset = 500,
         }),
@@ -393,27 +570,17 @@ const updating_ucd_fields = brk: {
             .max_len = 9,
             .max_offset = 500,
         }),
-
-        // Shift
-        default.field("simple_uppercase_mapping").override(.{
-            .max_shift_down = max_code_point,
-            .max_shift_up = max_code_point,
+        default.field("lowercase_mapping").override(.{
+            .max_len = 9,
+            .max_offset = 500,
         }),
-        default.field("simple_lowercase_mapping").override(.{
-            .max_shift_down = max_code_point,
-            .max_shift_up = max_code_point,
+        default.field("titlecase_mapping").override(.{
+            .max_len = 9,
+            .max_offset = 500,
         }),
-        default.field("simple_titlecase_mapping").override(.{
-            .max_shift_down = max_code_point,
-            .max_shift_up = max_code_point,
-        }),
-        default.field("case_folding_simple").override(.{
-            .max_shift_down = max_code_point,
-            .max_shift_up = max_code_point,
-        }),
-        default.field("case_folding_turkish").override(.{
-            .max_shift_down = max_code_point,
-            .max_shift_up = max_code_point,
+        default.field("uppercase_mapping").override(.{
+            .max_len = 9,
+            .max_offset = 500,
         }),
     };
 

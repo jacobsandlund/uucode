@@ -7,8 +7,8 @@ pub const std_options: std.Options = .{
     .log_level = .debug,
 };
 
-// Needs about 81 MB normally but 87 MB when `is_updating_ucd`
-const buffer_size = 100_000_000;
+// Needs about 149 MB normally but ? MB when `is_updating_ucd`
+const buffer_size = 200_000_000;
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
@@ -123,6 +123,207 @@ const BlockMap = std.HashMapUnmanaged(Block, u16, struct {
     }
 }, std.hash_map.default_max_load_percentage);
 
+fn TableAllData(comptime c: config.Table) type {
+    var fields_len_bound: usize = c.fields.len;
+    for (c.extensions) |x| {
+        fields_len_bound += x.inputs.len;
+        fields_len_bound += x.fields.len;
+    }
+    var fields: [fields_len_bound]std.builtin.Type.StructField = undefined;
+    var x_fields: [fields_len_bound]config.Field = undefined;
+    var i: usize = 0;
+
+    // Add extension fields:
+    for (c.extensions) |x| {
+        for (x.fields) |xf| {
+            for (fields[0..i]) |existing| {
+                if (std.mem.eql(u8, existing.name, xf.name)) {
+                    @compileError("Extension field '" ++ xf.name ++ "' already exists in table");
+                }
+            }
+
+            x_fields[i] = xf;
+            fields[i] = .{
+                .name = xf.name,
+                .type = types.Field(xf),
+                .default_value_ptr = null,
+                .is_comptime = false,
+                .alignment = 0, // Required for packed structs
+            };
+            i += 1;
+        }
+    }
+
+    const extension_fields_len = i;
+
+    for (c.fields, 0..) |cf, c_i| {
+        const F = types.Field(cf);
+
+        for (c.fields[0..c_i]) |existing| {
+            if (std.mem.eql(u8, existing.name, cf.name)) {
+                @compileError("Field '" ++ cf.name ++ "' already exists in table");
+            }
+        }
+
+        // If a field isn't in `default` it's an extension field, which
+        // should've been added above.
+        if (!config.default.hasField(cf.name)) {
+            const x_field: ?config.Field = for (x_fields[0..extension_fields_len]) |xf| {
+                if (std.mem.eql(u8, xf.name, cf.name)) break xf;
+            } else null;
+
+            if (x_field) |xf| {
+                if (!xf.eql(cf)) {
+                    @compileError("Table field '" ++ cf.name ++ "' does not match the field in the extension");
+                }
+            } else {
+                @compileError("Table field '" ++ cf.name ++ "' not found in any of the table's extensions");
+            }
+
+            continue;
+        }
+
+        fields[i] = .{
+            .name = cf.name,
+            .type = F,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = 0, // Required for packed structs
+        };
+        i += 1;
+    }
+
+    // Add extension inputs:
+    for (c.extensions) |x| {
+        loop_inputs: for (x.inputs) |input| {
+            for (fields[0..i]) |existing| {
+                if (std.mem.eql(u8, existing.name, input)) {
+                    continue :loop_inputs;
+                }
+            }
+
+            fields[i] = .{
+                .name = input,
+                .type = types.Field(config.default.field(input)),
+                .default_value_ptr = null,
+                .is_comptime = false,
+                .alignment = 0, // Required for packed structs
+            };
+            i += 1;
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = fields[0..i],
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+
+fn TableBacking(
+    comptime AllData: type,
+) type {
+    var backing_fields_len: usize = 0;
+    for (@typeInfo(AllData).@"struct".fields) |f| {
+        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, "BackingBuffer")) {
+            backing_fields_len += 1;
+        }
+    }
+
+    var backing_fields: [backing_fields_len]std.builtin.Type.StructField = undefined;
+    var i: usize = 0;
+
+    for (@typeInfo(AllData).@"struct".fields) |f| {
+        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, "BackingBuffer")) {
+            backing_fields[i] = .{
+                .name = f.name,
+                .type = f.type.BackingBuffer,
+                .default_value_ptr = null, // TODO: can we set this?
+                .is_comptime = false,
+                .alignment = @alignOf(f.type.BackingBuffer),
+            };
+            i += 1;
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = &backing_fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+
+fn TableTracking(
+    comptime AllData: type,
+) type {
+    var tracking_fields_len: usize = 0;
+    for (@typeInfo(AllData).@"struct".fields) |f| {
+        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, "Tracking")) {
+            tracking_fields_len += 1;
+        }
+    }
+
+    var tracking_fields: [tracking_fields_len]std.builtin.Type.StructField = undefined;
+    var i: usize = 0;
+
+    for (@typeInfo(AllData).@"struct".fields) |f| {
+        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, "Tracking")) {
+            tracking_fields[i] = .{
+                .name = f.name,
+                .type = f.type.Tracking,
+                .default_value_ptr = null, // TODO: can we set this?
+                .is_comptime = false,
+                .alignment = @alignOf(f.type.Tracking),
+            };
+            i += 1;
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = &tracking_fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+
+fn singleInit(
+    comptime field: []const u8,
+    data: anytype,
+    tracking: anytype,
+    cp: u21,
+    d: anytype,
+) void {
+    const Field = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
+    if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "initOptional")) {
+        if (@typeInfo(@TypeOf(d)) == .optional) {
+            @field(data, field) = .initOptional(
+                &@field(tracking, field),
+                cp,
+                d,
+            );
+        } else {
+            @field(data, field) = .init(
+                &@field(tracking, field),
+                cp,
+                d,
+            );
+        }
+    } else if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "optional")) {
+        @field(data, field) = .init(d);
+    } else {
+        @field(data, field) = d;
+    }
+}
+
 pub fn writeTable(
     comptime table_config: config.Table,
     table_index: usize,
@@ -132,7 +333,30 @@ pub fn writeTable(
 ) !void {
     const Table = types.Table(table_config);
     const Data = @typeInfo(@FieldType(Table, "data")).array.child;
-    const AllData = types.AllData(table_config);
+    const AllData = TableAllData(table_config);
+    const Backing = TableBacking(AllData);
+    const Tracking = TableTracking(AllData);
+
+    var backing = blk: {
+        const b: *Backing = try allocator.create(Backing);
+        b.* = std.mem.zeroInit(Backing, .{});
+
+        break :blk b;
+    };
+    defer allocator.destroy(backing);
+
+    var tracking = blk: {
+        var t: Tracking = undefined;
+        inline for (@typeInfo(Tracking).@"struct".fields) |field| {
+            @field(t, field.name) = .{};
+        }
+        break :blk t;
+    };
+    defer {
+        inline for (@typeInfo(Tracking).@"struct".fields) |field| {
+            @field(tracking, field.name).deinit(allocator);
+        }
+    }
 
     var data_map: DataMap(Data) = .empty;
     defer data_map.deinit(allocator);
@@ -165,7 +389,12 @@ pub fn writeTable(
 
         // UnicodeData fields
         if (@hasField(AllData, "name")) {
-            a.name = unicode_data.name;
+            a.name = try .fromSlice(
+                allocator,
+                &backing.name,
+                &tracking.name,
+                unicode_data.name,
+            );
         }
         if (@hasField(AllData, "general_category")) {
             a.general_category = unicode_data.general_category;
@@ -180,86 +409,293 @@ pub fn writeTable(
             a.decomposition_type = unicode_data.decomposition_type;
         }
         if (@hasField(AllData, "decomposition_mapping")) {
-            a.decomposition_mapping = unicode_data.decomposition_mapping;
+            a.decomposition_mapping = try .fromSliceFor(
+                allocator,
+                &backing.decomposition_mapping,
+                &tracking.decomposition_mapping,
+                cp,
+                unicode_data.decomposition_mapping,
+            );
         }
         if (@hasField(AllData, "numeric_type")) {
             a.numeric_type = unicode_data.numeric_type;
         }
         if (@hasField(AllData, "numeric_value_decimal")) {
-            a.numeric_value_decimal = unicode_data.numeric_value_decimal;
+            a.numeric_value_decimal = .init(unicode_data.numeric_value_decimal);
         }
         if (@hasField(AllData, "numeric_value_digit")) {
-            a.numeric_value_digit = unicode_data.numeric_value_digit;
+            a.numeric_value_digit = .init(unicode_data.numeric_value_digit);
         }
         if (@hasField(AllData, "numeric_value_numeric")) {
-            a.numeric_value_numeric = unicode_data.numeric_value_numeric;
+            a.numeric_value_numeric = try .fromSlice(
+                allocator,
+                &backing.numeric_value_numeric,
+                &tracking.numeric_value_numeric,
+                unicode_data.numeric_value_numeric,
+            );
         }
         if (@hasField(AllData, "is_bidi_mirrored")) {
             a.is_bidi_mirrored = unicode_data.is_bidi_mirrored;
         }
         if (@hasField(AllData, "unicode_1_name")) {
-            a.unicode_1_name = unicode_data.unicode_1_name;
+            a.unicode_1_name = try .fromSlice(
+                allocator,
+                &backing.unicode_1_name,
+                &tracking.unicode_1_name,
+                unicode_data.unicode_1_name,
+            );
         }
         if (@hasField(AllData, "simple_uppercase_mapping")) {
-            a.simple_uppercase_mapping = unicode_data.simple_uppercase_mapping;
+            singleInit(
+                "simple_uppercase_mapping",
+                &a,
+                &tracking,
+                cp,
+                unicode_data.simple_uppercase_mapping,
+            );
         }
         if (@hasField(AllData, "simple_lowercase_mapping")) {
-            a.simple_lowercase_mapping = unicode_data.simple_lowercase_mapping;
+            singleInit(
+                "simple_lowercase_mapping",
+                &a,
+                &tracking,
+                cp,
+                unicode_data.simple_lowercase_mapping,
+            );
         }
         if (@hasField(AllData, "simple_titlecase_mapping")) {
-            a.simple_titlecase_mapping = unicode_data.simple_titlecase_mapping;
+            singleInit(
+                "simple_titlecase_mapping",
+                &a,
+                &tracking,
+                cp,
+                unicode_data.simple_titlecase_mapping,
+            );
         }
 
         // CaseFolding fields
         if (@hasField(AllData, "case_folding_simple")) {
             if (case_folding) |cf| {
-                a.case_folding_simple = cf.case_folding_simple;
+                const d =
+                    cf.case_folding_simple_only orelse
+                    cf.case_folding_common_only orelse
+                    cp;
+                singleInit("case_folding_simple", &a, &tracking, cp, d);
             } else {
-                a.case_folding_simple = .no_shift;
-            }
-        }
-        if (@hasField(AllData, "case_folding_turkish")) {
-            if (case_folding) |cf| {
-                a.case_folding_turkish = cf.case_folding_turkish;
-            } else {
-                a.case_folding_turkish = .no_shift;
+                singleInit("case_folding_simple", &a, &tracking, cp, cp);
             }
         }
         if (@hasField(AllData, "case_folding_full")) {
             if (case_folding) |cf| {
-                a.case_folding_full = cf.case_folding_full;
+                if (cf.case_folding_full_only.len > 0) {
+                    a.case_folding_full = try .fromSliceFor(
+                        allocator,
+                        &backing.case_folding_full,
+                        &tracking.case_folding_full,
+                        cp,
+                        cf.case_folding_full_only,
+                    );
+                } else if (cf.case_folding_common_only) |c| {
+                    a.case_folding_full = try .fromSliceFor(
+                        allocator,
+                        &backing.case_folding_full,
+                        &tracking.case_folding_full,
+                        cp,
+                        &.{c},
+                    );
+                } else {
+                    a.case_folding_full = try .fromSliceFor(
+                        allocator,
+                        &backing.case_folding_full,
+                        &tracking.case_folding_full,
+                        cp,
+                        &.{cp},
+                    );
+                }
             } else {
-                a.case_folding_full = .empty;
+                a.case_folding_full = try .fromSliceFor(
+                    allocator,
+                    &backing.case_folding_full,
+                    &tracking.case_folding_full,
+                    cp,
+                    &.{cp},
+                );
+            }
+        }
+        if (@hasField(AllData, "case_folding_turkish_only")) {
+            if (case_folding) |cf| {
+                if (cf.case_folding_turkish_only) |t| {
+                    a.case_folding_turkish_only = try .fromSliceFor(
+                        allocator,
+                        &backing.case_folding_turkish_only,
+                        &tracking.case_folding_turkish_only,
+                        cp,
+                        &.{t},
+                    );
+                } else {
+                    a.case_folding_turkish_only = .empty;
+                }
+            } else {
+                a.case_folding_turkish_only = .empty;
+            }
+        }
+        if (@hasField(AllData, "case_folding_common_only")) {
+            if (case_folding) |cf| {
+                if (cf.case_folding_common_only) |c| {
+                    a.case_folding_common_only = try .fromSliceFor(
+                        allocator,
+                        &backing.case_folding_common_only,
+                        &tracking.case_folding_common_only,
+                        cp,
+                        &.{c},
+                    );
+                } else {
+                    a.case_folding_common_only = .empty;
+                }
+            } else {
+                a.case_folding_common_only = .empty;
+            }
+        }
+        if (@hasField(AllData, "case_folding_simple_only")) {
+            if (case_folding) |cf| {
+                if (cf.case_folding_simple_only) |s| {
+                    a.case_folding_simple_only = try .fromSliceFor(
+                        allocator,
+                        &backing.case_folding_simple_only,
+                        &tracking.case_folding_simple_only,
+                        cp,
+                        &.{s},
+                    );
+                }
+            } else {
+                a.case_folding_simple_only = .empty;
+            }
+        }
+        if (@hasField(AllData, "case_folding_full_only")) {
+            if (case_folding) |cf| {
+                a.case_folding_full_only = try .fromSliceFor(
+                    allocator,
+                    &backing.case_folding_full_only,
+                    &tracking.case_folding_full_only,
+                    cp,
+                    cf.case_folding_full_only,
+                );
+            } else {
+                a.case_folding_full_only = .empty;
             }
         }
 
         // SpecialCasing fields
         if (@hasField(AllData, "special_lowercase_mapping")) {
             if (special_casing) |sc| {
-                a.special_lowercase_mapping = sc.special_lowercase_mapping;
+                a.special_lowercase_mapping = try .fromSliceFor(
+                    allocator,
+                    &backing.special_lowercase_mapping,
+                    &tracking.special_lowercase_mapping,
+                    cp,
+                    sc.special_lowercase_mapping,
+                );
             } else {
                 a.special_lowercase_mapping = .empty;
             }
         }
         if (@hasField(AllData, "special_titlecase_mapping")) {
             if (special_casing) |sc| {
-                a.special_titlecase_mapping = sc.special_titlecase_mapping;
+                a.special_titlecase_mapping = try .fromSliceFor(
+                    allocator,
+                    &backing.special_titlecase_mapping,
+                    &tracking.special_titlecase_mapping,
+                    cp,
+                    sc.special_titlecase_mapping,
+                );
             } else {
                 a.special_titlecase_mapping = .empty;
             }
         }
         if (@hasField(AllData, "special_uppercase_mapping")) {
             if (special_casing) |sc| {
-                a.special_uppercase_mapping = sc.special_uppercase_mapping;
+                a.special_uppercase_mapping = try .fromSliceFor(
+                    allocator,
+                    &backing.special_uppercase_mapping,
+                    &tracking.special_uppercase_mapping,
+                    cp,
+                    sc.special_uppercase_mapping,
+                );
             } else {
                 a.special_uppercase_mapping = .empty;
             }
         }
         if (@hasField(AllData, "special_casing_condition")) {
             if (special_casing) |sc| {
-                a.special_casing_condition = sc.special_casing_condition;
+                a.special_casing_condition = try .fromSlice(
+                    allocator,
+                    &backing.special_casing_condition,
+                    &tracking.special_casing_condition,
+                    sc.special_casing_condition,
+                );
             } else {
                 a.special_casing_condition = .empty;
+            }
+        }
+
+        // Case mappings
+        if (@hasField(AllData, "lowercase_mapping")) {
+            if (special_casing) |sc| {
+                a.lowercase_mapping = try .fromSliceFor(
+                    allocator,
+                    &backing.lowercase_mapping,
+                    &tracking.lowercase_mapping,
+                    cp,
+                    sc.special_lowercase_mapping,
+                );
+            } else {
+                a.lowercase_mapping = try .fromSliceFor(
+                    allocator,
+                    &backing.lowercase_mapping,
+                    &tracking.lowercase_mapping,
+                    cp,
+                    &.{unicode_data.simple_lowercase_mapping orelse cp},
+                );
+            }
+        }
+
+        if (@hasField(AllData, "titlecase_mapping")) {
+            if (special_casing) |sc| {
+                a.titlecase_mapping = try .fromSliceFor(
+                    allocator,
+                    &backing.titlecase_mapping,
+                    &tracking.titlecase_mapping,
+                    cp,
+                    sc.special_titlecase_mapping,
+                );
+            } else {
+                a.titlecase_mapping = try .fromSliceFor(
+                    allocator,
+                    &backing.titlecase_mapping,
+                    &tracking.titlecase_mapping,
+                    cp,
+                    &.{unicode_data.simple_titlecase_mapping orelse cp},
+                );
+            }
+        }
+
+        if (@hasField(AllData, "uppercase_mapping")) {
+            if (special_casing) |sc| {
+                a.uppercase_mapping = try .fromSliceFor(
+                    allocator,
+                    &backing.uppercase_mapping,
+                    &tracking.uppercase_mapping,
+                    cp,
+                    sc.special_uppercase_mapping,
+                );
+            } else {
+                a.uppercase_mapping = try .fromSliceFor(
+                    allocator,
+                    &backing.uppercase_mapping,
+                    &tracking.uppercase_mapping,
+                    cp,
+                    &.{unicode_data.simple_uppercase_mapping orelse cp},
+                );
             }
         }
 
@@ -448,20 +884,34 @@ pub fn writeTable(
         \\
     , .{ stage1.items.len, stage2.items.len, data_array.items.len });
 
-    const Backing = @FieldType(Table, "backing");
+    var all_fields_okay = true;
 
     inline for (table_config.fields) |f| {
-        var max_offset: usize = 0;
-
-        if (@hasField(Backing, f.name)) {
-            max_offset = @field(ucd.backing, f.name).len;
-        }
-
-        if (!config.is_updating_ucd and f.max_offset != max_offset) {
-            std.debug.panic("Field '{s}' configured with max_offset {d} but the actual max offset is {d}. Reconfigure with actual ({d})", .{ f.name, f.max_offset, max_offset, max_offset });
+        if (@hasField(Tracking, f.name)) {
+            const t = @field(tracking, f.name);
+            if (config.is_updating_ucd) {
+                const min_config = t.minBitsConfig();
+                if (!config.default.field(f.name).eql(min_config)) {
+                    const w = try std.io.getStdErr().writer();
+                    try w.writeAll(
+                        \\
+                        \\ Update default config in `config.zig` with the correct field config:
+                        \\
+                    );
+                    min_config.write(w);
+                }
+            } else {
+                if (!f.runtime(.{}).compareActual(t.actualConfig())) {
+                    all_fields_okay = false;
+                }
+            }
         }
 
         try f.runtime(.{}).write(writer);
+    }
+
+    if (!all_fields_okay) {
+        @panic("Table config doesn't match actual. See above for details");
     }
 
     try writer.writeAll(
@@ -488,24 +938,23 @@ pub fn writeTable(
     );
 
     inline for (@typeInfo(Backing).@"struct".fields) |field| {
-        const backing = @field(ucd.backing, field.name);
+        if (!@hasField(Data, field.name)) continue;
 
         try writer.print(
             \\            .{s} = .{{
-            \\                .buffer = .{{
         , .{field.name});
 
-        for (backing.slice()) |item| {
+        const b = @field(backing, field.name);
+        const t = @field(tracking, field.name);
+
+        for (b[0..t.max_offset]) |item| {
             try writer.print("{},", .{item});
         }
 
-        try writer.print(
+        try writer.writeAll(
+            \\            },
             \\
-            \\                }},
-            \\                .len = {},
-            \\            }},
-            \\
-        , .{backing.len});
+        );
     }
 
     const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));

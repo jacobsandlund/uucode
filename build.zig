@@ -257,7 +257,7 @@ const test_build_config_zig =
     \\            d.field("case_folding_simple"),
     \\            d.field("name").override(.{
     \\                .embedded_len = 15,
-    \\                .max_offset = 986664,
+    \\                .max_offset = 986096,
     \\            }),
     \\         },
     \\    },

@@ -495,43 +495,6 @@ pub const Block = enum(u9) {
     znamenny_musical_notation,
 };
 
-pub fn UnicodeData(comptime c: config.Table) type {
-    return struct {
-        name: Field(c.field("name")),
-        general_category: Field(c.field("general_category")),
-        canonical_combining_class: Field(c.field("canonical_combining_class")),
-        bidi_class: Field(c.field("bidi_class")),
-        decomposition_type: Field(c.field("decomposition_type")),
-        decomposition_mapping: Field(c.field("decomposition_mapping")),
-        numeric_type: Field(c.field("numeric_type")),
-        numeric_value_decimal: Field(c.field("numeric_value_decimal")),
-        numeric_value_digit: Field(c.field("numeric_value_digit")),
-        numeric_value_numeric: Field(c.field("numeric_value_numeric")),
-        is_bidi_mirrored: Field(c.field("is_bidi_mirrored")),
-        unicode_1_name: Field(c.field("unicode_1_name")),
-        simple_uppercase_mapping: Field(c.field("simple_uppercase_mapping")),
-        simple_lowercase_mapping: Field(c.field("simple_lowercase_mapping")),
-        simple_titlecase_mapping: Field(c.field("simple_titlecase_mapping")),
-    };
-}
-
-pub fn CaseFolding(comptime c: config.Table) type {
-    return struct {
-        case_folding_simple: Field(c.field("case_folding_simple")),
-        case_folding_turkish: Field(c.field("case_folding_turkish")),
-        case_folding_full: Field(c.field("case_folding_full")),
-    };
-}
-
-pub fn SpecialCasing(comptime c: config.Table) type {
-    return struct {
-        special_lowercase_mapping: Field(c.field("special_lowercase_mapping")),
-        special_titlecase_mapping: Field(c.field("special_titlecase_mapping")),
-        special_uppercase_mapping: Field(c.field("special_uppercase_mapping")),
-        special_casing_condition: Field(c.field("special_casing_condition")),
-    };
-}
-
 pub const DerivedCoreProperties = struct {
     is_math: bool = false,
     is_alphabetic: bool = false,
@@ -564,7 +527,7 @@ pub const EmojiData = struct {
     is_extended_pictographic: bool = false,
 };
 
-fn Field(c: config.Field) type {
+pub fn Field(c: config.Field) type {
     return switch (c.kind()) {
         .var_len => VarLen(c),
         .shift => Shift(c),
@@ -573,110 +536,10 @@ fn Field(c: config.Field) type {
     };
 }
 
-pub fn AllData(comptime c: config.Table) type {
-    var fields_len_bound: usize = c.fields.len;
-    for (c.extensions) |x| {
-        fields_len_bound += x.inputs.len;
-        fields_len_bound += x.fields.len;
-    }
-    var fields: [fields_len_bound]std.builtin.Type.StructField = undefined;
-    var x_fields: [fields_len_bound]config.Field = undefined;
-    var i: usize = 0;
-
-    // Add extension fields:
-    for (c.extensions) |x| {
-        for (x.fields) |xf| {
-            for (fields[0..i]) |existing| {
-                if (std.mem.eql(u8, existing.name, xf.name)) {
-                    @compileError("Extension field '" ++ xf.name ++ "' already exists in table");
-                }
-            }
-
-            x_fields[i] = xf;
-            fields[i] = .{
-                .name = xf.name,
-                .type = Field(xf),
-                .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = 0, // Required for packed structs
-            };
-            i += 1;
-        }
-    }
-
-    const extension_fields_len = i;
-
-    for (c.fields, 0..) |cf, c_i| {
-        const F = Field(cf);
-
-        for (c.fields[0..c_i]) |existing| {
-            if (std.mem.eql(u8, existing.name, cf.name)) {
-                @compileError("Field '" ++ cf.name ++ "' already exists in table");
-            }
-        }
-
-        // If a field isn't in `default` it's an extension field, which
-        // should've been added above.
-        if (!config.default.hasField(cf.name)) {
-            const x_field: ?config.Field = for (x_fields[0..extension_fields_len]) |xf| {
-                if (std.mem.eql(u8, xf.name, cf.name)) break xf;
-            } else null;
-
-            if (x_field) |xf| {
-                if (!xf.eql(cf)) {
-                    @compileError("Table field '" ++ cf.name ++ "' does not match the field in the extension");
-                }
-            } else {
-                @compileError("Table field '" ++ cf.name ++ "' not found in any of the table's extensions");
-            }
-
-            continue;
-        }
-
-        fields[i] = .{
-            .name = cf.name,
-            .type = F,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = 0, // Required for packed structs
-        };
-        i += 1;
-    }
-
-    // Add extension inputs:
-    for (c.extensions) |x| {
-        loop_inputs: for (x.inputs) |input| {
-            for (fields[0..i]) |existing| {
-                if (std.mem.eql(u8, existing.name, input)) {
-                    continue :loop_inputs;
-                }
-            }
-
-            fields[i] = .{
-                .name = input,
-                .type = Field(config.default.field(input)),
-                .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = 0, // Required for packed structs
-            };
-            i += 1;
-        }
-    }
-
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = fields[0..i],
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
-}
-
 pub fn Table(comptime c: config.Table) type {
     @setEvalBranchQuota(10_000);
     var data_fields: [c.fields.len + 1]std.builtin.Type.StructField = undefined;
-    var backing_arrays: [c.fields.len]std.builtin.Type.StructField = undefined;
+    var backing_buffers: [c.fields.len]std.builtin.Type.StructField = undefined;
     var backing_len: usize = 0;
     var data_bit_size: usize = 0;
 
@@ -684,12 +547,12 @@ pub fn Table(comptime c: config.Table) type {
         const F = Field(cf);
 
         if (cf.kind() == .var_len) {
-            backing_arrays[backing_len] = .{
+            backing_buffers[backing_len] = .{
                 .name = cf.name,
-                .type = F.BackingArray,
+                .type = F.BackingBuffer,
                 .default_value_ptr = null,
                 .is_comptime = false,
-                .alignment = @alignOf(F.BackingArray),
+                .alignment = @alignOf(F.BackingBuffer),
             };
             backing_len += 1;
         }
@@ -739,10 +602,10 @@ pub fn Table(comptime c: config.Table) type {
         },
     });
 
-    const BackingArrays = @Type(.{
+    const BackingBuffers = @Type(.{
         .@"struct" = .{
             .layout = .auto,
-            .fields = backing_arrays[0..backing_len],
+            .fields = backing_buffers[0..backing_len],
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },
@@ -758,10 +621,10 @@ pub fn Table(comptime c: config.Table) type {
         },
         .{
             .name = "backing",
-            .type = BackingArrays,
+            .type = BackingBuffers,
             .default_value_ptr = null,
             .is_comptime = false,
-            .alignment = @alignOf(BackingArrays),
+            .alignment = @alignOf(BackingBuffers),
         },
         .{
             .name = "data",
@@ -889,44 +752,135 @@ pub fn VarLen(
 
     return packed struct {
         data: packed union {
-            embedded: EmbeddedArray,
             offset: Offset,
+            embedded: EmbeddedArray,
+            shift: ShiftSingleItem,
         },
         len: Len,
 
         const Self = @This();
         pub const T = @typeInfo(c.type).pointer.child;
-        const EmbeddedArray = PackedArray(T, embedded_len);
         pub const Offset = std.math.IntFittingRange(0, max_offset);
-        const Len = std.math.IntFittingRange(0, max_len);
+        const EmbeddedArray = PackedArray(T, embedded_len);
+        const ShiftSingleItem = if (c.cp_packing == .shift_single_item) Shift(c) else void;
+
+        const len_sentinel_offset = @intFromBool(c.cp_packing == .sentinel_for_eql);
+        const Len = std.math.IntFittingRange(0, max_len + len_sentinel_offset);
 
         pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
+        pub const sentinel_for_eql_cp = max_len + 1;
+        pub const eql_cp = if (c.cp_packing == .sentinel_for_eql)
+            Self{ .len = sentinel_for_eql_cp, .data = .{ .offset = 0 } }
+        else
+            void{};
 
-        pub const BufferForEmbedded = [embedded_len]T;
-        pub const BackingArray = std.BoundedArray(T, max_offset);
-        pub const OffsetMap = SliceMap(T, Offset);
-        pub const LenTracking: type = [max_len]Offset;
+        const buffer_for_embedded_len = @max(
+            embedded_len,
+            @intFromBool(c.cp_packing == .sentinel_for_eql or c.cp_packing == .shift_single_item),
+        );
+        pub const BufferForEmbedded = [buffer_for_embedded_len]T;
+        pub const BackingBuffer = [max_offset]T;
 
-        pub fn fromSlice(
+        pub const Tracking = struct {
+            max_offset: usize = 0,
+            offset_map: SliceMap(T, Offset) = .empty,
+            len_counts: [max_len]Offset = [_]Offset{0} ** max_len,
+            shift: ShiftTracking = .{},
+
+            pub fn deinit(self: *Tracking, allocator: std.mem.Allocator) void {
+                self.offset_map.deinit(allocator);
+            }
+
+            pub fn actualConfig(
+                self: *const Tracking,
+            ) config.Field.Runtime {
+                var i = max_len;
+                while (i != 0) {
+                    i -= 1;
+                    if (self.len_counts[i] != 0) {
+                        break;
+                    }
+                } else return c.runtime(.{
+                    .max_len = 0,
+                    .max_offset = 0,
+                    .embedded_len = 0,
+                });
+
+                return c.runtime(.{
+                    .shift_low = self.shift.shift_low,
+                    .shift_high = self.shift.shift_high,
+                    .max_len = i + 1,
+                    .max_offset = self.max_offset,
+                });
+            }
+
+            pub fn minBitsConfig(self: *const Tracking) config.Field.Runtime {
+                if (comptime embedded_len != 0) {
+                    @compileError("embedded_len != 0 is not supported for minBitsConfig");
+                }
+
+                const actual = self.actualConfig();
+                if (actual.max_len == 0) {
+                    return actual;
+                }
+
+                const item_bits = @bitSizeOf(T);
+                var best_embedded_len: usize = actual.max_len;
+                var best_max_offset: usize = 0;
+                var best_bits = best_embedded_len * item_bits;
+                var current_max_offset: usize = 0;
+
+                var i: usize = actual.max_len;
+                while (i != 0) {
+                    i -= 1;
+                    current_max_offset += (i + 1) * self.len_counts[i];
+
+                    const embedded_bits = i * item_bits;
+
+                    // We do over-estimate the max offset a bit by taking the
+                    // offset _after_ the last item, since we don't know what the
+                    // last item will be. This simplifies creating backing arrays
+                    // of length `max_offset`.
+                    const offset_bits = std.math.log2_int(usize, current_max_offset);
+                    const bits = @max(offset_bits, embedded_bits);
+
+                    if (bits < best_bits or (bits == best_bits and current_max_offset <= best_max_offset)) {
+                        best_embedded_len = i;
+                        best_max_offset = current_max_offset;
+                        best_bits = bits;
+                    }
+                }
+
+                std.debug.assert(current_max_offset == self.max_offset);
+
+                return c.runtime(.{
+                    .shift_low = actual.shift_low,
+                    .shift_high = actual.shift_high,
+                    .max_len = actual.max_len,
+                    .max_offset = best_max_offset,
+                    .embedded_len = best_embedded_len,
+                });
+            }
+        };
+
+        inline fn _fromSlice(
             allocator: std.mem.Allocator,
-            backing: *BackingArray,
-            map: *OffsetMap,
-            len_tracking: *LenTracking,
+            backing: *BackingBuffer,
+            tracking: *Tracking,
             s: []const T,
         ) !Self {
-            const len: Len = @intCast(s.len);
-
             if (comptime embedded_len == 0 and max_offset == 0) {
                 return .empty;
             } else if ((comptime embedded_len == max_len) or s.len <= embedded_len) {
                 return .{
-                    .len = len,
+                    .len = @intCast(s.len),
                     .data = .{
                         .embedded = EmbeddedArray.fromSlice(s),
                     },
                 };
             } else {
-                const gop = try map.getOrPut(allocator, s);
+                const len: Len = @intCast(s.len);
+                const gop = try tracking.offset_map.getOrPut(allocator, s);
                 if (gop.found_existing) {
                     return .{
                         .len = len,
@@ -936,11 +890,12 @@ pub fn VarLen(
                     };
                 }
 
-                const offset: Offset = @intCast(backing.len);
+                const offset: Offset = @intCast(tracking.max_offset);
                 gop.value_ptr.* = offset;
-                backing.appendSliceAssumeCapacity(s);
-                gop.key_ptr.* = backing.buffer[offset .. offset + s.len];
-                len_tracking[s.len - 1] += 1;
+                @memcpy(backing[offset .. offset + s.len], s);
+                gop.key_ptr.* = backing[offset .. offset + s.len];
+                tracking.len_counts[s.len - 1] += 1;
+                tracking.max_offset += s.len;
 
                 return .{
                     .len = len,
@@ -951,7 +906,48 @@ pub fn VarLen(
             }
         }
 
-        pub fn slice(
+        pub fn fromSlice(
+            allocator: std.mem.Allocator,
+            backing: *BackingBuffer,
+            tracking: *Tracking,
+            s: []const T,
+        ) !Self {
+            if (c.cp_packing != .direct) {
+                @compileError("fromSlice is only supported for direct packing: use sliceFor instead");
+            }
+
+            return ._fromSlice(allocator, backing, tracking, s);
+        }
+
+        pub fn fromSliceFor(
+            allocator: std.mem.Allocator,
+            backing: *BackingBuffer,
+            tracking: *Tracking,
+            cp: u21,
+            s: []const T,
+        ) !Self {
+            if (s.len == 1) {
+                tracking.shift.track(cp, s[0]);
+            }
+
+            if (c.cp_packing == .shift_single_item and s.len == 1) {
+                return .{
+                    .len = 1,
+                    .data = .{
+                        .shift = .initUntracked(cp, s[0]),
+                    },
+                };
+            } else if (c.cp_packing == .sentinel_for_eql and
+                s.len == 1 and
+                s[0] == cp)
+            {
+                return .eql_cp;
+            } else {
+                return ._fromSlice(allocator, backing, tracking, s);
+            }
+        }
+
+        inline fn _slice(
             self: *const Self,
             buffer_for_embedded: []T,
         ) []const T {
@@ -964,11 +960,47 @@ pub fn VarLen(
             if (comptime embedded_len == max_len) {
                 return self.data.embedded.slice(buffer_for_embedded, self.len);
             } else if (comptime embedded_len == 0) {
-                return backing.constSlice()[self.data.offset .. self.data.offset + self.len];
+                return backing[self.data.offset .. @as(usize, self.data.offset) + @as(usize, self.len)];
             } else if (self.len <= embedded_len) {
                 return self.data.embedded.slice(buffer_for_embedded, self.len);
             } else {
-                return backing.constSlice()[self.data.offset .. self.data.offset + self.len];
+                return backing[self.data.offset .. @as(usize, self.data.offset) + @as(usize, self.len)];
+            }
+        }
+
+        pub fn slice(self: *const Self, buffer_for_embedded: []T) []const T {
+            if (c.cp_packing != .direct) {
+                @compileError("slice is only supported for direct packing: use sliceFor instead");
+            }
+
+            return self._slice(buffer_for_embedded);
+        }
+
+        pub fn sliceFor(
+            self: *const Self,
+            cp: u21,
+            buffer_for_embedded: []T,
+        ) []const T {
+            switch (c.cp_packing) {
+                .sentinel_for_eql => {
+                    if (self.len == sentinel_for_eql_cp) {
+                        buffer_for_embedded[0] = cp;
+                        return buffer_for_embedded[0..1];
+                    } else {
+                        return self._slice(buffer_for_embedded);
+                    }
+                },
+                .shift_single_item => {
+                    if (self.len == 1) {
+                        buffer_for_embedded[0] = self.data.shift.value(cp);
+                        return buffer_for_embedded[0..1];
+                    } else {
+                        return self._slice(buffer_for_embedded);
+                    }
+                },
+                else => {
+                    @compileError("sliceFor can only be called when cp_packing is .sentinel_for_eql or .shift_single_item");
+                },
             }
         }
 
@@ -986,81 +1018,19 @@ pub fn VarLen(
                 return std.hash.autoHash(hasher, self.data.offset);
             }
         }
-
-        pub fn minBitsConfig(
-            backing: *BackingArray,
-            len_tracking: *LenTracking,
-        ) config.Field.Runtime {
-            if (comptime embedded_len != 0) {
-                @compileError("embedded_len != 0 is not supported for minBitsConfig");
-            }
-
-            var i = max_len;
-            while (i != 0) {
-                i -= 1;
-                if (len_tracking[i] != 0) {
-                    break;
-                }
-            } else return c.runtime(.{
-                .max_len = 0,
-                .max_offset = 0,
-                .embedded_len = 0,
-            });
-
-            const actual_max_len = i + 1;
-            const item_bits = @bitSizeOf(T);
-            var best_embedded_len: usize = actual_max_len;
-            var best_max_offset: usize = 0;
-            var best_bits = best_embedded_len * item_bits;
-            var current_max_offset: usize = 0;
-
-            i += 1;
-            while (i != 0) {
-                i -= 1;
-                current_max_offset += (i + 1) * len_tracking[i];
-
-                const embedded_bits = i * item_bits;
-
-                // We do over-estimate the max offset a bit by taking the
-                // offset _after_ the last item, since we don't know what the
-                // last item will be. This simplifies creating backing arrays
-                // of length `max_offset`.
-                const offset_bits = std.math.log2_int(usize, current_max_offset);
-                const bits = @max(offset_bits, embedded_bits);
-
-                if (bits < best_bits or (bits == best_bits and current_max_offset <= best_max_offset)) {
-                    best_embedded_len = i;
-                    best_max_offset = current_max_offset;
-                    best_bits = bits;
-                }
-            }
-
-            std.debug.assert(current_max_offset == backing.len);
-
-            return c.runtime(.{
-                .max_len = actual_max_len,
-                .max_offset = best_max_offset,
-                .embedded_len = best_embedded_len,
-            });
-        }
     };
 }
 
 pub const ShiftTracking = struct {
-    max_shift_down: u21 = 0,
-    max_shift_up: u21 = 0,
+    shift_low: isize = 0,
+    shift_high: isize = 0,
 
-    pub fn track(tracking: *ShiftTracking, cp: u21, d: u21) void {
-        if (cp < d) {
-            const shift = d - cp;
-            if (tracking.max_shift_up < shift) {
-                tracking.max_shift_up = shift;
-            }
-        } else if (cp > d) {
-            const shift = cp - d;
-            if (tracking.max_shift_down < shift) {
-                tracking.max_shift_down = shift;
-            }
+    pub fn track(self: *ShiftTracking, cp: u21, d: u21) void {
+        const shift = @as(isize, d) - @as(isize, cp);
+        if (self.shift_high < shift) {
+            self.shift_high = shift;
+        } else if (shift < self.shift_low) {
+            self.shift_low = shift;
         }
     }
 };
@@ -1115,7 +1085,17 @@ pub fn Optional(comptime c: config.Field) type {
 }
 
 pub fn Shift(comptime c: config.Field) type {
-    const invert_shift = c.max_shift_up == 0;
+    const is_optional_ = c.kind() == .shift and @typeInfo(c.type) == .optional;
+
+    if (c.kind() == .shift and !((is_optional_ and @typeInfo(c.type).optional.child == u21) or
+        c.type == u21))
+    {
+        @compileError("Shift field '" ++ c.name ++ "' must be type u21 or ?u21");
+    }
+
+    if (c.kind() == .var_len and @typeInfo(c.type).pointer.child != u21) {
+        @compileError("VarLen field '" ++ c.name ++ "' must be type []const u21");
+    }
 
     return packed struct {
         data: Int,
@@ -1123,46 +1103,60 @@ pub fn Shift(comptime c: config.Field) type {
         const Self = @This();
 
         pub const T = u21;
-        pub const is_optional = @typeInfo(c.type) == .optional;
-
+        pub const is_optional = is_optional_;
         const is_optional_offset: isize = @intFromBool(is_optional);
-        const from = if (invert_shift) 0 else -@as(isize, c.max_shift_down);
-        const to = (if (invert_shift) c.max_shift_down else c.max_shift_up) + is_optional_offset;
-        const Int = std.math.IntFittingRange(from, to);
+        const max = c.shift_high + is_optional_offset;
+        const Int = std.math.IntFittingRange(c.shift_low, max);
 
         // Only valid if `is_optional`
-        const null_data: Int = @intCast(to);
+        const null_data = std.math.maxInt(Int);
         pub const @"null" = Self{ .data = null_data };
 
         pub const no_shift = Self{ .data = 0 };
 
-        pub fn init(cp: u21, d: u21) Self {
-            if (comptime invert_shift) {
-                return Self{ .data = cp - d };
-            } else {
-                return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
+        pub const Tracking = struct {
+            shift: ShiftTracking = .{},
+
+            pub fn deinit(self: *Tracking, allocator: std.mem.Allocator) void {
+                _ = self;
+                _ = allocator;
             }
+
+            fn track(self: *Tracking, cp: u21, d: u21) void {
+                self.shift.track(cp, d);
+            }
+
+            pub fn actualConfig(self: *const Tracking) config.Field.Runtime {
+                return c.runtime(.{
+                    .shift_low = self.shift.shift_low,
+                    .shift_high = self.shift.shift_high,
+                });
+            }
+
+            pub fn minBitsConfig(self: *const Tracking) config.Field.Runtime {
+                return self.actualConfig();
+            }
+        };
+
+        pub fn initUntracked(cp: u21, d: u21) Self {
+            return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
         }
 
-        pub fn initTracked(cp: u21, d: u21, tracking: *ShiftTracking) Self {
+        pub fn init(tracking: *Tracking, cp: u21, d: u21) Self {
             tracking.track(cp, d);
-            return .init(cp, d);
+            return .initUntracked(cp, d);
         }
 
-        pub fn initOptionalTracked(cp: u21, o: ?u21, tracking: *ShiftTracking) Self {
+        pub fn initOptional(tracking: *Tracking, cp: u21, o: ?u21) Self {
             if (o) |d| {
-                return .initTracked(cp, d, tracking);
+                return .init(tracking, cp, d);
             } else {
                 return .null;
             }
         }
 
         pub fn value(self: Self, cp: u21) u21 {
-            if (comptime invert_shift) {
-                return cp - self.data;
-            } else {
-                return @intCast(@as(isize, cp) + @as(isize, self.data));
-            }
+            return @intCast(@as(isize, cp) + @as(isize, self.data));
         }
 
         pub fn optional(self: Self, cp: u21) ?u21 {
@@ -1171,15 +1165,6 @@ pub fn Shift(comptime c: config.Field) type {
             } else {
                 return self.value(cp);
             }
-        }
-
-        pub fn minBitsConfig(
-            shift_tracking: *ShiftTracking,
-        ) config.Field.Runtime {
-            return c.runtime(.{
-                .max_shift_down = shift_tracking.max_shift_down,
-                .max_shift_up = shift_tracking.max_shift_up,
-            });
         }
     };
 }

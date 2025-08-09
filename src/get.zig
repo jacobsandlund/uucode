@@ -13,6 +13,7 @@ fn DataFor(comptime table: anytype) type {
 
 fn TableFor(comptime field: []const u8) type {
     for (tables) |table| {
+        //@compileLog("Checking table: " ++ table.name);
         if (@hasField(DataFor(table), field)) {
             return @TypeOf(table);
         }
