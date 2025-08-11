@@ -7,8 +7,7 @@ pub const std_options: std.Options = .{
     .log_level = .debug,
 };
 
-// Needs about 149 MB normally but ? MB when `is_updating_ucd`
-const buffer_size = 200_000_000;
+const buffer_size = 150_000_000; // Actual is ~149 MiB
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
@@ -495,21 +494,13 @@ pub fn writeTable(
                         cp,
                         cf.case_folding_full_only,
                     );
-                } else if (cf.case_folding_common_only) |c| {
-                    a.case_folding_full = try .fromSliceFor(
-                        allocator,
-                        &backing.case_folding_full,
-                        &tracking.case_folding_full,
-                        cp,
-                        &.{c},
-                    );
                 } else {
                     a.case_folding_full = try .fromSliceFor(
                         allocator,
                         &backing.case_folding_full,
                         &tracking.case_folding_full,
                         cp,
-                        &.{cp},
+                        &.{cf.case_folding_common_only orelse cp},
                     );
                 }
             } else {
@@ -566,6 +557,8 @@ pub fn writeTable(
                         cp,
                         &.{s},
                     );
+                } else {
+                    a.case_folding_simple_only = .empty;
                 }
             } else {
                 a.case_folding_simple_only = .empty;
@@ -640,13 +633,18 @@ pub fn writeTable(
 
         // Case mappings
         if (@hasField(AllData, "lowercase_mapping")) {
-            if (special_casing) |sc| {
+            const use_special = if (special_casing) |sc|
+                sc.special_casing_condition.len == 0
+            else
+                false;
+
+            if (use_special) {
                 a.lowercase_mapping = try .fromSliceFor(
                     allocator,
                     &backing.lowercase_mapping,
                     &tracking.lowercase_mapping,
                     cp,
-                    sc.special_lowercase_mapping,
+                    special_casing.?.special_lowercase_mapping,
                 );
             } else {
                 a.lowercase_mapping = try .fromSliceFor(
@@ -660,13 +658,18 @@ pub fn writeTable(
         }
 
         if (@hasField(AllData, "titlecase_mapping")) {
-            if (special_casing) |sc| {
+            const use_special = if (special_casing) |sc|
+                sc.special_casing_condition.len == 0
+            else
+                false;
+
+            if (use_special) {
                 a.titlecase_mapping = try .fromSliceFor(
                     allocator,
                     &backing.titlecase_mapping,
                     &tracking.titlecase_mapping,
                     cp,
-                    sc.special_titlecase_mapping,
+                    special_casing.?.special_titlecase_mapping,
                 );
             } else {
                 a.titlecase_mapping = try .fromSliceFor(
@@ -680,13 +683,18 @@ pub fn writeTable(
         }
 
         if (@hasField(AllData, "uppercase_mapping")) {
-            if (special_casing) |sc| {
+            const use_special = if (special_casing) |sc|
+                sc.special_casing_condition.len == 0
+            else
+                false;
+
+            if (use_special) {
                 a.uppercase_mapping = try .fromSliceFor(
                     allocator,
                     &backing.uppercase_mapping,
                     &tracking.uppercase_mapping,
                     cp,
-                    sc.special_uppercase_mapping,
+                    special_casing.?.special_uppercase_mapping,
                 );
             } else {
                 a.uppercase_mapping = try .fromSliceFor(
@@ -891,14 +899,14 @@ pub fn writeTable(
             const t = @field(tracking, f.name);
             if (config.is_updating_ucd) {
                 const min_config = t.minBitsConfig();
-                if (!config.default.field(f.name).eql(min_config)) {
-                    const w = try std.io.getStdErr().writer();
+                if (!config.default.field(f.name).runtime(.{}).eql(min_config)) {
+                    const w = std.io.getStdErr().writer();
                     try w.writeAll(
                         \\
-                        \\ Update default config in `config.zig` with the correct field config:
+                        \\Update default config in `config.zig` with the correct field config:
                         \\
                     );
-                    min_config.write(w);
+                    try min_config.write(w);
                 }
             } else {
                 if (!f.runtime(.{}).compareActual(t.actualConfig())) {

@@ -4,6 +4,7 @@ const types = @import("types.zig");
 pub const max_code_point: u21 = 0x10FFFF;
 pub const code_point_range_end: u21 = max_code_point + 1;
 
+// TODO: figure out why it takes so long to compile with this on.
 pub const is_updating_ucd = false;
 
 pub const Field = struct {
@@ -81,7 +82,10 @@ pub const Field = struct {
                 \\    .type = {s},
                 \\
             , .{ self.name, self.type });
-            if (self.cp_packing != .direct) {
+            if (self.cp_packing != .direct or
+                self.shift_low != 0 or
+                self.shift_high != 0)
+            {
                 try writer.print(
                     \\    .cp_packing = .{s},
                     \\    .shift_low = {},
@@ -230,6 +234,8 @@ pub const Table = struct {
     }
 
     pub fn field(comptime self: *const Table, name: []const u8) Field {
+        @setEvalBranchQuota(20_000);
+
         return for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
                 break f;
@@ -261,7 +267,7 @@ pub const default = Table{
             .name = "name",
             .type = []const u8,
             .max_len = 88,
-            .max_offset = 1031029,
+            .max_offset = 1030461,
             .embedded_len = 2,
         },
         .{ .name = "general_category", .type = types.GeneralCategory },
@@ -271,8 +277,11 @@ pub const default = Table{
         .{
             .name = "decomposition_mapping",
             .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = -181519,
+            .shift_high = 99324,
             .max_len = 18,
-            .max_offset = 6454,
+            .max_offset = 4602,
             .embedded_len = 0,
         },
         .{ .name = "numeric_type", .type = types.NumericType },
@@ -326,29 +335,41 @@ pub const default = Table{
         .{
             .name = "case_folding_full",
             .type = []const u21,
-            .max_len = 3,
-            .max_offset = 160,
-            .embedded_len = 0,
             .cp_packing = .shift_single_item,
             .shift_low = -42561,
             .shift_high = 35267,
+            .max_len = 3,
+            .max_offset = 160,
+            .embedded_len = 0,
         },
         .{
             .name = "case_folding_turkish_only",
             .type = []const u21,
+            .cp_packing = .direct,
+            .shift_low = -199,
+            .shift_high = 232,
             .max_len = 1,
+            .max_offset = 2,
             .embedded_len = 0,
         },
         .{
             .name = "case_folding_common_only",
             .type = []const u21,
+            .cp_packing = .direct,
+            .shift_low = -42561,
+            .shift_high = 35267,
             .max_len = 1,
+            .max_offset = 1423,
             .embedded_len = 0,
         },
         .{
             .name = "case_folding_simple_only",
             .type = []const u21,
+            .cp_packing = .direct,
+            .shift_low = -7615,
+            .shift_high = 1,
             .max_len = 1,
+            .max_offset = 31,
             .embedded_len = 0,
         },
         .{
@@ -374,91 +395,61 @@ pub const default = Table{
             .name = "special_titlecase_mapping",
             .type = []const u21,
             .cp_packing = .shift_single_item,
-            .shift_low = -199,
-            .shift_high = 232,
+            .shift_low = 0,
+            .shift_high = 199,
             .max_len = 3,
-            .max_offset = 140,
+            .max_offset = 104,
             .embedded_len = 0,
         },
         .{
             .name = "special_uppercase_mapping",
             .type = []const u21,
             .cp_packing = .shift_single_item,
-            .shift_low = -199,
-            .shift_high = 232,
+            .shift_low = 0,
+            .shift_high = 199,
             .max_len = 3,
-            .max_offset = 167,
+            .max_offset = 158,
             .embedded_len = 0,
         },
         .{
             .name = "special_casing_condition",
             .type = []const types.SpecialCasingCondition,
             .max_len = 2,
-            .max_offset = 6,
-            .embedded_len = 1,
+            .max_offset = 9,
+            .embedded_len = 0,
         },
 
-        // Case mappings
+        //// Case mappings
         .{
             .name = "lowercase_mapping",
             .type = []const u21,
-            .max_len = 3,
-            .max_offset = 160,
-            .embedded_len = 0,
             .cp_packing = .shift_single_item,
             .shift_low = -42561,
-            .shift_high = 42561,
-        },
-        .{
-            .name = "uppercase_mapping",
-            .type = []const u21,
-            .max_len = 3,
-            .max_offset = 160,
+            .shift_high = 38864,
+            .max_len = 1,
+            .max_offset = 0,
             .embedded_len = 0,
-            .cp_packing = .shift_single_item,
-            .shift_low = -42561,
-            .shift_high = 42561,
         },
         .{
             .name = "titlecase_mapping",
             .type = []const u21,
-            .max_len = 3,
-            .max_offset = 160,
-            .embedded_len = 0,
             .cp_packing = .shift_single_item,
-            .shift_low = -42561,
+            .shift_low = -38864,
             .shift_high = 42561,
+            .max_len = 3,
+            .max_offset = 104,
+            .embedded_len = 0,
         },
-        //        .{
-        //            .name = "lowercase_conditional_mapping",
-        //            .type = []const u21,
-        //            .max_len = 3,
-        //            .max_offset = 160,
-        //            .embedded_len = 0,
-        //            .cp_packing = .shift_single_item,
-        //            .shift_low = -42561,
-        //            .shift_high = 42561,
-        //        },
-        //        .{
-        //            .name = "uppercase_conditional_mapping",
-        //            .type = []const u21,
-        //            .max_len = 3,
-        //            .max_offset = 160,
-        //            .embedded_len = 0,
-        //            .cp_packing = .shift_single_item,
-        //            .shift_low = -42561,
-        //            .shift_high = 42561,
-        //        },
-        //        .{
-        //            .name = "titlecase_conditional_mapping",
-        //            .type = []const u21,
-        //            .max_len = 3,
-        //            .max_offset = 160,
-        //            .embedded_len = 0,
-        //            .cp_packing = .shift_single_item,
-        //            .shift_low = -42561,
-        //            .shift_high = 42561,
-        //        },
+        .{
+            .name = "uppercase_mapping",
+            .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = -38864,
+            .shift_high = 42561,
+            .max_len = 3,
+            .max_offset = 158,
+            .embedded_len = 0,
+        },
 
         // DerivedCoreProperties fields
         .{ .name = "is_math", .type = bool },
@@ -513,19 +504,21 @@ const updating_ucd_fields = brk: {
     const var_len_or_shift_fields = [_]Field{
         default.field("name").override(.{
             .max_len = 200,
-            .max_offset = 2_000_000,
+            .max_offset = 1_500_000,
         }),
         default.field("decomposition_mapping").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
             .max_len = 40,
-            .max_offset = 16_000,
+            .max_offset = 8_000,
         }),
         default.field("numeric_value_numeric").override(.{
             .max_len = 30,
-            .max_offset = 4000,
+            .max_offset = 800,
         }),
         default.field("unicode_1_name").override(.{
             .max_len = 120,
-            .max_offset = 100_000,
+            .max_offset = 80_000,
         }),
         default.field("simple_uppercase_mapping").override(.{
             .shift_low = -@as(isize, max_code_point),
@@ -544,43 +537,65 @@ const updating_ucd_fields = brk: {
             .shift_high = max_code_point,
         }),
         default.field("case_folding_full").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
             .max_len = 9,
-            .max_offset = 500,
+            .max_offset = 200,
         }),
-        default.field("case_folding_turkish_only"),
-        default.field("case_folding_common_only"),
-        default.field("case_folding_simple_only"),
+        default.field("case_folding_turkish_only").override(.{
+            .max_offset = 20,
+        }),
+        default.field("case_folding_common_only").override(.{
+            .max_offset = 2_000,
+        }),
+        default.field("case_folding_simple_only").override(.{
+            .max_offset = 300,
+        }),
         default.field("case_folding_full_only").override(.{
             .max_len = 9,
             .max_offset = 500,
         }),
         default.field("special_lowercase_mapping").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
             .max_len = 9,
-            .max_offset = 1000,
+            .max_offset = 50,
         }),
         default.field("special_titlecase_mapping").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
             .max_len = 9,
-            .max_offset = 1000,
+            .max_offset = 200,
         }),
         default.field("special_uppercase_mapping").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
             .max_len = 9,
-            .max_offset = 1000,
+            .max_offset = 300,
         }),
         default.field("special_casing_condition").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
             .max_len = 9,
-            .max_offset = 500,
+            .max_offset = 50,
         }),
         default.field("lowercase_mapping").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
             .max_len = 9,
-            .max_offset = 500,
+            .max_offset = 100,
         }),
         default.field("titlecase_mapping").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
             .max_len = 9,
-            .max_offset = 500,
+            .max_offset = 200,
         }),
         default.field("uppercase_mapping").override(.{
+            .shift_low = -@as(isize, max_code_point),
+            .shift_high = max_code_point,
             .max_len = 9,
-            .max_offset = 500,
+            .max_offset = 300,
         }),
     };
 

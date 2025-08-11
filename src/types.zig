@@ -750,6 +750,12 @@ pub fn VarLen(
         @compileError("VarLen with max_len == 0 is not supported due to Zig compiler bug");
     }
 
+    if (max_offset == 0 and !(embedded_len == max_len or
+        (max_len == 1 and c.cp_packing == .shift_single_item)))
+    {
+        @compileError("VarLen with max_offset == 0 is only supported if embedded_len is max_len, or max_len is 1 with shift_single_item");
+    }
+
     return packed struct {
         data: packed union {
             offset: Offset,
@@ -764,8 +770,10 @@ pub fn VarLen(
         const EmbeddedArray = PackedArray(T, embedded_len);
         const ShiftSingleItem = if (c.cp_packing == .shift_single_item) Shift(c) else void;
 
-        const len_sentinel_offset = @intFromBool(c.cp_packing == .sentinel_for_eql);
-        const Len = std.math.IntFittingRange(0, max_len + len_sentinel_offset);
+        const Len = std.math.IntFittingRange(
+            0,
+            max_len + @intFromBool(c.cp_packing == .sentinel_for_eql),
+        );
 
         pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
         pub const sentinel_for_eql_cp = max_len + 1;
@@ -774,17 +782,19 @@ pub fn VarLen(
         else
             void{};
 
-        const buffer_for_embedded_len = @max(
-            embedded_len,
-            @intFromBool(c.cp_packing == .sentinel_for_eql or c.cp_packing == .shift_single_item),
-        );
-        pub const BufferForEmbedded = [buffer_for_embedded_len]T;
+        pub const BufferForEmbedded = [
+            @max(
+                embedded_len,
+                @intFromBool(c.cp_packing == .sentinel_for_eql or c.cp_packing == .shift_single_item),
+            )
+        ]T;
+
         pub const BackingBuffer = [max_offset]T;
 
         pub const Tracking = struct {
             max_offset: usize = 0,
             offset_map: SliceMap(T, Offset) = .empty,
-            len_counts: [max_len]Offset = [_]Offset{0} ** max_len,
+            len_counts: [max_len]usize = [_]usize{0} ** max_len,
             shift: ShiftTracking = .{},
 
             pub fn deinit(self: *Tracking, allocator: std.mem.Allocator) void {
@@ -795,21 +805,16 @@ pub fn VarLen(
                 self: *const Tracking,
             ) config.Field.Runtime {
                 var i = max_len;
-                while (i != 0) {
-                    i -= 1;
-                    if (self.len_counts[i] != 0) {
-                        break;
+                const actual_max_len = while (i != 0) : (i -= 1) {
+                    if (self.len_counts[i - 1] != 0) {
+                        break i;
                     }
-                } else return c.runtime(.{
-                    .max_len = 0,
-                    .max_offset = 0,
-                    .embedded_len = 0,
-                });
+                } else (if (c.cp_packing == .shift_single_item) 1 else 0);
 
                 return c.runtime(.{
                     .shift_low = self.shift.shift_low,
                     .shift_high = self.shift.shift_high,
-                    .max_len = i + 1,
+                    .max_len = actual_max_len,
                     .max_offset = self.max_offset,
                 });
             }
@@ -820,7 +825,7 @@ pub fn VarLen(
                 }
 
                 const actual = self.actualConfig();
-                if (actual.max_len == 0) {
+                if (actual.max_len == 0 or actual.max_len == 1 and self.len_counts[0] == 0) {
                     return actual;
                 }
 
@@ -838,9 +843,9 @@ pub fn VarLen(
                     const embedded_bits = i * item_bits;
 
                     // We do over-estimate the max offset a bit by taking the
-                    // offset _after_ the last item, since we don't know what the
-                    // last item will be. This simplifies creating backing arrays
-                    // of length `max_offset`.
+                    // offset _after_ the last item, since we don't know what
+                    // the last item will be. This simplifies creating backing
+                    // buffers of length `max_offset`.
                     const offset_bits = std.math.log2_int(usize, current_max_offset);
                     const bits = @max(offset_bits, embedded_bits);
 
@@ -863,7 +868,7 @@ pub fn VarLen(
             }
         };
 
-        inline fn _fromSlice(
+        fn _fromSlice(
             allocator: std.mem.Allocator,
             backing: *BackingBuffer,
             tracking: *Tracking,
@@ -947,7 +952,7 @@ pub fn VarLen(
             }
         }
 
-        inline fn _slice(
+        fn _slice(
             self: *const Self,
             buffer_for_embedded: []T,
         ) []const T {
@@ -1104,9 +1109,7 @@ pub fn Shift(comptime c: config.Field) type {
 
         pub const T = u21;
         pub const is_optional = is_optional_;
-        const is_optional_offset: isize = @intFromBool(is_optional);
-        const max = c.shift_high + is_optional_offset;
-        const Int = std.math.IntFittingRange(c.shift_low, max);
+        const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional));
 
         // Only valid if `is_optional`
         const null_data = std.math.maxInt(Int);

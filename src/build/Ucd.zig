@@ -6,6 +6,8 @@ const builtin = @import("builtin");
 const types = @import("types.zig");
 const config = @import("config.zig");
 
+// TODO: add a bool to use the previous value (range_data), then in
+// tables use the previou data.
 const UnicodeData = struct {
     name: []const u8,
     general_category: types.GeneralCategory,
