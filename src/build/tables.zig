@@ -222,78 +222,6 @@ fn TableAllData(comptime c: config.Table) type {
     });
 }
 
-fn TableBacking(
-    comptime AllData: type,
-) type {
-    var backing_fields_len: usize = 0;
-    for (@typeInfo(AllData).@"struct".fields) |f| {
-        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, "BackingBuffer")) {
-            backing_fields_len += 1;
-        }
-    }
-
-    var backing_fields: [backing_fields_len]std.builtin.Type.StructField = undefined;
-    var i: usize = 0;
-
-    for (@typeInfo(AllData).@"struct".fields) |f| {
-        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, "BackingBuffer")) {
-            backing_fields[i] = .{
-                .name = f.name,
-                .type = f.type.BackingBuffer,
-                .default_value_ptr = null, // TODO: can we set this?
-                .is_comptime = false,
-                .alignment = @alignOf(f.type.BackingBuffer),
-            };
-            i += 1;
-        }
-    }
-
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &backing_fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
-}
-
-fn TableTracking(
-    comptime AllData: type,
-) type {
-    var tracking_fields_len: usize = 0;
-    for (@typeInfo(AllData).@"struct".fields) |f| {
-        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, "Tracking")) {
-            tracking_fields_len += 1;
-        }
-    }
-
-    var tracking_fields: [tracking_fields_len]std.builtin.Type.StructField = undefined;
-    var i: usize = 0;
-
-    for (@typeInfo(AllData).@"struct".fields) |f| {
-        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, "Tracking")) {
-            tracking_fields[i] = .{
-                .name = f.name,
-                .type = f.type.Tracking,
-                .default_value_ptr = null, // TODO: can we set this?
-                .is_comptime = false,
-                .alignment = @alignOf(f.type.Tracking),
-            };
-            i += 1;
-        }
-    }
-
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &tracking_fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
-}
-
 fn singleInit(
     comptime field: []const u8,
     data: anytype,
@@ -333,8 +261,8 @@ pub fn writeTable(
     const Table = types.Table(table_config);
     const Data = @typeInfo(@FieldType(Table, "data")).array.child;
     const AllData = TableAllData(table_config);
-    const Backing = TableBacking(AllData);
-    const Tracking = TableTracking(AllData);
+    const Backing = types.StructFromDecls(AllData, "BackingBuffer");
+    const Tracking = types.StructFromDecls(AllData, "Tracking");
 
     var backing = blk: {
         const b: *Backing = try allocator.create(Backing);

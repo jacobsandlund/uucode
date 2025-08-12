@@ -539,23 +539,10 @@ pub fn Field(c: config.Field) type {
 pub fn Table(comptime c: config.Table) type {
     @setEvalBranchQuota(10_000);
     var data_fields: [c.fields.len + 1]std.builtin.Type.StructField = undefined;
-    var backing_buffers: [c.fields.len]std.builtin.Type.StructField = undefined;
-    var backing_len: usize = 0;
     var data_bit_size: usize = 0;
 
     for (c.fields, 0..) |cf, i| {
         const F = Field(cf);
-
-        if (cf.kind() == .var_len) {
-            backing_buffers[backing_len] = .{
-                .name = cf.name,
-                .type = F.BackingBuffer,
-                .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = @alignOf(F.BackingBuffer),
-            };
-            backing_len += 1;
-        }
 
         data_fields[i] = .{
             .name = cf.name,
@@ -602,14 +589,7 @@ pub fn Table(comptime c: config.Table) type {
         },
     });
 
-    const BackingBuffers = @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = backing_buffers[0..backing_len],
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
+    const BackingBuffers = StructFromDecls(Data, "BackingBuffer");
 
     var table_fields: [5]std.builtin.Type.StructField = .{
         .{
@@ -687,6 +667,41 @@ pub fn Table(comptime c: config.Table) type {
         .@"struct" = .{
             .layout = .auto,
             .fields = table_fields[0..table_fields_len],
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+
+pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
+    var decl_fields_len: usize = 0;
+    for (@typeInfo(Struct).@"struct".fields) |f| {
+        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, decl)) {
+            decl_fields_len += 1;
+        }
+    }
+
+    var decl_fields: [decl_fields_len]std.builtin.Type.StructField = undefined;
+    var i: usize = 0;
+
+    for (@typeInfo(Struct).@"struct".fields) |f| {
+        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, decl)) {
+            const T = @field(f.type, decl);
+            decl_fields[i] = .{
+                .name = f.name,
+                .type = T,
+                .default_value_ptr = null, // TODO: can we set this?
+                .is_comptime = false,
+                .alignment = @alignOf(T),
+            };
+            i += 1;
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = &decl_fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },
