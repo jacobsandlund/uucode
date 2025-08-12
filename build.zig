@@ -229,8 +229,10 @@ const test_build_config_zig =
     \\const config = @import("config.zig");
     \\const d = config.default;
     \\
-    \\fn computeFoo(cp: u21, data: anytype) void {
+    \\fn computeFoo(cp: u21, data: anytype, b: anytype, t: anytype) void {
     \\    _ = cp;
+    \\    _ = b;
+    \\    _ = t;
     \\    const foo: u8 = switch (data.grapheme_break) {
     \\        .other => 0,
     \\        .control => 3,

@@ -766,7 +766,7 @@ pub fn writeTable(
         }
 
         inline for (table_config.extensions) |extension| {
-            extension.compute(cp, &a);
+            extension.compute(cp, &a, &backing, &tracking);
         }
 
         prev = a;

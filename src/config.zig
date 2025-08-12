@@ -259,9 +259,13 @@ pub const Table = struct {
 pub const Extension = struct {
     inputs: []const [:0]const u8,
     fields: []const Field,
-    compute: *const fn (cp: u21, data: anytype) void,
 
-    // TODO: support computed types for VarLen and Shift with tracking
+    compute: *const fn (
+        cp: u21,
+        data: anytype,
+        backing: anytype,
+        tracking: anytype,
+    ) void,
 
     pub fn field(comptime self: *const Extension, name: []const u8) Field {
         return for (self.fields) |f| {
