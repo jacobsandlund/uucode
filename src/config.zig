@@ -5,7 +5,7 @@ pub const max_code_point: u21 = 0x10FFFF;
 pub const code_point_range_end: u21 = max_code_point + 1;
 
 // TODO: figure out why it takes so long to compile with this on.
-pub const is_updating_ucd = false;
+pub const is_updating_ucd = true;
 
 pub const Field = struct {
     name: [:0]const u8,
@@ -47,6 +47,25 @@ pub const Field = struct {
                 a.embedded_len == b.embedded_len and
                 std.mem.eql(u8, a.type, b.type) and
                 std.mem.eql(u8, a.name, b.name);
+        }
+
+        pub fn override(self: Runtime, overrides: anytype) Runtime {
+            var result: Runtime = .{
+                .name = self.name,
+                .type = self.type,
+                .cp_packing = self.cp_packing,
+                .shift_low = self.shift_low,
+                .shift_high = self.shift_high,
+                .max_len = self.max_len,
+                .max_offset = self.max_offset,
+                .embedded_len = self.embedded_len,
+            };
+
+            inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| {
+                @field(result, f.name) = @field(overrides, f.name);
+            }
+
+            return result;
         }
 
         pub fn compareActual(self: Runtime, actual: Runtime) bool {
@@ -143,8 +162,8 @@ pub const Field = struct {
         };
     }
 
-    pub fn runtime(self: Field, overrides: anytype) Runtime {
-        var result: Runtime = .{
+    pub fn runtime(self: Field) Runtime {
+        return .{
             .name = self.name,
             .type = @typeName(self.type),
             .cp_packing = self.cp_packing,
@@ -154,17 +173,11 @@ pub const Field = struct {
             .max_offset = self.max_offset,
             .embedded_len = self.embedded_len,
         };
-
-        inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| {
-            @field(result, f.name) = @field(overrides, f.name);
-        }
-
-        return result;
     }
 
     pub fn eql(a: Field, b: Field) bool {
         // Use runtime `eql` just to be lazy
-        return a.runtime(.{}).eql(b.runtime(.{}));
+        return a.runtime().eql(b.runtime());
     }
 
     pub fn override(self: Field, overrides: anytype) Field {

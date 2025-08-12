@@ -782,6 +782,8 @@ pub fn VarLen(
         else
             void{};
 
+        pub const Tracking = VarLenTracking(T, max_len);
+
         pub const BufferForEmbedded = [
             @max(
                 embedded_len,
@@ -790,83 +792,6 @@ pub fn VarLen(
         ]T;
 
         pub const BackingBuffer = [max_offset]T;
-
-        pub const Tracking = struct {
-            max_offset: usize = 0,
-            offset_map: SliceMap(T, Offset) = .empty,
-            len_counts: [max_len]usize = [_]usize{0} ** max_len,
-            shift: ShiftTracking = .{},
-
-            pub fn deinit(self: *Tracking, allocator: std.mem.Allocator) void {
-                self.offset_map.deinit(allocator);
-            }
-
-            pub fn actualConfig(
-                self: *const Tracking,
-            ) config.Field.Runtime {
-                var i = max_len;
-                const actual_max_len = while (i != 0) : (i -= 1) {
-                    if (self.len_counts[i - 1] != 0) {
-                        break i;
-                    }
-                } else (if (c.cp_packing == .shift_single_item) 1 else 0);
-
-                return c.runtime(.{
-                    .shift_low = self.shift.shift_low,
-                    .shift_high = self.shift.shift_high,
-                    .max_len = actual_max_len,
-                    .max_offset = self.max_offset,
-                });
-            }
-
-            pub fn minBitsConfig(self: *const Tracking) config.Field.Runtime {
-                if (comptime embedded_len != 0) {
-                    @compileError("embedded_len != 0 is not supported for minBitsConfig");
-                }
-
-                const actual = self.actualConfig();
-                if (actual.max_len == 0 or actual.max_len == 1 and self.len_counts[0] == 0) {
-                    return actual;
-                }
-
-                const item_bits = @bitSizeOf(T);
-                var best_embedded_len: usize = actual.max_len;
-                var best_max_offset: usize = 0;
-                var best_bits = best_embedded_len * item_bits;
-                var current_max_offset: usize = 0;
-
-                var i: usize = actual.max_len;
-                while (i != 0) {
-                    i -= 1;
-                    current_max_offset += (i + 1) * self.len_counts[i];
-
-                    const embedded_bits = i * item_bits;
-
-                    // We do over-estimate the max offset a bit by taking the
-                    // offset _after_ the last item, since we don't know what
-                    // the last item will be. This simplifies creating backing
-                    // buffers of length `max_offset`.
-                    const offset_bits = std.math.log2_int(usize, current_max_offset);
-                    const bits = @max(offset_bits, embedded_bits);
-
-                    if (bits < best_bits or (bits == best_bits and current_max_offset <= best_max_offset)) {
-                        best_embedded_len = i;
-                        best_max_offset = current_max_offset;
-                        best_bits = bits;
-                    }
-                }
-
-                std.debug.assert(current_max_offset == self.max_offset);
-
-                return c.runtime(.{
-                    .shift_low = actual.shift_low,
-                    .shift_high = actual.shift_high,
-                    .max_len = actual.max_len,
-                    .max_offset = best_max_offset,
-                    .embedded_len = best_embedded_len,
-                });
-            }
-        };
 
         fn _fromSlice(
             allocator: std.mem.Allocator,
@@ -890,12 +815,12 @@ pub fn VarLen(
                     return .{
                         .len = len,
                         .data = .{
-                            .offset = gop.value_ptr.*,
+                            .offset = @intCast(gop.value_ptr.*),
                         },
                     };
                 }
 
-                const offset: Offset = @intCast(tracking.max_offset);
+                const offset = tracking.max_offset;
                 gop.value_ptr.* = offset;
                 @memcpy(backing[offset .. offset + s.len], s);
                 gop.key_ptr.* = backing[offset .. offset + s.len];
@@ -905,7 +830,7 @@ pub fn VarLen(
                 return .{
                     .len = len,
                     .data = .{
-                        .offset = offset,
+                        .offset = @intCast(offset),
                     },
                 };
             }
@@ -1026,9 +951,99 @@ pub fn VarLen(
     };
 }
 
+pub fn VarLenTracking(comptime T: type, comptime max_len: usize) type {
+    return struct {
+        max_offset: usize = 0,
+        offset_map: SliceMap(T, usize) = .empty,
+        len_counts: [max_len]usize = [_]usize{0} ** max_len,
+        shift: ShiftTracking = .{},
+
+        const Self = @This();
+
+        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+            self.offset_map.deinit(allocator);
+        }
+
+        pub fn actualConfig(
+            self: *const Self,
+            c: config.Field.Runtime,
+        ) config.Field.Runtime {
+            var i = max_len;
+            const actual_max_len: usize = while (i != 0) : (i -= 1) {
+                if (self.len_counts[i - 1] != 0) {
+                    break i;
+                }
+            } else (if (c.cp_packing == .shift_single_item) 1 else 0);
+
+            return c.override(.{
+                .shift_low = self.shift.shift_low,
+                .shift_high = self.shift.shift_high,
+                .max_len = actual_max_len,
+                .max_offset = self.max_offset,
+            });
+        }
+
+        pub fn minBitsConfig(
+            self: *const Self,
+            c: config.Field.Runtime,
+        ) config.Field.Runtime {
+            if (c.embedded_len != 0) {
+                @panic("embedded_len != 0 is not supported for minBitsConfig");
+            }
+
+            const actual = self.actualConfig(c);
+            if (actual.max_len == 0 or actual.max_len == 1 and self.len_counts[0] == 0) {
+                return actual;
+            }
+
+            const item_bits = @bitSizeOf(T);
+            var best_embedded_len: usize = actual.max_len;
+            var best_max_offset: usize = 0;
+            var best_bits = best_embedded_len * item_bits;
+            var current_max_offset: usize = 0;
+
+            var i: usize = actual.max_len;
+            while (i != 0) {
+                i -= 1;
+                current_max_offset += (i + 1) * self.len_counts[i];
+
+                const embedded_bits = i * item_bits;
+
+                // We do over-estimate the max offset a bit by taking the
+                // offset _after_ the last item, since we don't know what
+                // the last item will be. This simplifies creating backing
+                // buffers of length `max_offset`.
+                const offset_bits = std.math.log2_int(usize, current_max_offset);
+                const bits = @max(offset_bits, embedded_bits);
+
+                if (bits < best_bits or (bits == best_bits and current_max_offset <= best_max_offset)) {
+                    best_embedded_len = i;
+                    best_max_offset = current_max_offset;
+                    best_bits = bits;
+                }
+            }
+
+            std.debug.assert(current_max_offset == self.max_offset);
+
+            return c.override(.{
+                .shift_low = actual.shift_low,
+                .shift_high = actual.shift_high,
+                .max_len = actual.max_len,
+                .max_offset = best_max_offset,
+                .embedded_len = best_embedded_len,
+            });
+        }
+    };
+}
+
 pub const ShiftTracking = struct {
     shift_low: isize = 0,
     shift_high: isize = 0,
+
+    pub fn deinit(self: *ShiftTracking, allocator: std.mem.Allocator) void {
+        _ = self;
+        _ = allocator;
+    }
 
     pub fn track(self: *ShiftTracking, cp: u21, d: u21) void {
         const shift = @as(isize, d) - @as(isize, cp);
@@ -1037,6 +1052,17 @@ pub const ShiftTracking = struct {
         } else if (shift < self.shift_low) {
             self.shift_low = shift;
         }
+    }
+
+    pub fn actualConfig(self: *const ShiftTracking, c: config.Field.Runtime) config.Field.Runtime {
+        return c.override(.{
+            .shift_low = self.shift_low,
+            .shift_high = self.shift_high,
+        });
+    }
+
+    pub fn minBitsConfig(self: *const ShiftTracking, c: config.Field.Runtime) config.Field.Runtime {
+        return self.actualConfig(c);
     }
 };
 
@@ -1111,35 +1137,13 @@ pub fn Shift(comptime c: config.Field) type {
         pub const is_optional = is_optional_;
         const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional));
 
+        pub const Tracking = ShiftTracking;
+
         // Only valid if `is_optional`
         const null_data = std.math.maxInt(Int);
         pub const @"null" = Self{ .data = null_data };
 
         pub const no_shift = Self{ .data = 0 };
-
-        pub const Tracking = struct {
-            shift: ShiftTracking = .{},
-
-            pub fn deinit(self: *Tracking, allocator: std.mem.Allocator) void {
-                _ = self;
-                _ = allocator;
-            }
-
-            fn track(self: *Tracking, cp: u21, d: u21) void {
-                self.shift.track(cp, d);
-            }
-
-            pub fn actualConfig(self: *const Tracking) config.Field.Runtime {
-                return c.runtime(.{
-                    .shift_low = self.shift.shift_low,
-                    .shift_high = self.shift.shift_high,
-                });
-            }
-
-            pub fn minBitsConfig(self: *const Tracking) config.Field.Runtime {
-                return self.actualConfig();
-            }
-        };
 
         pub fn initUntracked(cp: u21, d: u21) Self {
             return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };

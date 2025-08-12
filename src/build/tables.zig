@@ -898,8 +898,8 @@ pub fn writeTable(
         if (@hasField(Tracking, f.name)) {
             const t = @field(tracking, f.name);
             if (config.is_updating_ucd) {
-                const min_config = t.minBitsConfig();
-                if (!config.default.field(f.name).runtime(.{}).eql(min_config)) {
+                const min_config = t.minBitsConfig(f.runtime());
+                if (!config.default.field(f.name).runtime().eql(min_config)) {
                     const w = std.io.getStdErr().writer();
                     try w.writeAll(
                         \\
@@ -909,13 +909,14 @@ pub fn writeTable(
                     try min_config.write(w);
                 }
             } else {
-                if (!f.runtime(.{}).compareActual(t.actualConfig())) {
+                const r = f.runtime();
+                if (!r.compareActual(t.actualConfig(r))) {
                     all_fields_okay = false;
                 }
             }
         }
 
-        try f.runtime(.{}).write(writer);
+        try f.runtime().write(writer);
     }
 
     if (!all_fields_okay) {
