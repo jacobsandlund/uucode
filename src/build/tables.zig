@@ -74,6 +74,10 @@ pub fn main() !void {
 
     const total_end = try std.time.Instant.now();
     std.log.debug("Total time: {d}ms\n", .{total_end.since(total_start) / std.time.ns_per_ms});
+
+    if (config.is_updating_ucd) {
+        @panic("Updating Ucd -- tables not configured to actully run. flip `is_updating_ucd` to false and run again");
+    }
 }
 
 fn DataMap(comptime Data: type) type {
@@ -313,6 +317,7 @@ pub fn writeTable(
         const block_value = ucd.blocks.get(cp) orelse types.Block.no_block;
 
         var a: AllData = undefined;
+        var prev: AllData = undefined;
 
         // UnicodeData fields
         if (@hasField(AllData, "name")) {
@@ -764,6 +769,8 @@ pub fn writeTable(
             extension.compute(cp, &a);
         }
 
+        prev = a;
+
         var d: Data = undefined;
 
         const data_fields = @typeInfo(Data).@"struct".fields;
@@ -936,10 +943,6 @@ pub fn writeTable(
         \\    },
         \\
     );
-
-    if (config.is_updating_ucd) {
-        @panic("Updating Ucd -- tables not configured to actully run. flip `is_updating_ucd` to false and run again");
-    }
 }
 
 test {

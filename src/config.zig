@@ -4,8 +4,7 @@ const types = @import("types.zig");
 pub const max_code_point: u21 = 0x10FFFF;
 pub const code_point_range_end: u21 = max_code_point + 1;
 
-// TODO: figure out why it takes so long to compile with this on.
-pub const is_updating_ucd = true;
+pub const is_updating_ucd = false;
 
 pub const Field = struct {
     name: [:0]const u8,

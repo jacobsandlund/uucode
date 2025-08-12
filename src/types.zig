@@ -894,7 +894,7 @@ pub fn VarLen(
 
         inline fn _slice(
             self: *const Self,
-            backing: *BackingBuffer,
+            backing: *const BackingBuffer,
             buffer_for_embedded: []T,
         ) []const T {
             // Repeat the two return cases, first with two `comptime` checks,
@@ -912,7 +912,7 @@ pub fn VarLen(
 
         pub fn sliceWithBacking(
             self: *const Self,
-            backing: *BackingBuffer,
+            backing: *const BackingBuffer,
             buffer_for_embedded: []T,
         ) []const T {
             if (c.cp_packing != .direct) {
@@ -924,7 +924,7 @@ pub fn VarLen(
 
         pub fn sliceForWithBacking(
             self: *const Self,
-            backing: *BackingBuffer,
+            backing: *const BackingBuffer,
             cp: u21,
             buffer_for_embedded: []T,
         ) []const T {

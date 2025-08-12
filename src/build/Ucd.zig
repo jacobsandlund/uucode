@@ -6,8 +6,6 @@ const builtin = @import("builtin");
 const types = @import("types.zig");
 const config = @import("config.zig");
 
-// TODO: add a bool to use the previous value (range_data), then in
-// tables use the previou data.
 const UnicodeData = struct {
     name: []const u8,
     general_category: types.GeneralCategory,
@@ -136,7 +134,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
 
     var lines = std.mem.splitScalar(u8, content, '\n');
     var next_cp: u21 = 0x0000;
-    const default_data = UnicodeData{
+    const gap_data = UnicodeData{
         .name = &.{},
         .general_category = types.GeneralCategory.other_not_assigned,
         .canonical_combining_class = 0,
@@ -163,9 +161,9 @@ fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
         const cp_str = parts.next().?;
         const cp = try parseCodePoint(cp_str);
 
+        // Fill ranges or gaps
         while (next_cp < cp) : (next_cp += 1) {
-            // Fill any ranges or gaps
-            ucd.unicode_data[next_cp] = range_data orelse default_data;
+            ucd.unicode_data[next_cp] = range_data orelse gap_data;
         }
 
         if (range_data != null) {
@@ -298,7 +296,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
 
     // Fill any remaining gaps at the end with default values
     while (next_cp < config.code_point_range_end) : (next_cp += 1) {
-        ucd.unicode_data[next_cp] = default_data;
+        ucd.unicode_data[next_cp] = gap_data;
     }
 }
 
