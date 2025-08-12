@@ -808,7 +808,7 @@ pub fn VarLen(
 
         pub const BackingBuffer = [max_offset]T;
 
-        fn _fromSlice(
+        inline fn _fromSlice(
             allocator: std.mem.Allocator,
             backing: *BackingBuffer,
             tracking: *Tracking,
@@ -892,14 +892,11 @@ pub fn VarLen(
             }
         }
 
-        fn _slice(
+        inline fn _slice(
             self: *const Self,
+            backing: *BackingBuffer,
             buffer_for_embedded: []T,
         ) []const T {
-            // Note: while it would be better for modularity to pass `backing`
-            // in, this makes for a nicer API without having to wrap VarLen.
-            const backing = comptime @field(@import("get.zig").tableFor(c.name).backing, c.name);
-
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
             if (comptime embedded_len == max_len) {
@@ -913,16 +910,21 @@ pub fn VarLen(
             }
         }
 
-        pub fn slice(self: *const Self, buffer_for_embedded: []T) []const T {
+        pub fn sliceWithBacking(
+            self: *const Self,
+            backing: *BackingBuffer,
+            buffer_for_embedded: []T,
+        ) []const T {
             if (c.cp_packing != .direct) {
                 @compileError("slice is only supported for direct packing: use sliceFor instead");
             }
 
-            return self._slice(buffer_for_embedded);
+            return self._slice(backing, buffer_for_embedded);
         }
 
-        pub fn sliceFor(
+        pub fn sliceForWithBacking(
             self: *const Self,
+            backing: *BackingBuffer,
             cp: u21,
             buffer_for_embedded: []T,
         ) []const T {
@@ -932,7 +934,7 @@ pub fn VarLen(
                         buffer_for_embedded[0] = cp;
                         return buffer_for_embedded[0..1];
                     } else {
-                        return self._slice(buffer_for_embedded);
+                        return self._slice(backing, buffer_for_embedded);
                     }
                 },
                 .shift_single_item => {
@@ -940,13 +942,29 @@ pub fn VarLen(
                         buffer_for_embedded[0] = self.data.shift.value(cp);
                         return buffer_for_embedded[0..1];
                     } else {
-                        return self._slice(buffer_for_embedded);
+                        return self._slice(backing, buffer_for_embedded);
                     }
                 },
                 else => {
                     @compileError("sliceFor can only be called when cp_packing is .sentinel_for_eql or .shift_single_item");
                 },
             }
+        }
+
+        // Note: while it would be better for modularity to pass `backing`
+        // in, this makes for a nicer API without having to wrap VarLen.
+        const hardcoded_backing = &@field(@import("get.zig").tableFor(c.name).backing, c.name);
+
+        pub fn slice(self: *const Self, buffer_for_embedded: []T) []const T {
+            return self.sliceWithBacking(hardcoded_backing, buffer_for_embedded);
+        }
+
+        pub fn sliceFor(
+            self: *const Self,
+            cp: u21,
+            buffer_for_embedded: []T,
+        ) []const T {
+            return self.sliceForWithBacking(hardcoded_backing, cp, buffer_for_embedded);
         }
 
         pub fn autoHash(self: Self, hasher: anytype) void {
