@@ -771,6 +771,10 @@ pub fn VarLen(
         @compileError("VarLen with max_offset == 0 is only supported if embedded_len is max_len, or max_len is 1 with shift_single_item");
     }
 
+    if (c.cp_packing == .shift) {
+        @compileError("`shift` packing is not supported for VarLen: use `shift_single_item` or `direct` instead");
+    }
+
     return packed struct {
         data: packed union {
             offset: Offset,
@@ -858,7 +862,7 @@ pub fn VarLen(
             s: []const T,
         ) !Self {
             if (c.cp_packing != .direct) {
-                @compileError("fromSlice is only supported for direct packing: use sliceFor instead");
+                @compileError("fromSlice is only supported for direct packing: use fromSliceFor instead");
             }
 
             return ._fromSlice(allocator, backing, tracking, s);
@@ -868,8 +872,8 @@ pub fn VarLen(
             allocator: std.mem.Allocator,
             backing: *BackingBuffer,
             tracking: *Tracking,
-            cp: u21,
             s: []const T,
+            cp: u21,
         ) !Self {
             if (s.len == 1) {
                 tracking.shift.track(cp, s[0]);
@@ -892,7 +896,7 @@ pub fn VarLen(
             }
         }
 
-        inline fn _slice(
+        fn innerSlice(
             self: *const Self,
             backing: *const BackingBuffer,
             buffer: []T,
@@ -916,17 +920,17 @@ pub fn VarLen(
             buffer: []T,
         ) []const T {
             if (c.cp_packing != .direct) {
-                @compileError("slice is only supported for direct packing: use sliceFor instead");
+                @compileError("sliceWithBacking is only supported for direct packing: use sliceForWithBacking instead");
             }
 
-            return self._slice(backing, buffer);
+            return self.innerSlice(backing, buffer);
         }
 
         pub fn sliceForWithBacking(
             self: *const Self,
             backing: *const BackingBuffer,
-            cp: u21,
             buffer: []T,
+            cp: u21,
         ) []const T {
             switch (c.cp_packing) {
                 .sentinel_for_eql => {
@@ -934,7 +938,7 @@ pub fn VarLen(
                         buffer[0] = cp;
                         return buffer[0..1];
                     } else {
-                        return self._slice(backing, buffer);
+                        return self.innerSlice(backing, buffer);
                     }
                 },
                 .shift_single_item => {
@@ -942,12 +946,11 @@ pub fn VarLen(
                         buffer[0] = self.data.shift.value(cp);
                         return buffer[0..1];
                     } else {
-                        return self._slice(backing, buffer);
+                        return self.innerSlice(backing, buffer);
                     }
                 },
-                else => {
-                    @compileError("sliceFor can only be called when cp_packing is .sentinel_for_eql or .shift_single_item");
-                },
+                .direct => return self.innerSlice(backing, buffer),
+                .shift => unreachable,
             }
         }
 
@@ -955,19 +958,24 @@ pub fn VarLen(
         // in, this makes for a nicer API without having to wrap VarLen.
         const hardcoded_backing = &@field(@import("get.zig").tableFor(c.name).backing, c.name);
 
-        pub fn slice(self: *const Self, buffer: []T) []const T {
+        fn _slice(self: *const Self, buffer: []T) []const T {
             return self.sliceWithBacking(hardcoded_backing, buffer);
         }
 
-        pub fn sliceFor(
+        fn _sliceFor(
             self: *const Self,
-            cp: u21,
             buffer: []T,
+            cp: u21,
         ) []const T {
-            return self.sliceForWithBacking(hardcoded_backing, cp, buffer);
+            return self.sliceForWithBacking(hardcoded_backing, buffer, cp);
         }
 
-        inline fn lazyMemcpy(dest: []T, source: []const T) []const T {
+        pub const slice = if (c.cp_packing == .direct)
+            _slice
+        else
+            _sliceFor;
+
+        fn lazyMemcpy(dest: []T, source: []const T) []const T {
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
             if (comptime embedded_len == max_len) {
@@ -985,13 +993,18 @@ pub fn VarLen(
             }
         }
 
-        pub fn copy(self: *const Self, dest: []T) []const T {
-            return lazyMemcpy(dest, self.slice(dest));
+        fn _copy(self: *const Self, dest: []T) []const T {
+            return lazyMemcpy(dest, self._slice(dest));
         }
 
-        pub fn copyFor(self: *const Self, cp: u21, dest: []T) []const T {
-            return lazyMemcpy(dest, self.sliceFor(cp, dest));
+        fn _copyFor(self: *const Self, dest: []T, cp: u21) []const T {
+            return lazyMemcpy(dest, self._sliceFor(dest, cp));
         }
+
+        pub const copy = if (c.cp_packing == .direct)
+            _copy
+        else
+            _copyFor;
 
         pub fn autoHash(self: Self, hasher: anytype) void {
             // Repeat the two return cases, first with two `comptime` checks,

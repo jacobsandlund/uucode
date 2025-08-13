@@ -345,8 +345,8 @@ pub fn writeTable(
                 allocator,
                 &backing.decomposition_mapping,
                 &tracking.decomposition_mapping,
-                cp,
                 unicode_data.decomposition_mapping,
+                cp,
             );
         }
         if (@hasField(AllData, "numeric_type")) {
@@ -430,16 +430,16 @@ pub fn writeTable(
                         allocator,
                         &backing.case_folding_full,
                         &tracking.case_folding_full,
-                        cp,
                         cf.case_folding_full_only,
+                        cp,
                     );
                 } else {
                     a.case_folding_full = try .fromSliceFor(
                         allocator,
                         &backing.case_folding_full,
                         &tracking.case_folding_full,
-                        cp,
                         &.{cf.case_folding_common_only orelse cp},
+                        cp,
                     );
                 }
             } else {
@@ -447,8 +447,8 @@ pub fn writeTable(
                     allocator,
                     &backing.case_folding_full,
                     &tracking.case_folding_full,
-                    cp,
                     &.{cp},
+                    cp,
                 );
             }
         }
@@ -459,8 +459,8 @@ pub fn writeTable(
                         allocator,
                         &backing.case_folding_turkish_only,
                         &tracking.case_folding_turkish_only,
-                        cp,
                         &.{t},
+                        cp,
                     );
                 } else {
                     a.case_folding_turkish_only = .empty;
@@ -476,8 +476,8 @@ pub fn writeTable(
                         allocator,
                         &backing.case_folding_common_only,
                         &tracking.case_folding_common_only,
-                        cp,
                         &.{c},
+                        cp,
                     );
                 } else {
                     a.case_folding_common_only = .empty;
@@ -493,8 +493,8 @@ pub fn writeTable(
                         allocator,
                         &backing.case_folding_simple_only,
                         &tracking.case_folding_simple_only,
-                        cp,
                         &.{s},
+                        cp,
                     );
                 } else {
                     a.case_folding_simple_only = .empty;
@@ -509,8 +509,8 @@ pub fn writeTable(
                     allocator,
                     &backing.case_folding_full_only,
                     &tracking.case_folding_full_only,
-                    cp,
                     cf.case_folding_full_only,
+                    cp,
                 );
             } else {
                 a.case_folding_full_only = .empty;
@@ -524,8 +524,8 @@ pub fn writeTable(
                     allocator,
                     &backing.special_lowercase_mapping,
                     &tracking.special_lowercase_mapping,
-                    cp,
                     sc.special_lowercase_mapping,
+                    cp,
                 );
             } else {
                 a.special_lowercase_mapping = .empty;
@@ -537,8 +537,8 @@ pub fn writeTable(
                     allocator,
                     &backing.special_titlecase_mapping,
                     &tracking.special_titlecase_mapping,
-                    cp,
                     sc.special_titlecase_mapping,
+                    cp,
                 );
             } else {
                 a.special_titlecase_mapping = .empty;
@@ -550,8 +550,8 @@ pub fn writeTable(
                     allocator,
                     &backing.special_uppercase_mapping,
                     &tracking.special_uppercase_mapping,
-                    cp,
                     sc.special_uppercase_mapping,
+                    cp,
                 );
             } else {
                 a.special_uppercase_mapping = .empty;
@@ -582,16 +582,16 @@ pub fn writeTable(
                     allocator,
                     &backing.lowercase_mapping,
                     &tracking.lowercase_mapping,
-                    cp,
                     special_casing.?.special_lowercase_mapping,
+                    cp,
                 );
             } else {
                 a.lowercase_mapping = try .fromSliceFor(
                     allocator,
                     &backing.lowercase_mapping,
                     &tracking.lowercase_mapping,
-                    cp,
                     &.{unicode_data.simple_lowercase_mapping orelse cp},
+                    cp,
                 );
             }
         }
@@ -607,16 +607,16 @@ pub fn writeTable(
                     allocator,
                     &backing.titlecase_mapping,
                     &tracking.titlecase_mapping,
-                    cp,
                     special_casing.?.special_titlecase_mapping,
+                    cp,
                 );
             } else {
                 a.titlecase_mapping = try .fromSliceFor(
                     allocator,
                     &backing.titlecase_mapping,
                     &tracking.titlecase_mapping,
-                    cp,
                     &.{unicode_data.simple_titlecase_mapping orelse cp},
+                    cp,
                 );
             }
         }
@@ -632,16 +632,16 @@ pub fn writeTable(
                     allocator,
                     &backing.uppercase_mapping,
                     &tracking.uppercase_mapping,
-                    cp,
                     special_casing.?.special_uppercase_mapping,
+                    cp,
                 );
             } else {
                 a.uppercase_mapping = try .fromSliceFor(
                     allocator,
                     &backing.uppercase_mapping,
                     &tracking.uppercase_mapping,
-                    cp,
                     &.{unicode_data.simple_uppercase_mapping orelse cp},
+                    cp,
                 );
             }
         }

@@ -72,7 +72,7 @@ test "special_lowercase_mapping" {
     var mapping_buffer: [2]u21 = undefined;
 
     // Greek Capital Sigma (U+03A3) which has Final_Sigma condition
-    const mapping = get(.special_lowercase_mapping, 0x03A3).sliceFor(0x03A3, &mapping_buffer);
+    const mapping = get(.special_lowercase_mapping, 0x03A3).slice(&mapping_buffer, 0x03A3);
     try testing.expectEqual(1, mapping.len);
     try testing.expectEqual(0x03C2, mapping[0]); // Should map to Greek Small Letter Final Sigma
 }
