@@ -411,6 +411,12 @@ pub fn writeTable(
                 const d =
                     cf.case_folding_simple_only orelse
                     cf.case_folding_common_only orelse
+
+                    // This would seem not to be necessary based on the heading
+                    // of CaseFolding.txt, but U+0130 has only an F and T
+                    // mapping and no S. The T mapping is the same as the
+                    // simple_lowercase_mapping so we use that here.
+                    cf.case_folding_turkish_only orelse
                     cp;
                 singleInit("case_folding_simple", &a, &tracking, cp, d);
             } else {

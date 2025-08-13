@@ -59,9 +59,13 @@ fn data(comptime table: anytype, cp: u21) DataFor(table) {
     return table.data[data_idx];
 }
 
-pub fn getPacked(comptime table_name: []const u8, cp: u21) DataFor(getTable(table_name)) {
+pub fn getPacked(comptime table_name: []const u8, cp: u21) PackedTypeOf(table_name) {
     const table = comptime getTable(table_name);
     return data(table, cp);
+}
+
+pub fn PackedTypeOf(comptime table_name: []const u8) type {
+    return DataFor(getTable(table_name));
 }
 
 const FieldEnum = blk: {
@@ -100,7 +104,7 @@ fn DataField(comptime field: []const u8) type {
     return @FieldType(DataFor(tableFor(field)), field);
 }
 
-pub fn Field(comptime field: []const u8) type {
+fn Field(comptime field: []const u8) type {
     const D = DataField(field);
     switch (@typeInfo(D)) {
         .@"struct", .@"enum", .@"union", .@"opaque" => {
@@ -137,13 +141,17 @@ inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
     }
 }
 
-// Note: `getX` is only needed because `get` uses a known field enum so that
-// the LSP can complete the field names, and for user extensions we wouldn't
-// know all the field names. If the LSP ever gets smart enough to figure out
-// all the field names, we can replace `get` with `getX` and lose the hardcoded
-// `KnownFieldsForLsp`.
-pub fn getX(comptime field: FieldEnum, cp: u21) Field(@tagName(field)) {
+// Note: `getX` and `TypeOfX` are only needed because `get` and`TypeOf` use a
+// known field enum so that the LSP can complete the field names, and for user
+// extensions we wouldn't know all the field names. If the LSP ever gets smart
+// enough to figure out all the field names, we can replace `get` with `getX`
+// and `TypeOf` with `TypeOfX` and lose the hardcoded `KnownFieldsForLsp`.
+pub fn getX(comptime field: FieldEnum, cp: u21) TypeOfX(field) {
     return getWithName(@tagName(field), cp);
+}
+
+pub fn TypeOfX(comptime field: FieldEnum) type {
+    return Field(@tagName(field));
 }
 
 pub const KnownFieldsForLsp = enum {
@@ -226,8 +234,12 @@ pub const KnownFieldsForLsp = enum {
 // figure out the type. It seems like the only way to get the LSP to know the
 // type would be having dedicated `get` functions for each field, but I don't
 // want to go that route.
-pub fn get(comptime field: KnownFieldsForLsp, cp: u21) Field(@tagName(field)) {
+pub fn get(comptime field: KnownFieldsForLsp, cp: u21) TypeOf(field) {
     return getWithName(@tagName(field), cp);
+}
+
+pub fn TypeOf(comptime field: KnownFieldsForLsp) type {
+    return Field(@tagName(field));
 }
 
 // TODO: figure out how to get the build to test this file (tests are in root.zig)

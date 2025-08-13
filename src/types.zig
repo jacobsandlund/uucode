@@ -799,13 +799,13 @@ pub fn VarLen(
 
         pub const Tracking = VarLenTracking(T, max_len);
 
-        pub const BufferForEmbedded = [
+        pub const SliceBuffer = [
             @max(
                 embedded_len,
                 @intFromBool(c.cp_packing == .sentinel_for_eql or c.cp_packing == .shift_single_item),
             )
         ]T;
-
+        pub const CopyBuffer = [max_len]T;
         pub const BackingBuffer = [max_offset]T;
 
         inline fn _fromSlice(
@@ -895,16 +895,16 @@ pub fn VarLen(
         inline fn _slice(
             self: *const Self,
             backing: *const BackingBuffer,
-            buffer_for_embedded: []T,
+            buffer: []T,
         ) []const T {
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
             if (comptime embedded_len == max_len) {
-                return self.data.embedded.slice(buffer_for_embedded, self.len);
+                return self.data.embedded.slice(buffer, self.len);
             } else if (comptime embedded_len == 0) {
                 return backing[self.data.offset .. @as(usize, self.data.offset) + @as(usize, self.len)];
             } else if (self.len <= embedded_len) {
-                return self.data.embedded.slice(buffer_for_embedded, self.len);
+                return self.data.embedded.slice(buffer, self.len);
             } else {
                 return backing[self.data.offset .. @as(usize, self.data.offset) + @as(usize, self.len)];
             }
@@ -913,36 +913,36 @@ pub fn VarLen(
         pub fn sliceWithBacking(
             self: *const Self,
             backing: *const BackingBuffer,
-            buffer_for_embedded: []T,
+            buffer: []T,
         ) []const T {
             if (c.cp_packing != .direct) {
                 @compileError("slice is only supported for direct packing: use sliceFor instead");
             }
 
-            return self._slice(backing, buffer_for_embedded);
+            return self._slice(backing, buffer);
         }
 
         pub fn sliceForWithBacking(
             self: *const Self,
             backing: *const BackingBuffer,
             cp: u21,
-            buffer_for_embedded: []T,
+            buffer: []T,
         ) []const T {
             switch (c.cp_packing) {
                 .sentinel_for_eql => {
                     if (self.len == sentinel_for_eql_cp) {
-                        buffer_for_embedded[0] = cp;
-                        return buffer_for_embedded[0..1];
+                        buffer[0] = cp;
+                        return buffer[0..1];
                     } else {
-                        return self._slice(backing, buffer_for_embedded);
+                        return self._slice(backing, buffer);
                     }
                 },
                 .shift_single_item => {
                     if (self.len == 1) {
-                        buffer_for_embedded[0] = self.data.shift.value(cp);
-                        return buffer_for_embedded[0..1];
+                        buffer[0] = self.data.shift.value(cp);
+                        return buffer[0..1];
                     } else {
-                        return self._slice(backing, buffer_for_embedded);
+                        return self._slice(backing, buffer);
                     }
                 },
                 else => {
@@ -955,16 +955,42 @@ pub fn VarLen(
         // in, this makes for a nicer API without having to wrap VarLen.
         const hardcoded_backing = &@field(@import("get.zig").tableFor(c.name).backing, c.name);
 
-        pub fn slice(self: *const Self, buffer_for_embedded: []T) []const T {
-            return self.sliceWithBacking(hardcoded_backing, buffer_for_embedded);
+        pub fn slice(self: *const Self, buffer: []T) []const T {
+            return self.sliceWithBacking(hardcoded_backing, buffer);
         }
 
         pub fn sliceFor(
             self: *const Self,
             cp: u21,
-            buffer_for_embedded: []T,
+            buffer: []T,
         ) []const T {
-            return self.sliceForWithBacking(hardcoded_backing, cp, buffer_for_embedded);
+            return self.sliceForWithBacking(hardcoded_backing, cp, buffer);
+        }
+
+        inline fn lazyMemcpy(dest: []T, source: []const T) []const T {
+            // Repeat the two return cases, first with two `comptime` checks,
+            // then with a runtime if/else
+            if (comptime embedded_len == max_len) {
+                return source;
+            } else if (comptime embedded_len == 0) {
+                const d = dest[0..source.len];
+                @memcpy(d, source);
+                return d;
+            } else if (source.len <= embedded_len) {
+                return source;
+            } else {
+                const d = dest[0..source.len];
+                @memcpy(d, source);
+                return d;
+            }
+        }
+
+        pub fn copy(self: *const Self, dest: []T) []const T {
+            return lazyMemcpy(dest, self.slice(dest));
+        }
+
+        pub fn copyFor(self: *const Self, cp: u21, dest: []T) []const T {
+            return lazyMemcpy(dest, self.sliceFor(cp, dest));
         }
 
         pub fn autoHash(self: Self, hasher: anytype) void {

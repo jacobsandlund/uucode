@@ -6,7 +6,10 @@ const testing = std.testing;
 
 pub const get = getpkg.get;
 pub const getX = getpkg.getX;
+pub const TypeOf = getpkg.TypeOf;
+pub const TypeOfX = getpkg.TypeOfX;
 pub const getPacked = getpkg.getPacked;
+pub const PackedTypeOf = getpkg.PackedTypeOf;
 
 test {
     // TODO: "tables" will need to have data for every field
