@@ -980,11 +980,11 @@ pub fn VarLen(
             // then with a runtime if/else
             if (comptime embedded_len == max_len) {
                 return source;
-            } else if (comptime embedded_len == 0) {
+            } else if (comptime embedded_len == 0 and c.cp_packing == .direct) {
                 const d = dest[0..source.len];
                 @memcpy(d, source);
                 return d;
-            } else if (source.len <= embedded_len) {
+            } else if (source.len <= embedded_len or (c.cp_packing == .shift_single_item and source.len == 1)) {
                 return source;
             } else {
                 const d = dest[0..source.len];
@@ -1015,6 +1015,11 @@ pub fn VarLen(
 
         fn _arrayFor(self: *const Self, cp: u21) [max_len]T {
             var a: [max_len]T = undefined;
+            if (c.cp_packing == .sentinel_for_eql and self.len == sentinel_for_eql_cp) {
+                a[0] = cp;
+                @memset(a[1..], 0);
+                return a;
+            }
             const s = lazyMemcpy(&a, self._sliceFor(&a, cp));
             @memset(a[s.len..], 0);
             return a;
