@@ -730,7 +730,7 @@ const grapheme_break_property_map = std.StaticStringMap(types.OriginalGraphemeBr
     .{ "Control", .control },
     .{ "Extend", .extend },
     .{ "Regional_Indicator", .regional_indicator },
-    .{ "SpacingMark", .spacingmark },
+    .{ "SpacingMark", .spacing_mark },
     .{ "L", .l },
     .{ "V", .v },
     .{ "T", .t },

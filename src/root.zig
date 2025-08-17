@@ -1,5 +1,6 @@
 const std = @import("std");
 const getpkg = @import("get.zig");
+const config = @import("config.zig");
 const types = @import("types.zig");
 pub const ascii = @import("ascii.zig");
 const testing = std.testing;
@@ -10,6 +11,9 @@ pub const TypeOf = getpkg.TypeOf;
 pub const TypeOfX = getpkg.TypeOfX;
 pub const getPacked = getpkg.getPacked;
 pub const PackedTypeOf = getpkg.PackedTypeOf;
+
+pub const max_code_point = config.max_code_point;
+pub const code_point_range_end = config.code_point_range_end;
 
 test {
     // TODO: "tables" will need to have data for every field

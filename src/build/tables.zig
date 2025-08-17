@@ -760,7 +760,7 @@ pub fn writeTable(
                     .control => .control,
                     .extend => .extend,
                     .regional_indicator => .regional_indicator,
-                    .spacingmark => .spacingmark,
+                    .spacing_mark => .spacing_mark,
                     .l => .l,
                     .v => .v,
                     .t => .t,
