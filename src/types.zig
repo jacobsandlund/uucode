@@ -896,7 +896,7 @@ pub fn VarLen(
             }
         }
 
-        fn innerSlice(
+        fn directSlice(
             self: *const Self,
             backing: *const BackingBuffer,
             buffer: []T,
@@ -923,7 +923,7 @@ pub fn VarLen(
                 @compileError("sliceWithBacking is only supported for direct packing: use sliceForWithBacking instead");
             }
 
-            return self.innerSlice(backing, buffer);
+            return self.directSlice(backing, buffer);
         }
 
         pub fn sliceForWithBacking(
@@ -938,7 +938,7 @@ pub fn VarLen(
                         buffer[0] = cp;
                         return buffer[0..1];
                     } else {
-                        return self.innerSlice(backing, buffer);
+                        return self.directSlice(backing, buffer);
                     }
                 },
                 .shift_single_item => {
@@ -946,10 +946,10 @@ pub fn VarLen(
                         buffer[0] = self.data.shift.value(cp);
                         return buffer[0..1];
                     } else {
-                        return self.innerSlice(backing, buffer);
+                        return self.directSlice(backing, buffer);
                     }
                 },
-                .direct => return self.innerSlice(backing, buffer),
+                .direct => return self.directSlice(backing, buffer),
                 .shift => unreachable,
             }
         }
@@ -1005,6 +1005,25 @@ pub fn VarLen(
             _copy
         else
             _copyFor;
+
+        fn _array(self: *const Self) [max_len]T {
+            var a: [max_len]T = undefined;
+            const s = lazyMemcpy(&a, self._slice(a));
+            @memset(a[s.len..], 0);
+            return a;
+        }
+
+        fn _arrayFor(self: *const Self, cp: u21) [max_len]T {
+            var a: [max_len]T = undefined;
+            const s = lazyMemcpy(&a, self._sliceFor(a, cp));
+            @memset(a[s.len..], 0);
+            return a;
+        }
+
+        pub const array = if (c.cp_packing == .direct)
+            _array
+        else
+            _arrayFor;
 
         pub fn autoHash(self: Self, hasher: anytype) void {
             // Repeat the two return cases, first with two `comptime` checks,
