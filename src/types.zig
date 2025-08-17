@@ -1008,14 +1008,14 @@ pub fn VarLen(
 
         fn _array(self: *const Self) [max_len]T {
             var a: [max_len]T = undefined;
-            const s = lazyMemcpy(&a, self._slice(a));
+            const s = lazyMemcpy(&a, self._slice(&a));
             @memset(a[s.len..], 0);
             return a;
         }
 
         fn _arrayFor(self: *const Self, cp: u21) [max_len]T {
             var a: [max_len]T = undefined;
-            const s = lazyMemcpy(&a, self._sliceFor(a, cp));
+            const s = lazyMemcpy(&a, self._sliceFor(&a, cp));
             @memset(a[s.len..], 0);
             return a;
         }
