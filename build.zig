@@ -96,7 +96,7 @@ pub fn build(b: *std.Build) void {
     const lib_mod = createLibMod(b, target, optimize, tables_path);
 
     // b.addModule with an existing module
-    _ = b.modules.put(b.dupe("uucode"), lib_mod) catch @panic("OOM");
+    _ = b.modules.put(b.dupe("gib"), lib_mod) catch @panic("OOM");
 
     const test_build_config_path = b.addWriteFiles().add("test_build_config.zig", test_build_config_zig);
     const t = buildTables(b, test_build_config_path);
@@ -207,7 +207,7 @@ fn buildTables(
         .target = b.graph.host,
     });
     const build_tables_exe = b.addExecutable(.{
-        .name = "uucode_build_tables",
+        .name = "gib_build_tables",
         .root_module = build_tables_mod,
     });
     build_tables_mod.addImport("config.zig", config_mod);
