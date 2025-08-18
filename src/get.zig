@@ -213,7 +213,7 @@ pub const KnownFieldsForLsp = enum {
 
     // EmojiData fields
     is_emoji,
-    has_emoji_presentation,
+    is_emoji_presentation,
     is_emoji_modifier,
     is_emoji_modifier_base,
     is_emoji_component,

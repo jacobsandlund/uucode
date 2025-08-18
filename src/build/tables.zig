@@ -727,8 +727,8 @@ pub fn writeTable(
         if (@hasField(AllData, "is_emoji")) {
             a.is_emoji = emoji_data.is_emoji;
         }
-        if (@hasField(AllData, "has_emoji_presentation")) {
-            a.has_emoji_presentation = emoji_data.has_emoji_presentation;
+        if (@hasField(AllData, "is_emoji_presentation")) {
+            a.is_emoji_presentation = emoji_data.is_emoji_presentation;
         }
         if (@hasField(AllData, "is_emoji_modifier")) {
             a.is_emoji_modifier = emoji_data.is_emoji_modifier;

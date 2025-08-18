@@ -520,7 +520,7 @@ pub const DerivedCoreProperties = struct {
 
 pub const EmojiData = struct {
     is_emoji: bool = false,
-    has_emoji_presentation: bool = false,
+    is_emoji_presentation: bool = false,
     is_emoji_modifier: bool = false,
     is_emoji_modifier_base: bool = false,
     is_emoji_component: bool = false,

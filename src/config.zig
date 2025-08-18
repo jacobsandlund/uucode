@@ -499,7 +499,7 @@ pub const default = Table{
 
         // EmojiData fields
         .{ .name = "is_emoji", .type = bool },
-        .{ .name = "has_emoji_presentation", .type = bool },
+        .{ .name = "is_emoji_presentation", .type = bool },
         .{ .name = "is_emoji_modifier", .type = bool },
         .{ .name = "is_emoji_modifier_base", .type = bool },
         .{ .name = "is_emoji_component", .type = bool },

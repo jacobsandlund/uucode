@@ -785,7 +785,7 @@ fn parseEmojiData(
 
 const emoji_data_property_map = std.StaticStringMap(std.meta.FieldEnum(types.EmojiData)).initComptime(.{
     .{ "Emoji", .is_emoji },
-    .{ "Emoji_Presentation", .has_emoji_presentation },
+    .{ "Emoji_Presentation", .is_emoji_presentation },
     .{ "Emoji_Modifier", .is_emoji_modifier },
     .{ "Emoji_Modifier_Base", .is_emoji_modifier_base },
     .{ "Emoji_Component", .is_emoji_component },
