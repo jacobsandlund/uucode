@@ -233,7 +233,7 @@ const test_build_config_zig =
     \\    _ = cp;
     \\    _ = b;
     \\    _ = t;
-    \\    const foo: u8 = switch (data.grapheme_break) {
+    \\    const foo: u8 = switch (data.original_grapheme_break) {
     \\        .other => 0,
     \\        .control => 3,
     \\        else => 10,
@@ -243,7 +243,7 @@ const test_build_config_zig =
     \\}
     \\
     \\const x = config.Extension{
-    \\    .inputs = &.{"grapheme_break"},
+    \\    .inputs = &.{"original_grapheme_break"},
     \\    .compute = &computeFoo,
     \\    .fields = &.{.extension("foo", u8)},
     \\};

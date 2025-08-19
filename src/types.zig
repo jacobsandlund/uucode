@@ -123,11 +123,10 @@ pub const OriginalGraphemeBreak = enum(u4) {
 
 pub const GraphemeBreak = enum(u5) {
     other,
+    control,
     prepend,
     cr,
     lf,
-    control,
-    extend,
     regional_indicator,
     spacing_mark,
     l,
@@ -136,10 +135,19 @@ pub const GraphemeBreak = enum(u5) {
     lv,
     lvt,
     zwj,
-    emoji_modifier_base,
-    emoji_modifier,
+    zwnj,
     extended_pictographic,
+    // extend, ==
+    //   zwnj +
+    //   indic_conjunct_break_extend +
+    //   indic_conjunct_break_linker
+    indic_conjunct_break_extend,
+    indic_conjunct_break_linker,
+    indic_conjunct_break_consonant,
 };
+
+pub const zero_width_non_joiner = 0x200C;
+pub const zero_width_joiner = 0x200D;
 
 pub const SpecialCasingCondition = enum(u4) {
     none,

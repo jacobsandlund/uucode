@@ -745,29 +745,52 @@ pub fn writeTable(
 
         // GraphemeBreak field (derived)
         if (@hasField(AllData, "grapheme_break")) {
-            if (emoji_data.is_emoji_modifier) {
-                a.grapheme_break = .emoji_modifier;
-            } else if (emoji_data.is_emoji_modifier_base) {
-                a.grapheme_break = .emoji_modifier_base;
-            } else if (emoji_data.is_extended_pictographic) {
+            if (emoji_data.is_extended_pictographic) {
+                std.debug.assert(original_grapheme_break == .other);
                 a.grapheme_break = .extended_pictographic;
             } else {
-                a.grapheme_break = switch (original_grapheme_break) {
-                    .other => .other,
-                    .prepend => .prepend,
-                    .cr => .cr,
-                    .lf => .lf,
-                    .control => .control,
-                    .extend => .extend,
-                    .regional_indicator => .regional_indicator,
-                    .spacing_mark => .spacing_mark,
-                    .l => .l,
-                    .v => .v,
-                    .t => .t,
-                    .lv => .lv,
-                    .lvt => .lvt,
-                    .zwj => .zwj,
-                };
+                switch (derived_core_properties.indic_conjunct_break) {
+                    .none => {
+                        a.grapheme_break = switch (original_grapheme_break) {
+                            .other => .other,
+                            .control => .control,
+                            .prepend => .prepend,
+                            .cr => .cr,
+                            .lf => .lf,
+                            .regional_indicator => .regional_indicator,
+                            .spacing_mark => .spacing_mark,
+                            .l => .l,
+                            .v => .v,
+                            .t => .t,
+                            .lv => .lv,
+                            .lvt => .lvt,
+                            .zwj => .zwj,
+                            .extend => blk: {
+                                if (cp == types.zero_width_non_joiner) {
+                                    break :blk .zwnj;
+                                } else {
+                                    std.log.err(
+                                        "Found an `extend` grapheme break that is Indic conjunct break `none` (and not zwnj): {x}",
+                                        .{cp},
+                                    );
+                                    unreachable;
+                                }
+                            },
+                        };
+                    },
+                    .extend => {
+                        std.debug.assert(original_grapheme_break == .extend);
+                        a.grapheme_break = .indic_conjunct_break_extend;
+                    },
+                    .linker => {
+                        std.debug.assert(original_grapheme_break == .extend);
+                        a.grapheme_break = .indic_conjunct_break_linker;
+                    },
+                    .consonant => {
+                        std.debug.assert(original_grapheme_break == .other);
+                        a.grapheme_break = .indic_conjunct_break_consonant;
+                    },
+                }
             }
         }
 
