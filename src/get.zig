@@ -225,7 +225,7 @@ pub const KnownFieldsForLsp = enum {
     // Block field
     block,
 
-    // gib.x fields
+    // uucode.x fields
     wcwidth,
 };
 

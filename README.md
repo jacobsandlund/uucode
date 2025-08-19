@@ -1,4 +1,4 @@
-# Gib(berish)
+# uucode (Micro/µ Unicode)
 
 This is currently "Draft PR" level code--I'll be working to polish it so it's more contributor friendly.
 

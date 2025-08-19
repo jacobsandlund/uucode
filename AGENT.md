@@ -1,4 +1,4 @@
-# Gib(berish)
+# uucode (Micro/µ Unicode)
 
 ## Project Overview
 
