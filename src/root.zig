@@ -16,7 +16,9 @@ pub const PackedTypeOf = getpkg.PackedTypeOf;
 pub const max_code_point = config.max_code_point;
 pub const code_point_range_end = config.code_point_range_end;
 
-pub const graphemeBreakComputed = grapheme.graphemeBreakComputed;
+pub const computeGraphemeBreak = grapheme.computeGraphemeBreak;
+pub const graphemeBreak = grapheme.graphemeBreak;
+pub const precomputeGraphemeBreak = grapheme.precomputeGraphemeBreak;
 
 test {
     std.testing.refAllDeclsRecursive(@This());

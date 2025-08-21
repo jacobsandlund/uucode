@@ -1,8 +1,9 @@
 const std = @import("std");
 
 const types = @import("types.zig");
+const get = @import("get.zig").get;
 
-pub const BreakState = enum {
+pub const BreakState = enum(u3) {
     default,
     regional_indicator,
     extended_pictographic,
@@ -20,7 +21,7 @@ fn isExtend(gb: types.GraphemeBreak) bool {
         gb == .indic_conjunct_break_linker;
 }
 
-pub fn graphemeBreakComputed(
+pub fn computeGraphemeBreak(
     gb1: types.GraphemeBreak,
     gb2: types.GraphemeBreak,
     state: *BreakState,
@@ -100,7 +101,9 @@ pub fn graphemeBreakComputed(
     if (gb1 == .indic_conjunct_break_consonant) {
         // start of sequence:
 
-        std.debug.assert(state.* == .default);
+        // In normal operation, we'll be in this state, but
+        // precomputeGraphemeBreak iterates all states.
+        // std.debug.assert(state.* == .default);
 
         if (isIndicConjunctBreakExtend(gb2)) {
             state.* = .indic_conjunct_break_consonant;
@@ -148,7 +151,9 @@ pub fn graphemeBreakComputed(
     if (gb1 == .extended_pictographic) {
         // start of sequence:
 
-        std.debug.assert(state.* == .default);
+        // In normal operation, we'll be in this state, but
+        // precomputeGraphemeBreak iterates all states.
+        // std.debug.assert(state.* == .default);
 
         if (isExtend(gb2) or gb2 == .zwj) {
             state.* = .extended_pictographic;
@@ -189,10 +194,8 @@ pub fn graphemeBreakComputed(
     return true;
 }
 
-test "GraphemeBreakTest.txt" {
+fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *BreakState) bool) !void {
     const Ucd = @import("build/Ucd.zig");
-    const getpkg = @import("get.zig");
-    const get = getpkg.get;
 
     const stripComment = Ucd.stripComment;
     const parseCodePoint = Ucd.parseCodePoint;
@@ -229,7 +232,7 @@ test "GraphemeBreakTest.txt" {
             const gb1 = get(.grapheme_break, cp1);
             const gb2 = get(.grapheme_break, cp2);
             const expected = std.mem.eql(u8, expected_str, "÷");
-            const actual = graphemeBreakComputed(gb1, gb2, &state);
+            const actual = getActual(cp1, cp2, &state);
             try std.testing.expect(expected or std.mem.eql(u8, expected_str, "×"));
             if (actual != expected) {
                 std.log.err("line={d} cp1={x}, cp2={x}: gb1={}, gb2={}, state={}, expected={}, actual={}", .{ line_num, cp1, cp2, gb1, gb2, state, expected, actual });
@@ -250,4 +253,99 @@ test "GraphemeBreakTest.txt" {
     try std.testing.expect(success);
 }
 
-// 5 BreakState fields x 2 x 18 GraphemeBreak fields = 1620
+fn testGetActualComputedGraphemeBreak(cp1: u21, cp2: u21, state: *BreakState) bool {
+    const gb1 = get(.grapheme_break, cp1);
+    const gb2 = get(.grapheme_break, cp2);
+    return computeGraphemeBreak(gb1, gb2, state);
+}
+
+test "GraphemeBreakTest.txt - computeGraphemeBreak" {
+    try testGraphemeBreak(testGetActualComputedGraphemeBreak);
+}
+
+pub fn GraphemeBreakTable(comptime GB: type, comptime State: type) type {
+    const Result = packed struct {
+        result: bool,
+        state: State,
+    };
+    const gb_fields = @typeInfo(GB).@"enum".fields;
+    const state_fields = @typeInfo(State).@"enum".fields;
+    const n_gb = gb_fields.len;
+    const n_gb_2 = n_gb * n_gb;
+    const n_state = state_fields.len;
+    const n = n_state * n_gb_2;
+
+    // Assert that these are simple enums (this isn't a full assertion, but
+    // likely good enough.)
+    std.debug.assert(gb_fields[gb_fields.len - 1].value == n_gb - 1);
+    std.debug.assert(state_fields[state_fields.len - 1].value == n_state - 1);
+
+    return struct {
+        data: [n]Result,
+
+        fn index(gb1: GB, gb2: GB, state: State) usize {
+            return @intFromEnum(state) * n_gb_2 + @intFromEnum(gb1) * n_gb + @intFromEnum(gb2);
+        }
+
+        pub fn set(self: *@This(), gb1: GB, gb2: GB, state: State, result: Result) void {
+            self.data[index(gb1, gb2, state)] = result;
+        }
+
+        pub fn get(self: @This(), gb1: GB, gb2: GB, state: State) Result {
+            return self.data[index(gb1, gb2, state)];
+        }
+    };
+}
+
+pub fn precomputeGraphemeBreak(
+    comptime GB: type,
+    comptime State: type,
+    compute: fn (gb1: GB, gb2: GB, state: *State) bool,
+) GraphemeBreakTable(GB, State) {
+    @setEvalBranchQuota(10_000);
+    var table: GraphemeBreakTable(GB, State) = undefined;
+
+    const gb_fields = @typeInfo(GB).@"enum".fields;
+    const state_fields = @typeInfo(State).@"enum".fields;
+
+    for (state_fields) |state_field| {
+        for (gb_fields) |gb1_field| {
+            for (gb_fields) |gb2_field| {
+                const original_state: State = @enumFromInt(state_field.value);
+                const gb1: GB = @enumFromInt(gb1_field.value);
+                const gb2: GB = @enumFromInt(gb2_field.value);
+                var state = original_state;
+                const result = compute(gb1, gb2, &state);
+                table.set(gb1, gb2, original_state, .{
+                    .result = result,
+                    .state = state,
+                });
+            }
+        }
+    }
+
+    return table;
+}
+
+pub fn graphemeBreak(
+    cp1: u21,
+    cp2: u21,
+    state: *BreakState,
+) bool {
+    const table = comptime precomputeGraphemeBreak(
+        types.GraphemeBreak,
+        BreakState,
+        computeGraphemeBreak,
+    );
+    // 5 BreakState fields x 2 x 18 GraphemeBreak fields = 1620
+    std.debug.assert(@sizeOf(@TypeOf(table)) == 1620);
+    const gb1 = get(.grapheme_break, cp1);
+    const gb2 = get(.grapheme_break, cp2);
+    const result = table.get(gb1, gb2, state.*);
+    state.* = result.state;
+    return result.result;
+}
+
+test "GraphemeBreakTest.txt - graphemeBreak" {
+    try testGraphemeBreak(graphemeBreak);
+}
