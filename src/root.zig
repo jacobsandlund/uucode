@@ -3,6 +3,7 @@ const getpkg = @import("get.zig");
 const config = @import("config.zig");
 const types = @import("types.zig");
 pub const ascii = @import("ascii.zig");
+const grapheme = @import("grapheme.zig");
 const testing = std.testing;
 
 pub const get = getpkg.get;
@@ -15,9 +16,10 @@ pub const PackedTypeOf = getpkg.PackedTypeOf;
 pub const max_code_point = config.max_code_point;
 pub const code_point_range_end = config.code_point_range_end;
 
+pub const graphemeBreakComputed = grapheme.graphemeBreakComputed;
+
 test {
-    // TODO: "tables" will need to have data for every field
-    //std.testing.refAllDecls(@This());
+    std.testing.refAllDeclsRecursive(@This());
 }
 
 test "name" {

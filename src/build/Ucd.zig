@@ -92,7 +92,7 @@ pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
     self.blocks.deinit(allocator);
 }
 
-fn parseCodePoint(str: []const u8) !u21 {
+pub fn parseCodePoint(str: []const u8) !u21 {
     return std.fmt.parseInt(u21, str, 16);
 }
 
@@ -107,7 +107,7 @@ fn parseCodePointRange(str: []const u8) !struct { start: u21, end: u21 } {
     }
 }
 
-fn stripComment(line: []const u8) []const u8 {
+pub fn stripComment(line: []const u8) []const u8 {
     if (std.mem.indexOf(u8, line, "#")) |idx| {
         return std.mem.trim(u8, line[0..idx], " \t");
     }
@@ -791,6 +791,10 @@ const emoji_data_property_map = std.StaticStringMap(std.meta.FieldEnum(types.Emo
     .{ "Emoji_Component", .is_emoji_component },
     .{ "Extended_Pictographic", .is_extended_pictographic },
 });
+
+test {
+    std.testing.refAllDeclsRecursive(Self);
+}
 
 test "parse code point" {
     try std.testing.expectEqual(@as(u21, 0x0000), try parseCodePoint("0000"));

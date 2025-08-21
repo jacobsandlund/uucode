@@ -4,8 +4,10 @@ version="16.0.0"
 
 base_url="https://www.unicode.org/Public/zipped/${version}"
 
+mv ucd/.gitignore ucd-gitignore
 rm -rf ucd
 mkdir -p ucd/Unihan
+mv ucd-gitignore ucd/.gitignore
 
 cd ucd
 curl -o ucd.zip "${base_url}/UCD.zip"

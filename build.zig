@@ -261,6 +261,7 @@ const test_build_config_zig =
     \\                .embedded_len = 15,
     \\                .max_offset = 986096,
     \\            }),
+    \\            d.field("grapheme_break"),
     \\         },
     \\    },
     \\    .{

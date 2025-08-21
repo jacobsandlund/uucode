@@ -746,6 +746,7 @@ pub fn writeTable(
         // GraphemeBreak field (derived)
         if (@hasField(AllData, "grapheme_break")) {
             if (emoji_data.is_extended_pictographic) {
+                // std.log.err("cp={x}: original_grapheme_break={}", .{ cp, original_grapheme_break });
                 std.debug.assert(original_grapheme_break == .other);
                 a.grapheme_break = .extended_pictographic;
             } else {
@@ -779,14 +780,21 @@ pub fn writeTable(
                         };
                     },
                     .extend => {
-                        std.debug.assert(original_grapheme_break == .extend);
-                        a.grapheme_break = .indic_conjunct_break_extend;
+                        if (cp == types.zero_width_joiner) {
+                            a.grapheme_break = .zwj;
+                        } else {
+                            // std.log.err("cp={x}: original_grapheme_break={}", .{ cp, original_grapheme_break });
+                            std.debug.assert(original_grapheme_break == .extend);
+                            a.grapheme_break = .indic_conjunct_break_extend;
+                        }
                     },
                     .linker => {
+                        // std.log.err("cp={x}: original_grapheme_break={}", .{ cp, original_grapheme_break });
                         std.debug.assert(original_grapheme_break == .extend);
                         a.grapheme_break = .indic_conjunct_break_linker;
                     },
                     .consonant => {
+                        // std.log.err("cp={x}: original_grapheme_break={}", .{ cp, original_grapheme_break });
                         std.debug.assert(original_grapheme_break == .other);
                         a.grapheme_break = .indic_conjunct_break_consonant;
                     },
@@ -976,5 +984,4 @@ pub fn writeTable(
 
 test {
     std.testing.refAllDeclsRecursive(@This());
-    std.testing.refAllDeclsRecursive(Ucd);
 }

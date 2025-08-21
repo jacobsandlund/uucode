@@ -57,7 +57,7 @@ Unikemet.txt
 VerticalOrientation.txt
 # auxiliary/GraphemeBreakProperty.txt (used)
 auxiliary/GraphemeBreakTest.html
-auxiliary/GraphemeBreakTest.txt
+# auxiliary/GraphemeBreakTest.txt
 auxiliary/LineBreakTest.html
 auxiliary/LineBreakTest.txt
 auxiliary/SentenceBreakProperty.txt

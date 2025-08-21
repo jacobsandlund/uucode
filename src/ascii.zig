@@ -20,7 +20,7 @@ pub fn isAlphabetic(c: u21) bool {
 ///
 /// See also: `control_code`
 pub fn isControl(c: u21) bool {
-    return c <= std.control_code.us or c == std.control_code.del;
+    return c <= std.ascii.control_code.us or c == std.ascii.control_code.del;
 }
 
 /// Returns whether the code point is a digit.
