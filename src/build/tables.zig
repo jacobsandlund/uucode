@@ -753,19 +753,6 @@ pub fn writeTable(
                 switch (derived_core_properties.indic_conjunct_break) {
                     .none => {
                         a.grapheme_break = switch (original_grapheme_break) {
-                            .other => .other,
-                            .control => .control,
-                            .prepend => .prepend,
-                            .cr => .cr,
-                            .lf => .lf,
-                            .regional_indicator => .regional_indicator,
-                            .spacing_mark => .spacing_mark,
-                            .l => .l,
-                            .v => .v,
-                            .t => .t,
-                            .lv => .lv,
-                            .lvt => .lvt,
-                            .zwj => .zwj,
                             .extend => blk: {
                                 if (cp == types.zero_width_non_joiner) {
                                     break :blk .zwnj;
@@ -777,6 +764,10 @@ pub fn writeTable(
                                     unreachable;
                                 }
                             },
+                            inline else => |o| comptime std.meta.stringToEnum(
+                                types.GraphemeBreak,
+                                @tagName(o),
+                            ) orelse unreachable,
                         };
                     },
                     .extend => {

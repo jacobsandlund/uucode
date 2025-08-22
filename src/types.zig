@@ -503,6 +503,8 @@ pub const Block = enum(u9) {
     znamenny_musical_notation,
 };
 
+// The following types are internal to `uucode`:
+
 pub const DerivedCoreProperties = struct {
     is_math: bool = false,
     is_alphabetic: bool = false,
