@@ -6,8 +6,6 @@ Check out the [AGENTS.md](./AGENTS.md) for a basic explanation. (I've not actual
 
 ## Super basic usage
 
-### API
-
 ``` zig
 const uucode = @import("uucode");
 
@@ -70,11 +68,15 @@ if (b.lazyDependency("uucode", .{
 #### Advanced configuration
 
 ``` zig
+///////////////////////////////////////////////////////////
 // In `build.zig`:
 b.dependency("uucode", .{
+    .target = target,
+    .optimize = optimize,
     .build_config_path = b.path("src/build/uucode_config.zig"),
 })
 
+///////////////////////////////////////////////////////////
 // `src/build/uucode_config.zig`:
 const config = @import("config.zig");
 const d = config.default;
@@ -114,4 +116,12 @@ pub const tables = [_]config.Table{
         },
     },
 }
+
+///////////////////////////////////////////////////////////
+// In your code:
+const uucode = @import("uucode");
+
+// This uses `getX` because `get` only includes known properties to aid with
+// LSP completion
+uucode.getX(.is_odd_emoji, 0x1F34B) // 🍋 == true
 ```
