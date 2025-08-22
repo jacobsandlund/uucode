@@ -245,7 +245,9 @@ const test_build_config_zig =
     \\const x = config.Extension{
     \\    .inputs = &.{"original_grapheme_break"},
     \\    .compute = &computeFoo,
-    \\    .fields = &.{.extension("foo", u8)},
+    \\    .fields = &.{
+    \\        .{ .name = "foo", .type = u8 },
+    \\    },
     \\};
     \\
     \\pub const tables = [_]config.Table{

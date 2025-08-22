@@ -154,13 +154,6 @@ pub const Field = struct {
         }
     }
 
-    pub fn extension(name: [:0]const u8, comptime T: type) Field {
-        return .{
-            .name = name,
-            .type = T,
-        };
-    }
-
     pub fn runtime(self: Field) Runtime {
         return .{
             .name = self.name,
