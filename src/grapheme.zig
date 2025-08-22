@@ -3,7 +3,7 @@ const std = @import("std");
 const types = @import("types.zig");
 const get = @import("get.zig").get;
 
-pub const BreakState = enum(u3) {
+pub const GraphemeBreakState = enum(u3) {
     default,
     regional_indicator,
     extended_pictographic,
@@ -24,7 +24,7 @@ fn isExtend(gb: types.GraphemeBreak) bool {
 pub fn computeGraphemeBreak(
     gb1: types.GraphemeBreak,
     gb2: types.GraphemeBreak,
-    state: *BreakState,
+    state: *GraphemeBreakState,
 ) bool {
     // Update state when new `gb2` break property breaks sequences.
     switch (state.*) {
@@ -194,7 +194,7 @@ pub fn computeGraphemeBreak(
     return true;
 }
 
-fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *BreakState) bool) !void {
+fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *GraphemeBreakState) bool) !void {
     const Ucd = @import("build/Ucd.zig");
 
     const stripComment = Ucd.stripComment;
@@ -222,7 +222,7 @@ fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *BreakState) bool
         const start = parts.next().?;
         try std.testing.expect(std.mem.eql(u8, start, "÷"));
 
-        var state: BreakState = .default;
+        var state: GraphemeBreakState = .default;
         var cp1 = try parseCodePoint(parts.next().?);
         var expected_str = parts.next().?;
         var cp2 = try parseCodePoint(parts.next().?);
@@ -253,7 +253,7 @@ fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *BreakState) bool
     try std.testing.expect(success);
 }
 
-fn testGetActualComputedGraphemeBreak(cp1: u21, cp2: u21, state: *BreakState) bool {
+fn testGetActualComputedGraphemeBreak(cp1: u21, cp2: u21, state: *GraphemeBreakState) bool {
     const gb1 = get(.grapheme_break, cp1);
     const gb2 = get(.grapheme_break, cp2);
     return computeGraphemeBreak(gb1, gb2, state);
@@ -330,11 +330,11 @@ pub fn precomputeGraphemeBreak(
 pub fn graphemeBreak(
     cp1: u21,
     cp2: u21,
-    state: *BreakState,
+    state: *GraphemeBreakState,
 ) bool {
     const table = comptime precomputeGraphemeBreak(
         types.GraphemeBreak,
-        BreakState,
+        GraphemeBreakState,
         computeGraphemeBreak,
     );
     // 5 BreakState fields x 2 x 18 GraphemeBreak fields = 1620

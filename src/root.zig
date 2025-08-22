@@ -19,6 +19,7 @@ pub const code_point_range_end = config.code_point_range_end;
 pub const computeGraphemeBreak = grapheme.computeGraphemeBreak;
 pub const graphemeBreak = grapheme.graphemeBreak;
 pub const precomputeGraphemeBreak = grapheme.precomputeGraphemeBreak;
+pub const GraphemeBreakState = grapheme.GraphemeBreakState;
 
 test {
     std.testing.refAllDeclsRecursive(@This());
