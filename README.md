@@ -1,6 +1,6 @@
 # uucode (Micro/µ Unicode)
 
-TODO: add documentation in this README and in some static docs site.
+TODO: greatly expand documentation in this README and in a static docs site.
 
 Check out the [AGENTS.md](./AGENTS.md) for a basic explanation. (I've not actually used agents that much but they're sometimes helpful for easier tasks.)
 
