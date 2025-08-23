@@ -10,6 +10,10 @@ pub const Field = struct {
     name: [:0]const u8,
     type: type,
 
+    // Use this in case the type is defined in `build_config` or some module
+    // imported in `build_config`.
+    resolved_type: []const u8 = "",
+
     // For Shift + VarLen fields
     cp_packing: CpPacking = .direct,
     shift_low: isize = 0,
@@ -157,7 +161,10 @@ pub const Field = struct {
     pub fn runtime(self: Field) Runtime {
         return .{
             .name = self.name,
-            .type = @typeName(self.type),
+            .type = if (self.resolved_type.len > 0)
+                self.resolved_type
+            else
+                @typeName(self.type),
             .cp_packing = self.cp_packing,
             .shift_low = self.shift_low,
             .shift_high = self.shift_high,
