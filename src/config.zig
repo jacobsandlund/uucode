@@ -112,7 +112,7 @@ pub const Field = struct {
                     \\
                 , .{self.type});
             } else {
-                var parts = std.mem.splitScalar(u8, self.type, ".");
+                var parts = std.mem.splitScalar(u8, self.type, '.');
                 const base_type = parts.next().?;
                 const rest = parts.rest();
 
