@@ -55,6 +55,7 @@ pub const Field = struct {
         pub fn override(self: Runtime, overrides: anytype) Runtime {
             var result: Runtime = .{
                 .name = self.name,
+                .import = self.import,
                 .type = self.type,
                 .cp_packing = self.cp_packing,
                 .shift_low = self.shift_low,
