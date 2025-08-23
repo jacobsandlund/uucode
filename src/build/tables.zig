@@ -2,6 +2,7 @@ const std = @import("std");
 const Ucd = @import("Ucd.zig");
 const types = @import("types.zig");
 const config = @import("config.zig");
+const build_config = @import("build_config");
 
 pub const std_options: std.Options = .{
     .log_level = .debug,
@@ -11,7 +12,7 @@ const buffer_size = 150_000_000; // Actual is ~149 MiB
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
-    const table_configs: []const config.Table = if (config.is_updating_ucd) &.{config.updating_ucd} else &@import("build_config").tables;
+    const table_configs: []const config.Table = if (config.is_updating_ucd) &.{config.updating_ucd} else build_config.tables;
 
     const buffer = try std.heap.page_allocator.alloc(u8, buffer_size);
     defer std.heap.page_allocator.free(buffer);
@@ -39,6 +40,7 @@ pub fn main() !void {
         \\
         \\const types = @import("types.zig");
         \\const config = @import("config.zig");
+        \\const build_config = @import("build_config");
         \\
         \\pub const tables = .{
         \\

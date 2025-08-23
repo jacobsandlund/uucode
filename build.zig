@@ -30,57 +30,57 @@ pub fn build(b: *std.Build) void {
 
     const tables_path_opt = b.option(std.Build.LazyPath, "tables.zig", "Built tables source file");
 
-    const tables_path = tables_path_opt orelse tables_blk: {
-        const build_config_path = build_config_path_opt orelse path_blk: {
-            const build_config_zig = build_config_zig_opt orelse config_blk: {
-                var bytes = std.ArrayList(u8).init(b.allocator);
-                defer bytes.deinit();
-                const writer = bytes.writer();
+    const build_config_path = build_config_path_opt orelse path_blk: {
+        const build_config_zig = build_config_zig_opt orelse config_blk: {
+            var bytes = std.ArrayList(u8).init(b.allocator);
+            defer bytes.deinit();
+            const writer = bytes.writer();
 
-                writer.writeAll(
-                    \\const config = @import("config.zig");
-                    \\const d = config.default;
-                    \\
-                    \\pub const tables = [_]config.Table{
-                    \\    .{
-                    \\        .fields = &.{
-                    \\
-                ) catch @panic("OOM");
+            writer.writeAll(
+                \\const config = @import("config.zig");
+                \\const d = config.default;
+                \\
+                \\pub const tables = [_]config.Table{
+                \\    .{
+                \\        .fields = &.{
+                \\
+            ) catch @panic("OOM");
 
-                if (table_0_fields) |fields| {
-                    for (fields) |f| {
-                        writer.print("            d.field(\"{s}\"),\n", .{f}) catch @panic("OOM");
-                    }
-                } else {
-                    writer.writeAll("Specify either `table_0_fields`, `build_config.zig`, `build_config_path`, or `tables.zig`\n") catch @panic("OOM");
+            if (table_0_fields) |fields| {
+                for (fields) |f| {
+                    writer.print("            d.field(\"{s}\"),\n", .{f}) catch @panic("OOM");
                 }
+            } else {
+                writer.writeAll("Specify either `table_0_fields`, `build_config.zig`, or `build_config_path`\n") catch @panic("OOM");
+            }
 
-                if (table_1_fields) |fields| {
-                    writer.writeAll(
-                        \\         },
-                        \\     },
-                        \\    .{
-                        \\        .fields = &.{
-                    ) catch @panic("OOM");
-
-                    for (fields) |f| {
-                        writer.print("            d.field(\"{s}\"),\n", .{f}) catch @panic("OOM");
-                    }
-                }
-
+            if (table_1_fields) |fields| {
                 writer.writeAll(
                     \\         },
                     \\     },
-                    \\};
-                    \\
+                    \\    .{
+                    \\        .fields = &.{
                 ) catch @panic("OOM");
 
-                break :config_blk bytes.toOwnedSlice() catch @panic("OOM");
-            };
+                for (fields) |f| {
+                    writer.print("            d.field(\"{s}\"),\n", .{f}) catch @panic("OOM");
+                }
+            }
 
-            break :path_blk b.addWriteFiles().add("build_config.zig", build_config_zig);
+            writer.writeAll(
+                \\         },
+                \\     },
+                \\};
+                \\
+            ) catch @panic("OOM");
+
+            break :config_blk bytes.toOwnedSlice() catch @panic("OOM");
         };
 
+        break :path_blk b.addWriteFiles().add("build_config.zig", build_config_zig);
+    };
+
+    const tables_path = tables_path_opt orelse tables_blk: {
         const t = buildTables(b, build_config_path);
 
         // b.addModule with an existing module
@@ -93,14 +93,14 @@ pub fn build(b: *std.Build) void {
 
     b.addNamedLazyPath("tables.zig", tables_path);
 
-    const lib_mod = createLibMod(b, target, optimize, tables_path);
+    const lib_mod = createLibMod(b, target, optimize, tables_path, build_config_path);
 
     // b.addModule with an existing module
     _ = b.modules.put(b.dupe("uucode"), lib_mod) catch @panic("OOM");
 
     const test_build_config_path = b.addWriteFiles().add("test_build_config.zig", test_build_config_zig);
     const t = buildTables(b, test_build_config_path);
-    const test_lib_mod = createLibMod(b, target, optimize, t.tables);
+    const test_lib_mod = createLibMod(b, target, optimize, t.tables, test_build_config_path);
 
     const src_tests = b.addTest(.{
         .root_module = test_lib_mod,
@@ -123,6 +123,7 @@ fn createLibMod(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     tables_path: std.Build.LazyPath,
+    build_config_path: std.Build.LazyPath,
 ) *std.Build.Module {
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/config.zig"),
@@ -138,6 +139,13 @@ fn createLibMod(
     types_mod.addImport("config.zig", config_mod);
     config_mod.addImport("types.zig", types_mod);
 
+    const build_config_mod = b.createModule(.{
+        .root_source_file = build_config_path,
+        .target = target,
+    });
+    build_config_mod.addImport("types.zig", types_mod);
+    build_config_mod.addImport("config.zig", config_mod);
+
     const tables_mod = b.createModule(.{
         .root_source_file = tables_path,
         .target = target,
@@ -145,6 +153,7 @@ fn createLibMod(
     });
     tables_mod.addImport("types.zig", types_mod);
     tables_mod.addImport("config.zig", config_mod);
+    tables_mod.addImport("build_config", build_config_mod);
 
     const get_mod = b.createModule(.{
         .root_source_file = b.path("src/get.zig"),

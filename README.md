@@ -58,7 +58,7 @@ if (b.lazyDependency("uucode", .{
         "general_category",
         "case_folding_simple",
         "is_alphabetic",
-        "is_emoji",
+        // ...
     }),
 })) |dep| {
     step.root_module.addImport("uucode", dep.module("uucode"));
@@ -85,34 +85,44 @@ const d = config.default;
 //const config_x = @import("config.x.zig");
 //const wcwidth = config_x.wcwidth;
 
-fn computeOddEmoji(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
+fn computeEmojiOddOrEven(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
     _ = backing;
     _ = tracking;
-    data.is_odd_emoji = data.is_emoji and cp % 2 == 1;
+    if (!data.is_emoji) {
+        data.emoji_odd_or_even = .not_emoji;
+    } else if (cp % 2 == 0) {
+        data.emoji_odd_or_even = .even_emoji;
+    } else {
+        data.emoji_odd_or_even = .odd_emoji;
+    }
 }
 
-const is_odd_emoji = config.Extension{
+pub const EmojiOddOrEven = enum {
+    not_emoji,
+    even_emoji,
+    odd_emoji,
+}
+
+const emoji_odd_or_even = config.Extension{
     .inputs = &.{"is_emoji"},
-    .compute = &computeOddEmoji,
+    .compute = &computeEmojiOddOrEven,
     .fields = &.{
-        .{ .name = "is_odd_emoji", .type = bool },
+        .{ .name = "emoji_odd_or_even", .type = EmojiOddOrEven },
     },
 }
 
 pub const tables = [_]config.Table{
     .{
         .extensions = &.{
-            is_odd_emoji,
+            emoji_odd_or_even,
             //wcwidth,
         },
         .fields = &.{
-            is_odd_emoji.field("is_odd_emoji"),
+            emoji_odd_or_even.field("emoji_odd_or_even"),
             //wcwidth.field("wcwidth"),
             d.field("general_category"),
             d.field("block"),
-            d.field("is_emoji_presentation"),
-            d.field("case_folding_full"),
-            d.field("grapheme_break"),
+            // ...
         },
     },
 }
@@ -123,5 +133,5 @@ const uucode = @import("uucode");
 
 // This uses `getX` because `get` only includes known properties to aid with
 // LSP completion
-uucode.getX(.is_odd_emoji, 0x1F34B) // 🍋 == true
+uucode.getX(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
 ```
