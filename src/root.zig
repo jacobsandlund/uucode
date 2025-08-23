@@ -74,9 +74,13 @@ test "getPacked" {
     try testing.expect(!d1.is_lowercase);
 }
 
-test "get an extension field" {
+test "get extension foo" {
     try testing.expectEqual(0, getX(.foo, 65));
     try testing.expectEqual(3, getX(.foo, 0));
+}
+
+test "get extension emoji_odd_or_even" {
+    try testing.expectEqual(.odd_emoji, getX(.emoji_odd_or_even, 0x1F34B)); // 🍋
 }
 
 test "special_casing_condition" {

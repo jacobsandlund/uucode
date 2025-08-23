@@ -36,6 +36,10 @@ pub fn build(b: *std.Build) void {
             defer bytes.deinit();
             const writer = bytes.writer();
 
+            if (table_0_fields == null) {
+                break :config_blk bytes.toOwnedSlice() catch @panic("OOM");
+            }
+
             writer.writeAll(
                 \\const config = @import("config.zig");
                 \\const d = config.default;
@@ -46,12 +50,8 @@ pub fn build(b: *std.Build) void {
                 \\
             ) catch @panic("OOM");
 
-            if (table_0_fields) |fields| {
-                for (fields) |f| {
-                    writer.print("            d.field(\"{s}\"),\n", .{f}) catch @panic("OOM");
-                }
-            } else {
-                writer.writeAll("Specify either `table_0_fields`, `build_config.zig`, or `build_config_path`\n") catch @panic("OOM");
+            for (table_0_fields.?) |f| {
+                writer.print("            d.field(\"{s}\"),\n", .{f}) catch @panic("OOM");
             }
 
             if (table_1_fields) |fields| {
@@ -80,34 +80,21 @@ pub fn build(b: *std.Build) void {
         break :path_blk b.addWriteFiles().add("build_config.zig", build_config_zig);
     };
 
-    const tables_path = tables_path_opt orelse tables_blk: {
-        const t = buildTables(b, build_config_path);
-
-        // b.addModule with an existing module
-        _ = b.modules.put(b.dupe("build_config"), t.build_config) catch @panic("OOM");
-        _ = b.modules.put(b.dupe("config.zig"), t.config) catch @panic("OOM");
-        _ = b.modules.put(b.dupe("types.zig"), t.types) catch @panic("OOM");
-
-        break :tables_blk t.tables;
-    };
-
-    b.addNamedLazyPath("tables.zig", tables_path);
-
-    const lib_mod = createLibMod(b, target, optimize, tables_path, build_config_path);
+    const mod = createLibMod(b, target, optimize, tables_path_opt, build_config_path);
 
     // b.addModule with an existing module
-    _ = b.modules.put(b.dupe("uucode"), lib_mod) catch @panic("OOM");
+    _ = b.modules.put(b.dupe("uucode"), mod.lib) catch @panic("OOM");
+    b.addNamedLazyPath("tables.zig", mod.tables_path);
 
     const test_build_config_path = b.addWriteFiles().add("test_build_config.zig", test_build_config_zig);
-    const t = buildTables(b, test_build_config_path);
-    const test_lib_mod = createLibMod(b, target, optimize, t.tables, test_build_config_path);
+    const test_mod = createLibMod(b, target, optimize, null, test_build_config_path);
 
     const src_tests = b.addTest(.{
-        .root_module = test_lib_mod,
+        .root_module = test_mod.lib,
     });
 
     const build_tests = b.addTest(.{
-        .root_module = t.build_tables,
+        .root_module = test_mod.build_tables.?,
     });
 
     const run_src_tests = b.addRunArtifact(src_tests);
@@ -122,9 +109,13 @@ fn createLibMod(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
-    tables_path: std.Build.LazyPath,
+    tables_path_opt: ?std.Build.LazyPath,
     build_config_path: std.Build.LazyPath,
-) *std.Build.Module {
+) struct {
+    lib: *std.Build.Module,
+    build_tables: ?*std.Build.Module,
+    tables_path: std.Build.LazyPath,
+} {
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/config.zig"),
         .target = target,
@@ -145,6 +136,13 @@ fn createLibMod(
     });
     build_config_mod.addImport("types.zig", types_mod);
     build_config_mod.addImport("config.zig", config_mod);
+
+    var build_tables: ?*std.Build.Module = null;
+    const tables_path = tables_path_opt orelse blk: {
+        const t = buildTables(b, build_config_path);
+        build_tables = t.build_tables;
+        break :blk t.tables;
+    };
 
     const tables_mod = b.createModule(.{
         .root_source_file = tables_path,
@@ -175,16 +173,17 @@ fn createLibMod(
     lib_mod.addImport("types.zig", types_mod);
     lib_mod.addImport("get.zig", get_mod);
 
-    return lib_mod;
+    return .{
+        .lib = lib_mod,
+        .build_tables = build_tables,
+        .tables_path = tables_path,
+    };
 }
 
 fn buildTables(
     b: *std.Build,
     build_config_path: std.Build.LazyPath,
 ) struct {
-    config: *std.Build.Module,
-    types: *std.Build.Module,
-    build_config: *std.Build.Module,
     build_tables: *std.Build.Module,
     tables: std.Build.LazyPath,
 } {
@@ -226,11 +225,8 @@ fn buildTables(
     const tables_path = run_build_tables_exe.addOutputFileArg("tables.zig");
 
     return .{
-        .config = config_mod,
-        .types = types_mod,
-        .build_config = build_config_mod,
-        .build_tables = build_tables_mod,
         .tables = tables_path,
+        .build_tables = build_tables_mod,
     };
 }
 
@@ -242,16 +238,14 @@ const test_build_config_zig =
     \\    _ = cp;
     \\    _ = b;
     \\    _ = t;
-    \\    const foo: u8 = switch (data.original_grapheme_break) {
+    \\    data.foo = switch (data.original_grapheme_break) {
     \\        .other => 0,
     \\        .control => 3,
     \\        else => 10,
     \\    };
-    \\
-    \\    data.foo = foo;
     \\}
     \\
-    \\const x = config.Extension{
+    \\const foo = config.Extension{
     \\    .inputs = &.{"original_grapheme_break"},
     \\    .compute = &computeFoo,
     \\    .fields = &.{
@@ -259,13 +253,44 @@ const test_build_config_zig =
     \\    },
     \\};
     \\
+    \\fn computeEmojiOddOrEven(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
+    \\    _ = backing;
+    \\    _ = tracking;
+    \\    if (!data.is_emoji) {
+    \\        data.emoji_odd_or_even = .not_emoji;
+    \\    } else if (cp % 2 == 0) {
+    \\        data.emoji_odd_or_even = .even_emoji;
+    \\    } else {
+    \\        data.emoji_odd_or_even = .odd_emoji;
+    \\    }
+    \\}
+    \\
+    \\// types must be marked `pub` and be able to be part of a packed struct.
+    \\pub const EmojiOddOrEven = enum(u2) {
+    \\    not_emoji,
+    \\    even_emoji,
+    \\    odd_emoji,
+    \\};
+    \\
+    \\const emoji_odd_or_even = config.Extension{
+    \\    .inputs = &.{"is_emoji"},
+    \\    .compute = &computeEmojiOddOrEven,
+    \\    .fields = &.{
+    \\        .{ .name = "emoji_odd_or_even", .type = EmojiOddOrEven },
+    \\    },
+    \\};
+    \\
     \\pub const tables = [_]config.Table{
     \\    .{
     \\        .stages = .auto,
-    \\        .extensions = &.{x},
+    \\        .extensions = &.{
+    \\            foo,
+    \\            emoji_odd_or_even,
+    \\        },
     \\        .fields = &.{
     \\            d.field("simple_uppercase_mapping"),
-    \\            x.field("foo"),
+    \\            foo.field("foo"),
+    \\            emoji_odd_or_even.field("emoji_odd_or_even"),
     \\            d.field("general_category"),
     \\            d.field("case_folding_simple"),
     \\            d.field("name").override(.{

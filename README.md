@@ -97,11 +97,12 @@ fn computeEmojiOddOrEven(cp: u21, data: anytype, backing: anytype, tracking: any
     }
 }
 
-pub const EmojiOddOrEven = enum {
+// types must be marked `pub` and be able to be part of a packed struct.
+pub const EmojiOddOrEven = enum(u2) {
     not_emoji,
     even_emoji,
     odd_emoji,
-}
+};
 
 const emoji_odd_or_even = config.Extension{
     .inputs = &.{"is_emoji"},
@@ -109,7 +110,7 @@ const emoji_odd_or_even = config.Extension{
     .fields = &.{
         .{ .name = "emoji_odd_or_even", .type = EmojiOddOrEven },
     },
-}
+};
 
 pub const tables = [_]config.Table{
     .{
@@ -125,7 +126,7 @@ pub const tables = [_]config.Table{
             // ...
         },
     },
-}
+};
 
 ///////////////////////////////////////////////////////////
 // In your code:

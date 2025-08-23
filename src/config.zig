@@ -10,10 +10,6 @@ pub const Field = struct {
     name: [:0]const u8,
     type: type,
 
-    // Use this in case the type is defined in `build_config` or some module
-    // imported in `build_config`.
-    resolved_type: []const u8 = "",
-
     // For Shift + VarLen fields
     cp_packing: CpPacking = .direct,
     shift_low: isize = 0,
@@ -34,7 +30,6 @@ pub const Field = struct {
     pub const Runtime = struct {
         name: []const u8,
         type: []const u8,
-        is_resolved_type: bool,
         cp_packing: CpPacking,
         shift_low: isize,
         shift_high: isize,
@@ -49,7 +44,6 @@ pub const Field = struct {
                 a.max_len == b.max_len and
                 a.max_offset == b.max_offset and
                 a.embedded_len == b.embedded_len and
-                a.is_resolved_type == b.is_resolved_type and
                 std.mem.eql(u8, a.type, b.type) and
                 std.mem.eql(u8, a.name, b.name);
         }
@@ -58,7 +52,6 @@ pub const Field = struct {
             var result: Runtime = .{
                 .name = self.name,
                 .type = self.type,
-                .is_resolved_type = self.is_resolved_type,
                 .cp_packing = self.cp_packing,
                 .shift_low = self.shift_low,
                 .shift_high = self.shift_high,
@@ -106,27 +99,24 @@ pub const Field = struct {
                 \\    .name = "{s}",
                 \\
             , .{self.name});
-            if (self.is_resolved_type) {
+
+            var type_parts = std.mem.splitScalar(u8, self.type, '.');
+            const base_type = type_parts.next().?;
+            const rest_type = type_parts.rest();
+
+            if (std.mem.endsWith(u8, base_type, "types") or
+                std.mem.endsWith(u8, base_type, "types_x") or
+                rest_type.len == 0)
+            {
                 try writer.print(
-                    \\    .type = build_config.{s},
+                    \\    .type = {s},
                     \\
                 , .{self.type});
             } else {
-                var parts = std.mem.splitScalar(u8, self.type, '.');
-                const base_type = parts.next().?;
-                const rest = parts.rest();
-
-                if (rest.len > 0) {
-                    try writer.print(
-                        \\    .type = build_config.{s},
-                        \\
-                    , .{rest});
-                } else {
-                    try writer.print(
-                        \\    .type = {s},
-                        \\
-                    , .{base_type});
-                }
+                try writer.print(
+                    \\    .type = build_config.{s},
+                    \\
+                , .{rest_type});
             }
 
             if (self.cp_packing != .direct or
@@ -186,11 +176,7 @@ pub const Field = struct {
     pub fn runtime(self: Field) Runtime {
         return .{
             .name = self.name,
-            .type = if (self.resolved_type.len > 0)
-                self.resolved_type
-            else
-                @typeName(self.type),
-            .is_resolved_type = self.resolved_type.len > 0,
+            .type = @typeName(self.type),
             .cp_packing = self.cp_packing,
             .shift_low = self.shift_low,
             .shift_high = self.shift_high,
