@@ -34,6 +34,7 @@ pub const Field = struct {
     pub const Runtime = struct {
         name: []const u8,
         type: []const u8,
+        is_resolved_type: bool,
         cp_packing: CpPacking,
         shift_low: isize,
         shift_high: isize,
@@ -48,6 +49,7 @@ pub const Field = struct {
                 a.max_len == b.max_len and
                 a.max_offset == b.max_offset and
                 a.embedded_len == b.embedded_len and
+                a.is_resolved_type == b.is_resolved_type and
                 std.mem.eql(u8, a.type, b.type) and
                 std.mem.eql(u8, a.name, b.name);
         }
@@ -56,6 +58,7 @@ pub const Field = struct {
             var result: Runtime = .{
                 .name = self.name,
                 .type = self.type,
+                .is_resolved_type = self.is_resolved_type,
                 .cp_packing = self.cp_packing,
                 .shift_low = self.shift_low,
                 .shift_high = self.shift_high,
@@ -101,9 +104,31 @@ pub const Field = struct {
             try writer.print(
                 \\.{{
                 \\    .name = "{s}",
-                \\    .type = {s},
                 \\
-            , .{ self.name, self.type });
+            , .{self.name});
+            if (self.is_resolved_type) {
+                try writer.print(
+                    \\    .type = build_config.{s},
+                    \\
+                , .{self.type});
+            } else {
+                var parts = std.mem.splitScalar(u8, self.type, ".");
+                const base_type = parts.next().?;
+                const rest = parts.rest();
+
+                if (rest.len > 0) {
+                    try writer.print(
+                        \\    .type = build_config.{s},
+                        \\
+                    , .{rest});
+                } else {
+                    try writer.print(
+                        \\    .type = {s},
+                        \\
+                    , .{base_type});
+                }
+            }
+
             if (self.cp_packing != .direct or
                 self.shift_low != 0 or
                 self.shift_high != 0)
@@ -165,6 +190,7 @@ pub const Field = struct {
                 self.resolved_type
             else
                 @typeName(self.type),
+            .is_resolved_type = self.resolved_type.len > 0,
             .cp_packing = self.cp_packing,
             .shift_low = self.shift_low,
             .shift_high = self.shift_high,

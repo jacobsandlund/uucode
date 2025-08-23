@@ -82,7 +82,7 @@ const config = @import("config.zig");
 const d = config.default;
 
 // See https://github.com/jacobsandlund/uucode.x for community extensions.
-//const config_x = @import("config.x.zig");
+//pub const config_x = @import("config.x.zig");
 //const wcwidth = config_x.wcwidth;
 
 fn computeEmojiOddOrEven(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
