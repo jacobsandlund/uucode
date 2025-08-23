@@ -43,14 +43,13 @@ fn decodeByte(state: *usize, cp: *u21, byte: u8) bool {
 
 pub const CodePointIterator = struct {
     bytes: []const u8,
-    i: usize,
+    i: usize = 0,
 
     const Self = @This();
 
     pub fn init(bytes: []const u8) Self {
         return .{
             .bytes = bytes,
-            .i = 0,
         };
     }
 
