@@ -104,7 +104,8 @@ pub const Field = struct {
                 \\
             , .{self.name});
             if (self.import.len > 0) {
-                const type_part = std.mem.splitBackwardsScalar(u8, self.type, '.').next().?;
+                var parts = std.mem.splitBackwardsScalar(u8, self.type, '.');
+                const type_part = parts.next().?;
                 try writer.print(
                     \\    .type = @import("{s}").{s},
                 , .{ self.import, type_part });
