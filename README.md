@@ -79,11 +79,12 @@ b.dependency("uucode", .{
 ///////////////////////////////////////////////////////////
 // `src/build/uucode_config.zig`:
 const config = @import("config.zig");
-const d = config.default;
 
-// See https://github.com/jacobsandlund/uucode.x for community extensions.
-//pub const config_x = @import("config.x.zig");
-//const wcwidth = config_x.wcwidth;
+// Use `config.x.zig` for extensions already built in to `uucode`.
+const config_x = @import("config.x.zig");
+
+const d = config.default;
+const wcwidth = config_x.wcwidth;
 
 fn computeEmojiOddOrEven(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
     _ = backing;
@@ -116,7 +117,7 @@ pub const tables = [_]config.Table{
     .{
         .extensions = &.{
             emoji_odd_or_even,
-            //wcwidth,
+            wcwidth,
         },
         .fields = &.{
             emoji_odd_or_even.field("emoji_odd_or_even"),
@@ -135,4 +136,7 @@ const uucode = @import("uucode");
 // This uses `getX` because `get` only includes known properties to aid with
 // LSP completion
 uucode.getX(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
+
+// Built in extensions can use `get`
+uucode.get(.wcwidth, 0x26F5) // ⛵ == 2
 ```
