@@ -42,6 +42,17 @@ cp2 = 0x1F37C; // 🍼
 
 // combined grapheme cluster is 👩‍🍼 (woman feeding baby)
 uucode.graphemeBreak(cp1, cp2, &break_state); // false
+
+//////////////////////
+// code_point.Iterator
+
+// TODO: offer more alternatives (like reading into a code point buffer), and
+// do more testing and benchmarks
+var iter = uucode.code_point.Iterator.init("😀😅😻👺");
+iter.next(); // 0x1F600
+iter.next(); // 0x1F605
+iter.next(); // 0x1F63B
+iter.next(); // 0x1F47A
 ```
 
 ### Configuration
