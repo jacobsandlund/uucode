@@ -41,7 +41,7 @@ fn decodeByte(state: *usize, cp: *u21, byte: u8) bool {
     return state.* == UTF8_ACCEPT;
 }
 
-pub const Iterator = struct {
+pub const CodePointIterator = struct {
     bytes: []const u8,
     i: usize,
 
@@ -77,8 +77,8 @@ pub const Iterator = struct {
     }
 };
 
-test "Iterator for ascii" {
-    var iter = Iterator.init("abc");
+test "CodePointIterator for ascii" {
+    var iter = CodePointIterator.init("abc");
     try std.testing.expectEqual('a', iter.next());
     try std.testing.expectEqual(1, iter.i);
     try std.testing.expectEqual('b', iter.peek());
@@ -88,8 +88,8 @@ test "Iterator for ascii" {
     try std.testing.expectEqual(null, iter.next());
 }
 
-test "Iterator for emoji" {
-    var iter = Iterator.init("😀😅😻👺");
+test "CodePointIterator for emoji" {
+    var iter = CodePointIterator.init("😀😅😻👺");
     try std.testing.expectEqual(0x1F600, iter.next());
     try std.testing.expectEqual(0x1F605, iter.next());
     try std.testing.expectEqual(0x1F63B, iter.next());
