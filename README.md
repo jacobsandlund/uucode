@@ -2,7 +2,7 @@
 
 TODO: greatly expand documentation in this README and in a static docs site.
 
-Check out the [AGENTS.md](./AGENTS.md) for a basic explanation. (I've not actually used agents that much but they're sometimes helpful for easier tasks.)
+Check out [AGENTS.md](./AGENTS.md) for a basic explanation. (I've not actually used agents that much but they're sometimes helpful for easier tasks.)
 
 ## Super basic usage
 
