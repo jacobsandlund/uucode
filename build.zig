@@ -86,8 +86,7 @@ pub fn build(b: *std.Build) void {
     _ = b.modules.put(b.dupe("uucode"), mod.lib) catch @panic("OOM");
     b.addNamedLazyPath("tables.zig", mod.tables_path);
 
-    const test_build_config_path = b.addWriteFiles().add("test_build_config.zig", test_build_config_zig);
-    const test_mod = createLibMod(b, target, optimize, null, test_build_config_path);
+    const test_mod = createLibMod(b, target, optimize, null, b.path("src/build/test_build_config.zig"));
 
     const src_tests = b.addTest(.{
         .root_module = test_mod.lib,
@@ -130,12 +129,30 @@ fn createLibMod(
     types_mod.addImport("config.zig", config_mod);
     config_mod.addImport("types.zig", types_mod);
 
+    const config_x_mod = b.createModule(.{
+        .root_source_file = b.path("src/x/config.x.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const types_x_mod = b.createModule(.{
+        .root_source_file = b.path("src/x/types.x.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    types_x_mod.addImport("config.x.zig", config_x_mod);
+    config_x_mod.addImport("types.x.zig", types_x_mod);
+    config_x_mod.addImport("types.zig", types_mod);
+    config_x_mod.addImport("config.zig", config_mod);
+
     const build_config_mod = b.createModule(.{
         .root_source_file = build_config_path,
         .target = target,
     });
     build_config_mod.addImport("types.zig", types_mod);
     build_config_mod.addImport("config.zig", config_mod);
+    build_config_mod.addImport("types.x.zig", types_x_mod);
+    build_config_mod.addImport("config.x.zig", config_x_mod);
 
     var build_tables: ?*std.Build.Module = null;
     const tables_path = tables_path_opt orelse blk: {
@@ -150,6 +167,7 @@ fn createLibMod(
         .optimize = optimize,
     });
     tables_mod.addImport("types.zig", types_mod);
+    tables_mod.addImport("types.x.zig", types_x_mod);
     tables_mod.addImport("config.zig", config_mod);
     tables_mod.addImport("build_config", build_config_mod);
 
@@ -168,9 +186,10 @@ fn createLibMod(
         .optimize = optimize,
     });
 
-    lib_mod.addImport("config.zig", config_mod);
-    lib_mod.addImport("tables", tables_mod);
     lib_mod.addImport("types.zig", types_mod);
+    lib_mod.addImport("config.zig", config_mod);
+    lib_mod.addImport("types.x.zig", types_x_mod);
+    lib_mod.addImport("tables", tables_mod);
     lib_mod.addImport("get.zig", get_mod);
 
     return .{
@@ -201,6 +220,20 @@ fn buildTables(
     types_mod.addImport("config.zig", config_mod);
     config_mod.addImport("types.zig", types_mod);
 
+    const config_x_mod = b.createModule(.{
+        .root_source_file = b.path("src/x/config.x.zig"),
+        .target = target,
+    });
+
+    const types_x_mod = b.createModule(.{
+        .root_source_file = b.path("src/x/types.x.zig"),
+        .target = target,
+    });
+    types_x_mod.addImport("config.x.zig", config_x_mod);
+    config_x_mod.addImport("types.x.zig", types_x_mod);
+    config_x_mod.addImport("types.zig", types_mod);
+    config_x_mod.addImport("config.zig", config_mod);
+
     // Create build_config
     const build_config_mod = b.createModule(.{
         .root_source_file = build_config_path,
@@ -208,6 +241,8 @@ fn buildTables(
     });
     build_config_mod.addImport("types.zig", types_mod);
     build_config_mod.addImport("config.zig", config_mod);
+    build_config_mod.addImport("types.x.zig", types_x_mod);
+    build_config_mod.addImport("config.x.zig", config_x_mod);
 
     // Generate tables.zig with build_config
     const build_tables_mod = b.createModule(.{
@@ -229,89 +264,3 @@ fn buildTables(
         .build_tables = build_tables_mod,
     };
 }
-
-const test_build_config_zig =
-    \\const config = @import("config.zig");
-    \\const d = config.default;
-    \\
-    \\fn computeFoo(cp: u21, data: anytype, b: anytype, t: anytype) void {
-    \\    _ = cp;
-    \\    _ = b;
-    \\    _ = t;
-    \\    data.foo = switch (data.original_grapheme_break) {
-    \\        .other => 0,
-    \\        .control => 3,
-    \\        else => 10,
-    \\    };
-    \\}
-    \\
-    \\const foo = config.Extension{
-    \\    .inputs = &.{"original_grapheme_break"},
-    \\    .compute = &computeFoo,
-    \\    .fields = &.{
-    \\        .{ .name = "foo", .type = u8 },
-    \\    },
-    \\};
-    \\
-    \\fn computeEmojiOddOrEven(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
-    \\    _ = backing;
-    \\    _ = tracking;
-    \\    if (!data.is_emoji) {
-    \\        data.emoji_odd_or_even = .not_emoji;
-    \\    } else if (cp % 2 == 0) {
-    \\        data.emoji_odd_or_even = .even_emoji;
-    \\    } else {
-    \\        data.emoji_odd_or_even = .odd_emoji;
-    \\    }
-    \\}
-    \\
-    \\// types must be marked `pub` and be able to be part of a packed struct.
-    \\pub const EmojiOddOrEven = enum(u2) {
-    \\    not_emoji,
-    \\    even_emoji,
-    \\    odd_emoji,
-    \\};
-    \\
-    \\const emoji_odd_or_even = config.Extension{
-    \\    .inputs = &.{"is_emoji"},
-    \\    .compute = &computeEmojiOddOrEven,
-    \\    .fields = &.{
-    \\        .{ .name = "emoji_odd_or_even", .type = EmojiOddOrEven },
-    \\    },
-    \\};
-    \\
-    \\pub const tables = [_]config.Table{
-    \\    .{
-    \\        .stages = .auto,
-    \\        .extensions = &.{
-    \\            foo,
-    \\            emoji_odd_or_even,
-    \\        },
-    \\        .fields = &.{
-    \\            d.field("simple_uppercase_mapping"),
-    \\            foo.field("foo"),
-    \\            emoji_odd_or_even.field("emoji_odd_or_even"),
-    \\            d.field("general_category"),
-    \\            d.field("case_folding_simple"),
-    \\            d.field("name").override(.{
-    \\                .embedded_len = 15,
-    \\                .max_offset = 986096,
-    \\            }),
-    \\            d.field("grapheme_break"),
-    \\         },
-    \\    },
-    \\    .{
-    \\        .name = "checks",
-    \\        .stages = .auto,
-    \\        .extensions = &.{},
-    \\        .fields = &.{
-    \\            d.field("is_alphabetic"),
-    \\            d.field("is_lowercase"),
-    \\            d.field("is_uppercase"),
-    \\            d.field("special_casing_condition"),
-    \\            d.field("special_lowercase_mapping"),
-    \\         },
-    \\    },
-    \\};
-    \\
-;

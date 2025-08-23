@@ -39,6 +39,7 @@ pub fn main() !void {
         \\//! This file is auto-generated. Do not edit.
         \\
         \\const types = @import("types.zig");
+        \\const types_x = @import("types.x.zig");
         \\const config = @import("config.zig");
         \\const build_config = @import("build_config");
         \\

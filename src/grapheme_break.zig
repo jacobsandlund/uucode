@@ -26,14 +26,26 @@ pub fn computeGraphemeBreak(
     gb2: types.GraphemeBreak,
     state: *GraphemeBreakState,
 ) bool {
-    // Update state when new `gb2` break property breaks sequences.
+    // Set state back to default when `gb1` or `gb2` is not expected in sequence.
     switch (state.*) {
         .regional_indicator => {
-            if (gb2 != .regional_indicator) {
+            if (gb1 != .regional_indicator or gb2 != .regional_indicator) {
                 state.* = .default;
             }
         },
         .extended_pictographic => {
+            switch (gb1) {
+                // Keep state if in possibly valid sequence
+                .indic_conjunct_break_extend, // extend
+                .indic_conjunct_break_linker, // extend
+                .zwnj, // extend
+                .zwj,
+                .extended_pictographic,
+                => {},
+
+                else => state.* = .default,
+            }
+
             switch (gb2) {
                 // Keep state if in possibly valid sequence
                 .indic_conjunct_break_extend, // extend
@@ -47,6 +59,17 @@ pub fn computeGraphemeBreak(
             }
         },
         .indic_conjunct_break_consonant, .indic_conjunct_break_linker => {
+            switch (gb1) {
+                // Keep state if in possibly valid sequence
+                .indic_conjunct_break_consonant,
+                .indic_conjunct_break_linker,
+                .indic_conjunct_break_extend,
+                .zwj, // indic_conjunct_break_extend
+                => {},
+
+                else => state.* = .default,
+            }
+
             switch (gb2) {
                 // Keep state if in possibly valid sequence
                 .indic_conjunct_break_consonant,
@@ -302,7 +325,7 @@ pub fn precomputeGraphemeBreak(
     comptime State: type,
     compute: fn (gb1: GB, gb2: GB, state: *State) bool,
 ) GraphemeBreakTable(GB, State) {
-    @setEvalBranchQuota(10_000);
+    @setEvalBranchQuota(2_000_000);
     var table: GraphemeBreakTable(GB, State) = undefined;
 
     const gb_fields = @typeInfo(GB).@"enum".fields;

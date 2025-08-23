@@ -224,7 +224,8 @@ pub const KnownFieldsForLsp = enum {
     // Block field
     block,
 
-    // uucode.x fields
+    // `x` fields
+    grapheme_break_x_emoji,
     wcwidth,
 };
 
