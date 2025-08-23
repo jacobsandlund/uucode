@@ -10,6 +10,9 @@ pub const Field = struct {
     name: [:0]const u8,
     type: type,
 
+    // For types that need to be imported, use this as the import location
+    import: []const u8 = "",
+
     // For Shift + VarLen fields
     cp_packing: CpPacking = .direct,
     shift_low: isize = 0,
@@ -30,6 +33,7 @@ pub const Field = struct {
     pub const Runtime = struct {
         name: []const u8,
         type: []const u8,
+        import: []const u8,
         cp_packing: CpPacking,
         shift_low: isize,
         shift_high: isize,
@@ -97,9 +101,18 @@ pub const Field = struct {
             try writer.print(
                 \\.{{
                 \\    .name = "{s}",
-                \\    .type = {s},
                 \\
-            , .{ self.name, self.type });
+            , .{self.name});
+            if (self.import.len > 0) {
+                const type_part = std.mem.splitBackwardsScalar(u8, self.type, '.').next().?;
+                try writer.print(
+                    \\    .type = @import("{s}").{s},
+                , .{ self.import, type_part });
+            } else {
+                try writer.print(
+                    \\    .type = {s},
+                , .{self.type});
+            }
             if (self.cp_packing != .direct or
                 self.shift_low != 0 or
                 self.shift_high != 0)
@@ -158,6 +171,7 @@ pub const Field = struct {
         return .{
             .name = self.name,
             .type = @typeName(self.type),
+            .import = self.import,
             .cp_packing = self.cp_packing,
             .shift_low = self.shift_low,
             .shift_high = self.shift_high,
