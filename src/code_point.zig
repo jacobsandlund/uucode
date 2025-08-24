@@ -28,7 +28,7 @@ const state_utf8d = [_]u8{
     12, 36, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
 };
 
-fn decodeByte(state: *usize, cp: *u21, byte: u8) bool {
+fn decodeByte(state: *usize, cp: *u21, byte: u8) void {
     const class: std.math.IntFittingRange(0, 11) = @intCast(utf8d[byte]);
     const mask: u21 = 0xff;
 
@@ -38,7 +38,10 @@ fn decodeByte(state: *usize, cp: *u21, byte: u8) bool {
         (mask >> class) & byte;
 
     state.* = state_utf8d[state.* + class];
-    return state.* == UTF8_ACCEPT;
+}
+
+fn isDoneDecoding(state: usize) bool {
+    return state == UTF8_ACCEPT or state == UTF8_REJECT;
 }
 
 pub const CodePointIterator = struct {
@@ -58,39 +61,46 @@ pub const CodePointIterator = struct {
 
         var cp: u21 = 0;
         var state: usize = UTF8_ACCEPT;
-        while (self.i < self.bytes.len and
-            !decodeByte(&state, &cp, self.bytes[self.i])) : (self.i += 1)
-        {}
 
-        if (state == UTF8_ACCEPT) {
+        while (true) {
+            decodeByte(&state, &cp, self.bytes[self.i]);
             self.i += 1;
-            return cp;
-        } else {
-            return null;
+            if (isDoneDecoding(state) or self.i >= self.bytes.len) break;
         }
+
+        if (state == UTF8_ACCEPT) return cp;
+        return 0xFFFD; // Replacement character
     }
 
     pub fn peek(self: Self) ?u21 {
-        var iter = self;
-        return iter.next();
+        var it = self;
+        return it.next();
     }
 };
 
 test "CodePointIterator for ascii" {
-    var iter = CodePointIterator.init("abc");
-    try std.testing.expectEqual('a', iter.next());
-    try std.testing.expectEqual(1, iter.i);
-    try std.testing.expectEqual('b', iter.peek());
-    try std.testing.expectEqual('b', iter.next());
-    try std.testing.expectEqual('c', iter.next());
-    try std.testing.expectEqual(null, iter.peek());
-    try std.testing.expectEqual(null, iter.next());
+    var it = CodePointIterator.init("abc");
+    try std.testing.expectEqual('a', it.next());
+    try std.testing.expectEqual(1, it.i);
+    try std.testing.expectEqual('b', it.peek());
+    try std.testing.expectEqual('b', it.next());
+    try std.testing.expectEqual('c', it.next());
+    try std.testing.expectEqual(null, it.peek());
+    try std.testing.expectEqual(null, it.next());
 }
 
 test "CodePointIterator for emoji" {
-    var iter = CodePointIterator.init("😀😅😻👺");
-    try std.testing.expectEqual(0x1F600, iter.next());
-    try std.testing.expectEqual(0x1F605, iter.next());
-    try std.testing.expectEqual(0x1F63B, iter.next());
-    try std.testing.expectEqual(0x1F47A, iter.next());
+    var it = CodePointIterator.init("😀😅😻👺");
+    try std.testing.expectEqual(0x1F600, it.next());
+    try std.testing.expectEqual(0x1F605, it.next());
+    try std.testing.expectEqual(0x1F63B, it.next());
+    try std.testing.expectEqual(0x1F47A, it.next());
+}
+
+test "CodePointIterator overlong utf8" {
+    var it = CodePointIterator.init("\xf0\x80\x80\xaf");
+    try std.testing.expectEqual(0xFFFD, it.next());
+    try std.testing.expectEqual(0xFFFD, it.next());
+    try std.testing.expectEqual(0xFFFD, it.next());
+    try std.testing.expectEqual(null, it.next());
 }
