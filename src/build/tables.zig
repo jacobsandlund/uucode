@@ -33,7 +33,9 @@ pub fn main() !void {
 
     var out_file = try std.fs.cwd().createFile(output_path, .{});
     defer out_file.close();
-    const writer = out_file.writer();
+    var buf: [4096]u8 = undefined;
+    var writer_ = out_file.writer(&buf);
+    const writer = &writer_.interface;
 
     try writer.writeAll(
         \\//! This file is auto-generated. Do not edit.
@@ -74,6 +76,7 @@ pub fn main() !void {
         \\};
         \\
     );
+    try writer.flush();
 
     const total_end = try std.time.Instant.now();
     std.log.debug("Total time: {d}ms\n", .{total_end.since(total_start) / std.time.ns_per_ms});
@@ -221,7 +224,7 @@ fn TableAllData(comptime c: config.Table) type {
 
     return @Type(.{
         .@"struct" = .{
-            .layout = .auto,
+            .layout = .@"packed",
             .fields = fields[0..i],
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
@@ -866,13 +869,16 @@ pub fn writeTable(
             if (config.is_updating_ucd) {
                 const min_config = t.minBitsConfig(f.runtime());
                 if (!config.default.field(f.name).runtime().eql(min_config)) {
-                    const w = std.io.getStdErr().writer();
-                    try w.writeAll(
+                    var buf: [4096]u8 = undefined;
+                    var stderr_w = std.fs.File.stderr().writer(&buf);
+                    const stderr = &stderr_w.interface;
+                    try stderr.writeAll(
                         \\
                         \\Update default config in `config.zig` with the correct field config:
                         \\
                     );
-                    try min_config.write(w);
+                    try min_config.write(stderr);
+                    try stderr.flush();
                 }
             } else {
                 const r = f.runtime();

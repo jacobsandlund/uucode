@@ -32,9 +32,9 @@ pub fn build(b: *std.Build) void {
 
     const build_config_path = build_config_path_opt orelse path_blk: {
         const build_config_zig = build_config_zig_opt orelse config_blk: {
-            var bytes = std.ArrayList(u8).init(b.allocator);
+            var bytes: std.io.Writer.Allocating = .init(b.allocator);
             defer bytes.deinit();
-            const writer = bytes.writer();
+            const writer = &bytes.writer;
 
             if (table_0_fields == null) {
                 break :config_blk bytes.toOwnedSlice() catch @panic("OOM");
