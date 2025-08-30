@@ -27,6 +27,14 @@ uucode.get(.uppercase_mapping, cp).slice(&buffer1, cp) // "SS", but might not be
 var buffer2: uucode.TypeOf(.uppercase_mapping).CopyBuffer = undefined;
 uucode.get(.uppercase_mapping, cp).copy(&buffer2, cp) // "SS", copied into buffer2
 
+// Use `getPacked` to get a group of properties for a code point together.
+// The first argument is the name/index of the table ("0" for `fields`).
+cp = 0x03C2; // ς
+const data = uucode.getPacked("0", cp);
+
+data.simple_uppercase_mapping // U+03A3 == Σ
+data.general_category // .letter_lowercase
+
 //////////////////////
 // graphemeBreak
 
@@ -65,13 +73,40 @@ Only include the Unicode fields you actually use:
 if (b.lazyDependency("uucode", .{
     .target = target,
     .optimize = optimize,
-    .table_0_fields = @as([]const []const u8, .{
+    .fields = @as([]const []const u8, &.{
         "name",
         "general_category",
         "case_folding_simple",
         "is_alphabetic",
         // ...
     }),
+})) |dep| {
+    step.root_module.addImport("uucode", dep.module("uucode"));
+}
+```
+
+#### Multiple tables
+
+Fields can be split into multiple tables using `field_0` through `fields_9`, to optimize how fields are stored and accessed:
+
+
+``` zig
+// In `build.zig`:
+if (b.lazyDependency("uucode", .{
+    .target = target,
+    .optimize = optimize,
+    .fields_0 = @as([]const []const u8, &.{
+        "general_category",
+        "case_folding_simple",
+        "is_alphabetic",
+    }),
+    .fields_1 = @as([]const []const u8, &.{
+        // ...
+    }),
+    .fields_2 = @as([]const []const u8, &.{
+        // ...
+    }),
+    // ... `fields_3` to `fields_9`
 })) |dep| {
     step.root_module.addImport("uucode", dep.module("uucode"));
 }
@@ -92,7 +127,7 @@ b.dependency("uucode", .{
 // `src/build/uucode_config.zig`:
 const config = @import("config.zig");
 
-// Use `config.x.zig` for extensions already built in to `uucode`.
+// Use `config.x.zig` for extensions already built into `uucode`.
 const config_x = @import("config.x.zig");
 
 const d = config.default;

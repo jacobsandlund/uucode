@@ -4,6 +4,243 @@ const types = @import("types.zig");
 pub const max_code_point: u21 = 0x10FFFF;
 pub const code_point_range_end: u21 = max_code_point + 1;
 
+pub const default = Table{
+    .fields = &.{
+        // UnicodeData fields
+        .{
+            .name = "name",
+            .type = []const u8,
+            .max_len = 88,
+            .max_offset = 1030461,
+            .embedded_len = 2,
+        },
+        .{ .name = "general_category", .type = types.GeneralCategory },
+        .{ .name = "canonical_combining_class", .type = u8 },
+        .{ .name = "bidi_class", .type = types.BidiClass },
+        .{ .name = "decomposition_type", .type = types.DecompositionType },
+        .{
+            .name = "decomposition_mapping",
+            .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = -181519,
+            .shift_high = 99324,
+            .max_len = 18,
+            .max_offset = 4602,
+            .embedded_len = 0,
+        },
+        .{ .name = "numeric_type", .type = types.NumericType },
+        .{ .name = "numeric_value_decimal", .type = ?u4 },
+        .{ .name = "numeric_value_digit", .type = ?u4 },
+        .{
+            .name = "numeric_value_numeric",
+            .type = []const u8,
+            .max_len = 13,
+            .max_offset = 503,
+            .embedded_len = 1,
+        },
+        .{ .name = "is_bidi_mirrored", .type = bool },
+        .{
+            .name = "unicode_1_name",
+            .type = []const u8,
+            .max_len = 55,
+            .max_offset = 49956,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "simple_uppercase_mapping",
+            .type = ?u21,
+            .cp_packing = .shift,
+            .shift_low = -38864,
+            .shift_high = 42561,
+        },
+        .{
+            .name = "simple_lowercase_mapping",
+            .type = ?u21,
+            .cp_packing = .shift,
+            .shift_low = -42561,
+            .shift_high = 38864,
+        },
+        .{
+            .name = "simple_titlecase_mapping",
+            .type = ?u21,
+            .cp_packing = .shift,
+            .shift_low = -38864,
+            .shift_high = 42561,
+        },
+
+        // CaseFolding fields
+        .{
+            .name = "case_folding_simple",
+            .type = u21,
+            .cp_packing = .shift,
+            .shift_low = -42561,
+            .shift_high = 35267,
+        },
+        .{
+            .name = "case_folding_full",
+            .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = -42561,
+            .shift_high = 35267,
+            .max_len = 3,
+            .max_offset = 160,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "case_folding_turkish_only",
+            .type = []const u21,
+            .cp_packing = .direct,
+            .shift_low = -199,
+            .shift_high = 232,
+            .max_len = 1,
+            .max_offset = 2,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "case_folding_common_only",
+            .type = []const u21,
+            .cp_packing = .direct,
+            .shift_low = -42561,
+            .shift_high = 35267,
+            .max_len = 1,
+            .max_offset = 1423,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "case_folding_simple_only",
+            .type = []const u21,
+            .cp_packing = .direct,
+            .shift_low = -7615,
+            .shift_high = 1,
+            .max_len = 1,
+            .max_offset = 31,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "case_folding_full_only",
+            .type = []const u21,
+            .max_len = 3,
+            .max_offset = 160,
+            .embedded_len = 0,
+        },
+
+        // SpecialCasing fields
+        .{
+            .name = "special_lowercase_mapping",
+            .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = -199,
+            .shift_high = 232,
+            .max_len = 3,
+            .max_offset = 13,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "special_titlecase_mapping",
+            .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = 0,
+            .shift_high = 199,
+            .max_len = 3,
+            .max_offset = 104,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "special_uppercase_mapping",
+            .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = 0,
+            .shift_high = 199,
+            .max_len = 3,
+            .max_offset = 158,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "special_casing_condition",
+            .type = []const types.SpecialCasingCondition,
+            .max_len = 2,
+            .max_offset = 9,
+            .embedded_len = 0,
+        },
+
+        //// Case mappings
+        .{
+            .name = "lowercase_mapping",
+            .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = -42561,
+            .shift_high = 38864,
+            .max_len = 1,
+            .max_offset = 0,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "titlecase_mapping",
+            .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = -38864,
+            .shift_high = 42561,
+            .max_len = 3,
+            .max_offset = 104,
+            .embedded_len = 0,
+        },
+        .{
+            .name = "uppercase_mapping",
+            .type = []const u21,
+            .cp_packing = .shift_single_item,
+            .shift_low = -38864,
+            .shift_high = 42561,
+            .max_len = 3,
+            .max_offset = 158,
+            .embedded_len = 0,
+        },
+
+        // DerivedCoreProperties fields
+        .{ .name = "is_math", .type = bool },
+        .{ .name = "is_alphabetic", .type = bool },
+        .{ .name = "is_lowercase", .type = bool },
+        .{ .name = "is_uppercase", .type = bool },
+        .{ .name = "is_cased", .type = bool },
+        .{ .name = "is_case_ignorable", .type = bool },
+        .{ .name = "changes_when_lowercased", .type = bool },
+        .{ .name = "changes_when_uppercased", .type = bool },
+        .{ .name = "changes_when_titlecased", .type = bool },
+        .{ .name = "changes_when_casefolded", .type = bool },
+        .{ .name = "changes_when_casemapped", .type = bool },
+        .{ .name = "is_id_start", .type = bool },
+        .{ .name = "is_id_continue", .type = bool },
+        .{ .name = "is_xid_start", .type = bool },
+        .{ .name = "is_xid_continue", .type = bool },
+        .{ .name = "is_default_ignorable_code_point", .type = bool },
+        .{ .name = "is_grapheme_extend", .type = bool },
+        .{ .name = "is_grapheme_base", .type = bool },
+        .{ .name = "is_grapheme_link", .type = bool },
+        .{ .name = "indic_conjunct_break", .type = types.IndicConjunctBreak },
+
+        // EastAsianWidth field
+        .{ .name = "east_asian_width", .type = types.EastAsianWidth },
+
+        // OriginalGraphemeBreak field
+        // The original field from GraphemeBreakProperty.txt, but without
+        // treating emoji modifiers correctly, fixed below in GraphemeBreak.
+        .{ .name = "original_grapheme_break", .type = types.OriginalGraphemeBreak },
+
+        // EmojiData fields
+        .{ .name = "is_emoji", .type = bool },
+        .{ .name = "is_emoji_presentation", .type = bool },
+        .{ .name = "is_emoji_modifier", .type = bool },
+        .{ .name = "is_emoji_modifier_base", .type = bool },
+        .{ .name = "is_emoji_component", .type = bool },
+        .{ .name = "is_extended_pictographic", .type = bool },
+
+        // GraphemeBreak field (derived)
+        .{ .name = "grapheme_break", .type = types.GraphemeBreak },
+
+        // Block field
+        .{ .name = "block", .type = types.Block },
+    },
+};
+
 pub const is_updating_ucd = false;
 
 pub const Field = struct {
@@ -286,243 +523,6 @@ pub const Extension = struct {
             }
         } else @compileError("Field '" ++ name ++ "' not found in Extension");
     }
-};
-
-pub const default = Table{
-    .fields = &.{
-        // UnicodeData fields
-        .{
-            .name = "name",
-            .type = []const u8,
-            .max_len = 88,
-            .max_offset = 1030461,
-            .embedded_len = 2,
-        },
-        .{ .name = "general_category", .type = types.GeneralCategory },
-        .{ .name = "canonical_combining_class", .type = u8 },
-        .{ .name = "bidi_class", .type = types.BidiClass },
-        .{ .name = "decomposition_type", .type = types.DecompositionType },
-        .{
-            .name = "decomposition_mapping",
-            .type = []const u21,
-            .cp_packing = .shift_single_item,
-            .shift_low = -181519,
-            .shift_high = 99324,
-            .max_len = 18,
-            .max_offset = 4602,
-            .embedded_len = 0,
-        },
-        .{ .name = "numeric_type", .type = types.NumericType },
-        .{ .name = "numeric_value_decimal", .type = ?u4 },
-        .{ .name = "numeric_value_digit", .type = ?u4 },
-        .{
-            .name = "numeric_value_numeric",
-            .type = []const u8,
-            .max_len = 13,
-            .max_offset = 503,
-            .embedded_len = 1,
-        },
-        .{ .name = "is_bidi_mirrored", .type = bool },
-        .{
-            .name = "unicode_1_name",
-            .type = []const u8,
-            .max_len = 55,
-            .max_offset = 49956,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "simple_uppercase_mapping",
-            .type = ?u21,
-            .cp_packing = .shift,
-            .shift_low = -38864,
-            .shift_high = 42561,
-        },
-        .{
-            .name = "simple_lowercase_mapping",
-            .type = ?u21,
-            .cp_packing = .shift,
-            .shift_low = -42561,
-            .shift_high = 38864,
-        },
-        .{
-            .name = "simple_titlecase_mapping",
-            .type = ?u21,
-            .cp_packing = .shift,
-            .shift_low = -38864,
-            .shift_high = 42561,
-        },
-
-        // CaseFolding fields
-        .{
-            .name = "case_folding_simple",
-            .type = u21,
-            .cp_packing = .shift,
-            .shift_low = -42561,
-            .shift_high = 35267,
-        },
-        .{
-            .name = "case_folding_full",
-            .type = []const u21,
-            .cp_packing = .shift_single_item,
-            .shift_low = -42561,
-            .shift_high = 35267,
-            .max_len = 3,
-            .max_offset = 160,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "case_folding_turkish_only",
-            .type = []const u21,
-            .cp_packing = .direct,
-            .shift_low = -199,
-            .shift_high = 232,
-            .max_len = 1,
-            .max_offset = 2,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "case_folding_common_only",
-            .type = []const u21,
-            .cp_packing = .direct,
-            .shift_low = -42561,
-            .shift_high = 35267,
-            .max_len = 1,
-            .max_offset = 1423,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "case_folding_simple_only",
-            .type = []const u21,
-            .cp_packing = .direct,
-            .shift_low = -7615,
-            .shift_high = 1,
-            .max_len = 1,
-            .max_offset = 31,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "case_folding_full_only",
-            .type = []const u21,
-            .max_len = 3,
-            .max_offset = 160,
-            .embedded_len = 0,
-        },
-
-        // SpecialCasing fields
-        .{
-            .name = "special_lowercase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift_single_item,
-            .shift_low = -199,
-            .shift_high = 232,
-            .max_len = 3,
-            .max_offset = 13,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "special_titlecase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift_single_item,
-            .shift_low = 0,
-            .shift_high = 199,
-            .max_len = 3,
-            .max_offset = 104,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "special_uppercase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift_single_item,
-            .shift_low = 0,
-            .shift_high = 199,
-            .max_len = 3,
-            .max_offset = 158,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "special_casing_condition",
-            .type = []const types.SpecialCasingCondition,
-            .max_len = 2,
-            .max_offset = 9,
-            .embedded_len = 0,
-        },
-
-        //// Case mappings
-        .{
-            .name = "lowercase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift_single_item,
-            .shift_low = -42561,
-            .shift_high = 38864,
-            .max_len = 1,
-            .max_offset = 0,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "titlecase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift_single_item,
-            .shift_low = -38864,
-            .shift_high = 42561,
-            .max_len = 3,
-            .max_offset = 104,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "uppercase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift_single_item,
-            .shift_low = -38864,
-            .shift_high = 42561,
-            .max_len = 3,
-            .max_offset = 158,
-            .embedded_len = 0,
-        },
-
-        // DerivedCoreProperties fields
-        .{ .name = "is_math", .type = bool },
-        .{ .name = "is_alphabetic", .type = bool },
-        .{ .name = "is_lowercase", .type = bool },
-        .{ .name = "is_uppercase", .type = bool },
-        .{ .name = "is_cased", .type = bool },
-        .{ .name = "is_case_ignorable", .type = bool },
-        .{ .name = "changes_when_lowercased", .type = bool },
-        .{ .name = "changes_when_uppercased", .type = bool },
-        .{ .name = "changes_when_titlecased", .type = bool },
-        .{ .name = "changes_when_casefolded", .type = bool },
-        .{ .name = "changes_when_casemapped", .type = bool },
-        .{ .name = "is_id_start", .type = bool },
-        .{ .name = "is_id_continue", .type = bool },
-        .{ .name = "is_xid_start", .type = bool },
-        .{ .name = "is_xid_continue", .type = bool },
-        .{ .name = "is_default_ignorable_code_point", .type = bool },
-        .{ .name = "is_grapheme_extend", .type = bool },
-        .{ .name = "is_grapheme_base", .type = bool },
-        .{ .name = "is_grapheme_link", .type = bool },
-        .{ .name = "indic_conjunct_break", .type = types.IndicConjunctBreak },
-
-        // EastAsianWidth field
-        .{ .name = "east_asian_width", .type = types.EastAsianWidth },
-
-        // OriginalGraphemeBreak field
-        // The original field from GraphemeBreakProperty.txt, but without
-        // treating emoji modifiers correctly, fixed below in GraphemeBreak.
-        .{ .name = "original_grapheme_break", .type = types.OriginalGraphemeBreak },
-
-        // EmojiData fields
-        .{ .name = "is_emoji", .type = bool },
-        .{ .name = "is_emoji_presentation", .type = bool },
-        .{ .name = "is_emoji_modifier", .type = bool },
-        .{ .name = "is_emoji_modifier_base", .type = bool },
-        .{ .name = "is_emoji_component", .type = bool },
-        .{ .name = "is_extended_pictographic", .type = bool },
-
-        // GraphemeBreak field (derived)
-        .{ .name = "grapheme_break", .type = types.GraphemeBreak },
-
-        // Block field
-        .{ .name = "block", .type = types.Block },
-    },
 };
 
 const updating_ucd_fields = brk: {
