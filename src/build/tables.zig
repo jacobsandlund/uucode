@@ -148,13 +148,14 @@ fn TableAllData(comptime c: config.Table) type {
                 }
             }
 
+            const F = types.Field(xf);
             x_fields[i] = xf;
             fields[i] = .{
                 .name = xf.name,
-                .type = types.Field(xf),
+                .type = F,
                 .default_value_ptr = null,
                 .is_comptime = false,
-                .alignment = 0, // Required for packed structs
+                .alignment = @alignOf(F),
             };
             i += 1;
         }
@@ -163,8 +164,6 @@ fn TableAllData(comptime c: config.Table) type {
     const extension_fields_len = i;
 
     for (c.fields, 0..) |cf, c_i| {
-        const F = types.Field(cf);
-
         for (c.fields[0..c_i]) |existing| {
             if (std.mem.eql(u8, existing.name, cf.name)) {
                 @compileError("Field '" ++ cf.name ++ "' already exists in table");
@@ -189,12 +188,13 @@ fn TableAllData(comptime c: config.Table) type {
             continue;
         }
 
+        const F = types.Field(cf);
         fields[i] = .{
             .name = cf.name,
             .type = F,
             .default_value_ptr = null,
             .is_comptime = false,
-            .alignment = 0, // Required for packed structs
+            .alignment = @alignOf(F),
         };
         i += 1;
     }
@@ -208,12 +208,13 @@ fn TableAllData(comptime c: config.Table) type {
                 }
             }
 
+            const F = types.Field(config.default.field(input));
             fields[i] = .{
                 .name = input,
-                .type = types.Field(config.default.field(input)),
+                .type = F,
                 .default_value_ptr = null,
                 .is_comptime = false,
-                .alignment = 0, // Required for packed structs
+                .alignment = @alignOf(F),
             };
             i += 1;
         }
