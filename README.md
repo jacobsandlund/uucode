@@ -36,20 +36,20 @@ data.simple_uppercase_mapping // U+03A3 == Σ
 data.general_category // .letter_lowercase
 
 //////////////////////
-// graphemeBreak
+// grapheme_break
 
-var break_state: uucode.GraphemeBreakState = .default;
+var break_state: uucode.grapheme_break.State = .default;
 
 var cp1: u21 = 0x1F469; // 👩
 var cp2: u21 = 0x200D; // Zero width joiner
 
-uucode.graphemeBreak(cp1, cp2, &break_state); // false
+uucode.grapheme_break.check(cp1, cp2, &break_state); // false == no break
 
 cp1 = cp2;
 cp2 = 0x1F37C; // 🍼
 
 // combined grapheme cluster is 👩‍🍼 (woman feeding baby)
-uucode.graphemeBreak(cp1, cp2, &break_state); // false
+uucode.grapheme_break.check(cp1, cp2, &break_state); // false
 
 //////////////////////
 // utf8.Iterator
@@ -184,7 +184,7 @@ const uucode = @import("uucode");
 // LSP completion
 uucode.getX(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
 
-// Built in extensions can use `get`
+// Built-in extensions can still use `get`
 uucode.get(.wcwidth, 0x26F5) // ⛵ == 2
 ```
 
