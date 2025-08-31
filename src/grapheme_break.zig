@@ -3,7 +3,7 @@ const std = @import("std");
 const types = @import("types.zig");
 const get = @import("get.zig").get;
 
-pub const GraphemeBreakState = enum(u3) {
+pub const State = enum(u3) {
     default,
     regional_indicator,
     extended_pictographic,
@@ -24,7 +24,7 @@ fn isExtend(gb: types.GraphemeBreak) bool {
 pub fn computeGraphemeBreak(
     gb1: types.GraphemeBreak,
     gb2: types.GraphemeBreak,
-    state: *GraphemeBreakState,
+    state: *State,
 ) bool {
     // Set state back to default when `gb1` or `gb2` is not expected in sequence.
     switch (state.*) {
@@ -217,7 +217,7 @@ pub fn computeGraphemeBreak(
     return true;
 }
 
-fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *GraphemeBreakState) bool) !void {
+fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *State) bool) !void {
     const Ucd = @import("build/Ucd.zig");
 
     const stripComment = Ucd.stripComment;
@@ -245,7 +245,7 @@ fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *GraphemeBreakSta
         const start = parts.next().?;
         try std.testing.expect(std.mem.eql(u8, start, "÷"));
 
-        var state: GraphemeBreakState = .default;
+        var state: State = .default;
         var cp1 = try parseCodePoint(parts.next().?);
         var expected_str = parts.next().?;
         var cp2 = try parseCodePoint(parts.next().?);
@@ -276,7 +276,7 @@ fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *GraphemeBreakSta
     try std.testing.expect(success);
 }
 
-fn testGetActualComputedGraphemeBreak(cp1: u21, cp2: u21, state: *GraphemeBreakState) bool {
+fn testGetActualComputedGraphemeBreak(cp1: u21, cp2: u21, state: *State) bool {
     const gb1 = get(.grapheme_break, cp1);
     const gb2 = get(.grapheme_break, cp2);
     return computeGraphemeBreak(gb1, gb2, state);
@@ -286,7 +286,7 @@ test "GraphemeBreakTest.txt - computeGraphemeBreak" {
     try testGraphemeBreak(testGetActualComputedGraphemeBreak);
 }
 
-pub fn GraphemeBreakTable(comptime GB: type, comptime State: type) type {
+pub fn GraphemeBreakTable(comptime GB: type) type {
     const Result = packed struct {
         result: bool,
         state: State,
@@ -322,11 +322,10 @@ pub fn GraphemeBreakTable(comptime GB: type, comptime State: type) type {
 
 pub fn precomputeGraphemeBreak(
     comptime GB: type,
-    comptime State: type,
     compute: fn (gb1: GB, gb2: GB, state: *State) bool,
-) GraphemeBreakTable(GB, State) {
+) GraphemeBreakTable(GB) {
     @setEvalBranchQuota(2_000_000);
-    var table: GraphemeBreakTable(GB, State) = undefined;
+    var table: GraphemeBreakTable(GB) = undefined;
 
     const gb_fields = @typeInfo(GB).@"enum".fields;
     const state_fields = @typeInfo(State).@"enum".fields;
@@ -350,14 +349,13 @@ pub fn precomputeGraphemeBreak(
     return table;
 }
 
-pub fn graphemeBreak(
+pub fn check(
     cp1: u21,
     cp2: u21,
-    state: *GraphemeBreakState,
+    state: *State,
 ) bool {
     const table = comptime precomputeGraphemeBreak(
         types.GraphemeBreak,
-        GraphemeBreakState,
         computeGraphemeBreak,
     );
     // 5 BreakState fields x 2 x 18 GraphemeBreak fields = 1620
@@ -369,6 +367,6 @@ pub fn graphemeBreak(
     return result.result;
 }
 
-test "GraphemeBreakTest.txt - graphemeBreak" {
-    try testGraphemeBreak(graphemeBreak);
+test "GraphemeBreakTest.txt - check" {
+    try testGraphemeBreak(check);
 }
