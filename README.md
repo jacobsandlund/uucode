@@ -52,11 +52,11 @@ cp2 = 0x1F37C; // 🍼
 uucode.graphemeBreak(cp1, cp2, &break_state); // false
 
 //////////////////////
-// CodePointIterator
+// utf8.Iterator
 
-// TODO: offer more alternatives (like reading into a code point buffer), and
-// do more testing and benchmarks
-var iter = uucode.CodePointIterator.init("😀😅😻👺");
+// TODO: offer more alternatives (like reading into a code point buffer), SIMD,
+// and do more testing and benchmarks
+var iter = uucode.utf8.Iterator.init("😀😅😻👺");
 iter.next(); // 0x1F600
 iter.peek(); // 0x1F605
 iter.next(); // 0x1F605

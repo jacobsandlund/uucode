@@ -44,7 +44,7 @@ fn isDoneDecoding(state: usize) bool {
     return state == UTF8_ACCEPT or state == UTF8_REJECT;
 }
 
-pub const CodePointIterator = struct {
+pub const Iterator = struct {
     bytes: []const u8,
     i: usize = 0,
 
@@ -78,8 +78,8 @@ pub const CodePointIterator = struct {
     }
 };
 
-test "CodePointIterator for ascii" {
-    var it = CodePointIterator.init("abc");
+test "Iterator for ascii" {
+    var it = Iterator.init("abc");
     try std.testing.expectEqual('a', it.next());
     try std.testing.expectEqual(1, it.i);
     try std.testing.expectEqual('b', it.peek());
@@ -89,16 +89,16 @@ test "CodePointIterator for ascii" {
     try std.testing.expectEqual(null, it.next());
 }
 
-test "CodePointIterator for emoji" {
-    var it = CodePointIterator.init("😀😅😻👺");
+test "Iterator for emoji" {
+    var it = Iterator.init("😀😅😻👺");
     try std.testing.expectEqual(0x1F600, it.next());
     try std.testing.expectEqual(0x1F605, it.next());
     try std.testing.expectEqual(0x1F63B, it.next());
     try std.testing.expectEqual(0x1F47A, it.next());
 }
 
-test "CodePointIterator overlong utf8" {
-    var it = CodePointIterator.init("\xf0\x80\x80\xaf");
+test "Iterator overlong utf8" {
+    var it = Iterator.init("\xf0\x80\x80\xaf");
     try std.testing.expectEqual(0xFFFD, it.next());
     try std.testing.expectEqual(0xFFFD, it.next());
     try std.testing.expectEqual(0xFFFD, it.next());
