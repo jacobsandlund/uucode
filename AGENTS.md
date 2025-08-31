@@ -19,7 +19,7 @@ Always `zig build test` to check that changes still pass.
 
 ## Code Style
 
-Follow Zig standard conventions, but keep imports at the top.
+Follow Zig standard conventions, also keeping imports at the top.
 
 Prefer self-documenting code to comments, but add detailed comments for anything that needs explanation.
 

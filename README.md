@@ -4,8 +4,6 @@ TODO: greatly expand documentation in this README and in a static docs site.
 
 See branch `zig-0.14` if you haven't migrated to `0.15` yet (this branch won't last forever).
 
-Check out [AGENTS.md](./AGENTS.md) for a basic explanation. (I've not actually used agents that much but they're sometimes helpful for easier tasks.)
-
 ## Super basic usage
 
 ``` zig
@@ -189,3 +187,16 @@ uucode.getX(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
 // Built in extensions can use `get`
 uucode.get(.wcwidth, 0x26F5) // ⛵ == 2
 ```
+
+## Code architecture
+
+The architecture works in a few layers:
+
+* Layer 1 (`src/build/Ucd.zig`): Parses the Unicode Character Database (UCD).
+* Layer 2 (`src/build/tables.zig`): Generates table data written to a zig file.
+* Layer 3 (`src/root.zig`): Exposes methods to fetch information from the built tables.
+
+
+## AGENTS.md
+
+While I've included an `AGENTS.md`, any use of AI has been carefully reviewed--no slop here! I've primarily used agents for an initial pass at parsing the UCD text files.
