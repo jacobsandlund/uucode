@@ -149,9 +149,9 @@ fn buildBuildConfig(
     fields_8: ?[]const []const u8,
     fields_9: ?[]const []const u8,
 ) []const u8 {
-    var bytes = std.ArrayList(u8).init(allocator);
+    var bytes = std.Io.Writer.Allocating.init(allocator);
     defer bytes.deinit();
-    const writer = bytes.writer();
+    const writer = &bytes.writer;
 
     if (fields_0 == null) {
         return bytes.toOwnedSlice() catch @panic("OOM");
