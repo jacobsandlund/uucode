@@ -330,7 +330,7 @@ pub const Field = struct {
             return is_okay;
         }
 
-        pub fn write(self: Runtime, writer: *std.Io.Writer) !void {
+        pub fn write(self: Runtime, writer: anytype) !void {
             try writer.print(
                 \\.{{
                 \\    .name = "{s}",
