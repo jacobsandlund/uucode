@@ -1,12 +1,15 @@
 const std = @import("std");
 const getpkg = @import("get.zig");
-const config = @import("config.zig");
-const types = @import("types.zig");
+pub const config = @import("config.zig");
+pub const types = @import("types.zig");
 pub const ascii = @import("ascii.zig");
-const grapheme_break = @import("grapheme_break.zig");
+pub const grapheme_break = @import("grapheme_break.zig");
 pub const utf8 = @import("utf8.zig");
 pub const x = @import("x/root.zig");
 const testing = std.testing;
+
+pub const max_code_point = config.max_code_point;
+pub const code_point_range_end = config.code_point_range_end;
 
 pub const get = getpkg.get;
 pub const getX = getpkg.getX;
@@ -14,27 +17,6 @@ pub const TypeOf = getpkg.TypeOf;
 pub const TypeOfX = getpkg.TypeOfX;
 pub const getPacked = getpkg.getPacked;
 pub const PackedTypeOf = getpkg.PackedTypeOf;
-
-pub const max_code_point = config.max_code_point;
-pub const code_point_range_end = config.code_point_range_end;
-
-pub const GeneralCategory = types.GeneralCategory;
-pub const BidiClass = types.BidiClass;
-pub const DecompositionType = types.DecompositionType;
-pub const NumericType = types.NumericType;
-pub const IndicConjunctBreak = types.IndicConjunctBreak;
-pub const EastAsianWidth = types.EastAsianWidth;
-pub const OriginalGraphemeBreak = types.OriginalGraphemeBreak;
-pub const GraphemeBreak = types.GraphemeBreak;
-pub const zero_width_non_joiner = types.zero_width_non_joiner;
-pub const zero_width_joiner = types.zero_width_joiner;
-pub const SpecialCasingCondition = types.SpecialCasingCondition;
-pub const Block = types.Block;
-
-pub const computeGraphemeBreak = grapheme_break.computeGraphemeBreak;
-pub const graphemeBreak = grapheme_break.graphemeBreak;
-pub const precomputeGraphemeBreak = grapheme_break.precomputeGraphemeBreak;
-pub const GraphemeBreakState = grapheme_break.GraphemeBreakState;
 
 test {
     std.testing.refAllDeclsRecursive(@This());

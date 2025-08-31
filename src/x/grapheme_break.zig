@@ -2,7 +2,7 @@ const std = @import("std");
 const uucode = @import("../root.zig");
 const types_x = @import("types.x.zig");
 
-fn mapXEmojiToOriginal(gbx: types_x.GraphemeBreakXEmoji) uucode.GraphemeBreak {
+fn mapXEmojiToOriginal(gbx: types_x.GraphemeBreakXEmoji) uucode.types.GraphemeBreak {
     return switch (gbx) {
         .emoji_modifier => .indic_conjunct_break_extend,
         .emoji_modifier_base => .extended_pictographic,
@@ -10,7 +10,7 @@ fn mapXEmojiToOriginal(gbx: types_x.GraphemeBreakXEmoji) uucode.GraphemeBreak {
         inline else => |g| comptime blk: {
             @setEvalBranchQuota(10_000);
             break :blk std.meta.stringToEnum(
-                uucode.GraphemeBreak,
+                uucode.types.GraphemeBreak,
                 @tagName(g),
             ) orelse unreachable;
         },
@@ -26,11 +26,11 @@ fn mapXEmojiToOriginal(gbx: types_x.GraphemeBreakXEmoji) uucode.GraphemeBreak {
 pub fn computeGraphemeBreakXEmoji(
     gbx1: types_x.GraphemeBreakXEmoji,
     gbx2: types_x.GraphemeBreakXEmoji,
-    state: *uucode.GraphemeBreakState,
+    state: *uucode.grapheme_break.State,
 ) bool {
     const gb1 = mapXEmojiToOriginal(gbx1);
     const gb2 = mapXEmojiToOriginal(gbx2);
-    const result = uucode.computeGraphemeBreak(gb1, gb2, state);
+    const result = uucode.grapheme_break.computeGraphemeBreak(gb1, gb2, state);
 
     if (gbx2 == .emoji_modifier) {
         if (gbx1 == .emoji_modifier_base) {
@@ -55,14 +55,13 @@ pub fn computeGraphemeBreakXEmoji(
     }
 }
 
-pub fn graphemeBreakXEmoji(
+pub fn checkXEmoji(
     cp1: u21,
     cp2: u21,
-    state: *uucode.GraphemeBreakState,
+    state: *uucode.grapheme_break.State,
 ) bool {
-    const table = comptime uucode.precomputeGraphemeBreak(
+    const table = comptime uucode.grapheme_break.precomputeGraphemeBreak(
         types_x.GraphemeBreakXEmoji,
-        uucode.GraphemeBreakState,
         computeGraphemeBreakXEmoji,
     );
     const gb1 = uucode.get(.grapheme_break_x_emoji, cp1);

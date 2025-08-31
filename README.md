@@ -2,7 +2,7 @@
 
 TODO: greatly expand documentation in this README and in a static docs site.
 
-Check out [AGENTS.md](./AGENTS.md) for a basic explanation. (I've not actually used agents that much but they're sometimes helpful for easier tasks.)
+See branch `zig-0.14` if you haven't migrated to `0.15` yet (this branch won't last forever).
 
 ## Super basic usage
 
@@ -36,20 +36,20 @@ data.simple_uppercase_mapping // U+03A3 == Σ
 data.general_category // .letter_lowercase
 
 //////////////////////
-// graphemeBreak
+// grapheme_break
 
-var break_state: uucode.GraphemeBreakState = .default;
+var break_state: uucode.grapheme_break.State = .default;
 
 var cp1: u21 = 0x1F469; // 👩
 var cp2: u21 = 0x200D; // Zero width joiner
 
-uucode.graphemeBreak(cp1, cp2, &break_state); // false
+uucode.grapheme_break.check(cp1, cp2, &break_state); // false == no break
 
 cp1 = cp2;
 cp2 = 0x1F37C; // 🍼
 
 // combined grapheme cluster is 👩‍🍼 (woman feeding baby)
-uucode.graphemeBreak(cp1, cp2, &break_state); // false
+uucode.grapheme_break.check(cp1, cp2, &break_state); // false
 
 //////////////////////
 // utf8.Iterator
@@ -184,6 +184,19 @@ const uucode = @import("uucode");
 // LSP completion
 uucode.getX(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
 
-// Built in extensions can use `get`
+// Built-in extensions can still use `get`
 uucode.get(.wcwidth, 0x26F5) // ⛵ == 2
 ```
+
+## Code architecture
+
+The architecture works in a few layers:
+
+* Layer 1 (`src/build/Ucd.zig`): Parses the Unicode Character Database (UCD).
+* Layer 2 (`src/build/tables.zig`): Generates table data written to a zig file.
+* Layer 3 (`src/root.zig`): Exposes methods to fetch information from the built tables.
+
+
+## AGENTS.md
+
+While I've included an `AGENTS.md`, any use of AI has been carefully reviewed--no slop here! I've primarily used agents for an initial pass at parsing the UCD text files.

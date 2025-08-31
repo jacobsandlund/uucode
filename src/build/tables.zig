@@ -12,7 +12,7 @@ const buffer_size = 150_000_000; // Actual is ~149 MiB
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
-    const table_configs: []const config.Table = if (config.is_updating_ucd) &.{config.updating_ucd} else &build_config.tables;
+    const table_configs: []const config.Table = if (config.is_updating_ucd) &.{updating_ucd} else &build_config.tables;
 
     const buffer = try std.heap.page_allocator.alloc(u8, buffer_size);
     defer std.heap.page_allocator.free(buffer);
@@ -82,6 +82,136 @@ pub fn main() !void {
         @panic("Updating Ucd -- tables not configured to actully run. flip `is_updating_ucd` to false and run again");
     }
 }
+
+const updating_ucd_fields = brk: {
+    const d = config.default;
+    const max_cp = config.max_code_point;
+
+    @setEvalBranchQuota(5_000);
+    var fields: [d.fields.len]config.Field = undefined;
+
+    const var_len_or_shift_fields = [_]config.Field{
+        d.field("name").override(.{
+            .max_len = 200,
+            .max_offset = 1_500_000,
+        }),
+        d.field("decomposition_mapping").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+            .max_len = 40,
+            .max_offset = 8_000,
+        }),
+        d.field("numeric_value_numeric").override(.{
+            .max_len = 30,
+            .max_offset = 800,
+        }),
+        d.field("unicode_1_name").override(.{
+            .max_len = 120,
+            .max_offset = 80_000,
+        }),
+        d.field("simple_uppercase_mapping").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+        }),
+        d.field("simple_lowercase_mapping").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+        }),
+        d.field("simple_titlecase_mapping").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+        }),
+        d.field("case_folding_simple").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+        }),
+        d.field("case_folding_full").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+            .max_len = 9,
+            .max_offset = 200,
+        }),
+        d.field("case_folding_turkish_only").override(.{
+            .max_offset = 20,
+        }),
+        d.field("case_folding_common_only").override(.{
+            .max_offset = 2_000,
+        }),
+        d.field("case_folding_simple_only").override(.{
+            .max_offset = 300,
+        }),
+        d.field("case_folding_full_only").override(.{
+            .max_len = 9,
+            .max_offset = 500,
+        }),
+        d.field("special_lowercase_mapping").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+            .max_len = 9,
+            .max_offset = 50,
+        }),
+        d.field("special_titlecase_mapping").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+            .max_len = 9,
+            .max_offset = 200,
+        }),
+        d.field("special_uppercase_mapping").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+            .max_len = 9,
+            .max_offset = 300,
+        }),
+        d.field("special_casing_condition").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+            .max_len = 9,
+            .max_offset = 50,
+        }),
+        d.field("lowercase_mapping").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+            .max_len = 9,
+            .max_offset = 100,
+        }),
+        d.field("titlecase_mapping").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+            .max_len = 9,
+            .max_offset = 200,
+        }),
+        d.field("uppercase_mapping").override(.{
+            .shift_low = -@as(isize, max_cp),
+            .shift_high = max_cp,
+            .max_len = 9,
+            .max_offset = 300,
+        }),
+    };
+
+    for (var_len_or_shift_fields, 0..) |f, i| {
+        fields[i] = f.override(.{
+            .embedded_len = 0,
+        });
+    }
+
+    var i = var_len_or_shift_fields.len;
+
+    for (d.fields) |f| {
+        switch (f.kind()) {
+            .basic, .optional => {
+                fields[i] = f;
+                i += 1;
+            },
+            else => {},
+        }
+    }
+
+    break :brk fields;
+};
+
+const updating_ucd = config.Table{
+    .fields = &updating_ucd_fields,
+};
 
 fn DataMap(comptime Data: type) type {
     return std.HashMapUnmanaged(Data, u24, struct {
