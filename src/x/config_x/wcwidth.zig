@@ -94,10 +94,6 @@ const config = @import("config.zig");
 /// See also Ziglyph's `codePointWidth` function:
 /// https://codeberg.org/dude_the_builder/ziglyph/src/branch/main/src/display_width.zig
 ///
-/// Note that Ziglyph also treats Regional indicators as width 2, but because
-/// it takes two regional indicators to combine to form a flag in an emoji flag
-/// sequence, this instead treats it as width 1
-///
 fn compute(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
     _ = backing;
     _ = tracking;
@@ -125,13 +121,20 @@ fn compute(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
         data.wcwidth = 0;
     } else if (data.east_asian_width == .wide or data.east_asian_width == .fullwidth) {
         data.wcwidth = 2;
+    } else if (data.grapheme_break == .regional_indicator) {
+        data.wcwidth = 2;
     } else {
         data.wcwidth = 1;
     }
 }
 
 pub const wcwidth = config.Extension{
-    .inputs = &.{ "block", "east_asian_width", "general_category" },
+    .inputs = &.{
+        "block",
+        "east_asian_width",
+        "general_category",
+        "grapheme_break",
+    },
     .compute = &compute,
     .fields = &.{
         .{ .name = "wcwidth", .type = i3 },
