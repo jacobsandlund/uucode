@@ -19,7 +19,14 @@ pub const getPacked = getpkg.getPacked;
 pub const PackedTypeOf = getpkg.PackedTypeOf;
 
 test {
-    std.testing.refAllDeclsRecursive(@This());
+    std.testing.refAllDeclsRecursive(config);
+    std.testing.refAllDeclsRecursive(types);
+    std.testing.refAllDeclsRecursive(ascii);
+    std.testing.refAllDeclsRecursive(grapheme_break);
+    std.testing.refAllDeclsRecursive(utf8);
+    std.testing.refAllDeclsRecursive(getpkg);
+
+    // Don't ref `x` as it slows down compilation too much during tests
 }
 
 test "name" {

@@ -5,7 +5,7 @@ const config = @import("config.zig");
 const build_config = @import("build_config");
 
 pub const std_options: std.Options = .{
-    .log_level = .debug,
+    .log_level = .info,
 };
 
 const buffer_size = 150_000_000; // Actual is ~149 MiB
