@@ -105,17 +105,16 @@ fn DataField(comptime field: []const u8) type {
 
 fn Field(comptime field: []const u8) type {
     const D = DataField(field);
-    switch (@typeInfo(D)) {
-        .@"struct", .@"enum", .@"union", .@"opaque" => {
-            if (@hasDecl(D, "optional") and (!@hasDecl(D, "is_optional") or D.is_optional)) {
-                return ?D.T;
-            } else if (@hasDecl(D, "value")) {
-                return D.T;
-            } else {
-                return D;
-            }
-        },
-        else => return D,
+    if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "optional") or @hasDecl(D, "value"))) {
+        if (@hasDecl(D, "optional") and (!@hasDecl(D, "is_optional") or D.is_optional)) {
+            return ?D.T;
+        } else if (@hasDecl(D, "value")) {
+            return D.T;
+        } else {
+            return D;
+        }
+    } else {
+        return D;
     }
 }
 
@@ -123,20 +122,17 @@ inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
     const D = DataField(name);
     const table = comptime tableFor(name);
 
-    switch (@typeInfo(D)) {
-        .@"struct", .@"enum", .@"union", .@"opaque" => {
-            const d = @field(data(table, cp), name);
-            if (@hasDecl(D, "is_optional") and D.is_optional) {
-                return d.optional(cp);
-            } else if (@hasDecl(D, "optional") and !@hasDecl(D, "is_optional")) {
-                return d.optional();
-            } else if (@hasDecl(D, "value")) {
-                return d.value(cp);
-            } else {
-                return d;
-            }
-        },
-        else => return @field(data(table, cp), name),
+    if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "optional") or @hasDecl(D, "value"))) {
+        const d = @field(data(table, cp), name);
+        if (@hasDecl(D, "is_optional") and D.is_optional) {
+            return d.optional(cp);
+        } else if (@hasDecl(D, "optional") and !@hasDecl(D, "is_optional")) {
+            return d.optional();
+        } else {
+            return d.value(cp);
+        }
+    } else {
+        return @field(data(table, cp), name);
     }
 }
 
