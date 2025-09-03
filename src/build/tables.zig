@@ -477,8 +477,8 @@ pub fn writeTable(
         if (@hasField(AllData, "canonical_combining_class")) {
             a.canonical_combining_class = unicode_data.canonical_combining_class;
         }
-        if (@hasField(AllData, "bidi_class")) {
-            a.bidi_class = unicode_data.bidi_class;
+        if (@hasField(AllData, "unicode_data_bidi_class")) {
+            a.unicode_data_bidi_class = unicode_data.bidi_class;
         }
         if (@hasField(AllData, "decomposition_type")) {
             a.decomposition_type = unicode_data.decomposition_type;

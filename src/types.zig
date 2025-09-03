@@ -34,6 +34,7 @@ pub const GeneralCategory = enum(u5) {
     other_not_assigned, // Cn
 };
 
+// TODO: actually parse `DerivedBidiClass.txt`
 pub const BidiClass = enum(u5) {
     left_to_right, // L
     left_to_right_embedding, // LRE
