@@ -26,11 +26,11 @@ fn mapXEmojiToOriginal(gbx: types_x.GraphemeBreakXEmoji) uucode.types.GraphemeBr
 pub fn computeGraphemeBreakXEmoji(
     gbx1: types_x.GraphemeBreakXEmoji,
     gbx2: types_x.GraphemeBreakXEmoji,
-    state: *uucode.grapheme_break.State,
+    state: *uucode.grapheme.BreakState,
 ) bool {
     const gb1 = mapXEmojiToOriginal(gbx1);
     const gb2 = mapXEmojiToOriginal(gbx2);
-    const result = uucode.grapheme_break.computeGraphemeBreak(gb1, gb2, state);
+    const result = uucode.grapheme.computeGraphemeBreak(gb1, gb2, state);
 
     if (gbx2 == .emoji_modifier) {
         if (gbx1 == .emoji_modifier_base) {
@@ -55,12 +55,12 @@ pub fn computeGraphemeBreakXEmoji(
     }
 }
 
-pub fn checkXEmoji(
+pub fn isBreakXEmoji(
     cp1: u21,
     cp2: u21,
-    state: *uucode.grapheme_break.State,
+    state: *uucode.grapheme.BreakState,
 ) bool {
-    const table = comptime uucode.grapheme_break.precomputeGraphemeBreak(
+    const table = comptime uucode.grapheme.precomputeGraphemeBreak(
         types_x.GraphemeBreakXEmoji,
         computeGraphemeBreakXEmoji,
     );

@@ -1,3 +1,3 @@
-pub const grapheme_break_x = @import("types_x/grapheme_break_x.zig");
+pub const grapheme = @import("types_x/grapheme.zig");
 
-pub const GraphemeBreakXEmoji = grapheme_break_x.GraphemeBreakXEmoji;
+pub const GraphemeBreakXEmoji = grapheme.GraphemeBreakXEmoji;

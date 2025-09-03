@@ -38,18 +38,18 @@ data.general_category // .letter_lowercase
 //////////////////////
 // grapheme_break
 
-var break_state: uucode.grapheme_break.State = .default;
+var break_state: uucode.grapheme.BreakState = .default;
 
 var cp1: u21 = 0x1F469; // 👩
 var cp2: u21 = 0x200D; // Zero width joiner
 
-uucode.grapheme_break.check(cp1, cp2, &break_state); // false == no break
+uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
 
 cp1 = cp2;
 cp2 = 0x1F37C; // 🍼
 
 // combined grapheme cluster is 👩‍🍼 (woman feeding baby)
-uucode.grapheme_break.check(cp1, cp2, &break_state); // false
+uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
 
 //////////////////////
 // utf8.Iterator
