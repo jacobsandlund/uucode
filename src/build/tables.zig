@@ -5,7 +5,10 @@ const config = @import("config.zig");
 const build_config = @import("build_config");
 
 pub const std_options: std.Options = .{
-    .log_level = .info,
+    .log_level = if (@hasDecl(build_config, "log_level"))
+        build_config.log_level
+    else
+        .info,
 };
 
 const buffer_size = 150_000_000; // Actual is ~149 MiB
@@ -29,7 +32,9 @@ pub fn main() !void {
     // Get output path (only argument now)
     const output_path = args_iter.next() orelse std.debug.panic("No output file arg!", .{});
 
-    std.log.debug("fba end_index: {d}\n", .{fba.end_index});
+    std.log.debug("Fba end_index: {d}\n", .{fba.end_index});
+
+    std.log.debug("Writing to file: {s}\n", .{output_path});
 
     var out_file = try std.fs.cwd().createFile(output_path, .{});
     defer out_file.close();
