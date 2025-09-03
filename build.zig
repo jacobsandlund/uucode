@@ -174,10 +174,10 @@ fn buildBuildConfig(
 
     if (build_log_level) |level| {
         writer.print(
-            \\pub const log_level = {};
+            \\pub const log_level = .{s};
             \\
             \\
-        , .{level}) catch @panic("OOM");
+        , .{@tagName(level)}) catch @panic("OOM");
     }
 
     writer.writeAll(
@@ -410,6 +410,8 @@ test "simple build config with just fields/fields_0" {
     );
     defer std.testing.allocator.free(build_config);
 
+    errdefer std.debug.print("build_config: {s}", .{build_config});
+
     try std.testing.expect(std.mem.eql(u8,
         \\const config = @import("config.zig");
         \\const d = config.default;
@@ -445,6 +447,8 @@ test "complex build config with all fields_0 through fields_9" {
         .info,
     );
     defer std.testing.allocator.free(build_config);
+
+    errdefer std.debug.print("build_config: {s}", .{build_config});
 
     const substrings = [_][]const u8{
         "pub const log_level = .info;",
