@@ -124,7 +124,7 @@ inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
     const table = comptime tableFor(name);
     const d = @field(data(table, cp), name);
 
-    switch (@typeInfo(D)) {
+    switch (comptime @typeInfo(D)) {
         .@"struct", .@"enum", .@"union", .@"opaque" => {
             if (@hasDecl(D, "is_optional") and D.is_optional) {
                 return d.optional(cp);
