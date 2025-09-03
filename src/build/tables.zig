@@ -453,10 +453,10 @@ pub fn writeTable(
         const unicode_data = ucd.unicode_data[cp];
         const case_folding = ucd.case_folding.get(cp);
         const special_casing = ucd.special_casing.get(cp);
-        const derived_core_properties = ucd.derived_core_properties.get(cp) orelse types.DerivedCoreProperties{};
+        const derived_core_properties = ucd.derived_core_properties.get(cp) orelse Ucd.DerivedCoreProperties{};
         const east_asian_width = ucd.east_asian_width.get(cp) orelse types.EastAsianWidth.neutral;
         const original_grapheme_break = ucd.original_grapheme_break.get(cp) orelse types.OriginalGraphemeBreak.other;
-        const emoji_data = ucd.emoji_data.get(cp) orelse types.EmojiData{};
+        const emoji_data = ucd.emoji_data.get(cp) orelse Ucd.EmojiData{};
         const block_value = ucd.blocks.get(cp) orelse types.Block.no_block;
 
         var a: AllData = undefined;
