@@ -53,7 +53,7 @@ fn getTable(comptime table_name: []const u8) GetTable(table_name) {
 fn data(comptime table: anytype, cp: u21) DataFor(table) {
     const stage1_idx = cp >> 8;
     const stage2_idx = cp & 0xFF;
-    return table.data[table.stage2[(@as(usize, table.stage1[stage1_idx]) << 8) + stage2_idx]];
+    return table.data[table.stage2[table.stage1[stage1_idx] + stage2_idx]];
 }
 
 pub fn getPacked(comptime table_name: []const u8, cp: u21) PackedTypeOf(table_name) {

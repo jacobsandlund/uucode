@@ -250,7 +250,7 @@ fn hasAutoHash(comptime T: type) bool {
 const block_size = 256;
 const Block = [block_size]u24;
 
-const BlockMap = std.HashMapUnmanaged(Block, u16, struct {
+const BlockMap = std.HashMapUnmanaged(Block, usize, struct {
     pub fn hash(self: @This(), block: Block) u64 {
         _ = self;
         var hasher = std.hash.Wyhash.init(915296157);
@@ -436,7 +436,7 @@ pub fn writeTable(
     defer block_map.deinit(allocator);
     var stage2: std.ArrayListUnmanaged(u24) = .empty;
     defer stage2.deinit(allocator);
-    var stage1: std.ArrayListUnmanaged(u16) = .empty;
+    var stage1: std.ArrayListUnmanaged(usize) = .empty;
     defer stage1.deinit(allocator);
 
     var block: Block = undefined;
@@ -965,16 +965,16 @@ pub fn writeTable(
         if (block_len == block_size or cp == config.code_point_range_end - 1) {
             if (block_len < block_size) @memset(block[block_len..block_size], 0);
             const gop_block = try block_map.getOrPut(allocator, block);
-            var block_index: u16 = undefined;
+            var block_offset: usize = undefined;
             if (gop_block.found_existing) {
-                block_index = gop_block.value_ptr.*;
+                block_offset = gop_block.value_ptr.*;
             } else {
-                block_index = @intCast(stage2.items.len / block_size);
-                gop_block.value_ptr.* = block_index;
+                block_offset = stage2.items.len;
+                gop_block.value_ptr.* = block_offset;
                 try stage2.appendSlice(allocator, block[0..block_len]);
             }
 
-            try stage1.append(allocator, block_index);
+            try stage1.append(allocator, block_offset);
             block_len = 0;
         }
     }

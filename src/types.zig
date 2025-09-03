@@ -620,9 +620,7 @@ pub fn Table(comptime c: config.Table) type {
 
     if (len.stage1 > 0) {
         const next_stage_len = if (len.stage2 > 0) len.stage2 else len.data;
-        const block_size = 256;
-        const blocks_len = try std.math.divCeil(usize, next_stage_len, block_size);
-        const BlockOffset = std.math.IntFittingRange(0, blocks_len);
+        const BlockOffset = std.math.IntFittingRange(0, next_stage_len);
 
         const Stage1 = @Type(.{
             .array = .{
