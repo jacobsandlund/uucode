@@ -3,7 +3,7 @@ const getpkg = @import("get.zig");
 pub const config = @import("config.zig");
 pub const types = @import("types.zig");
 pub const ascii = @import("ascii.zig");
-pub const grapheme_break = @import("grapheme_break.zig");
+pub const grapheme = @import("grapheme.zig");
 pub const utf8 = @import("utf8.zig");
 pub const x = @import("x/root.zig");
 const testing = std.testing;
@@ -22,7 +22,7 @@ test {
     std.testing.refAllDeclsRecursive(config);
     std.testing.refAllDeclsRecursive(types);
     std.testing.refAllDeclsRecursive(ascii);
-    std.testing.refAllDeclsRecursive(grapheme_break);
+    std.testing.refAllDeclsRecursive(grapheme);
     std.testing.refAllDeclsRecursive(utf8);
     std.testing.refAllDeclsRecursive(getpkg);
 
