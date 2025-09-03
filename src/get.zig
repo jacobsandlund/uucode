@@ -122,10 +122,10 @@ fn Field(comptime field: []const u8) type {
 inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
     const D = DataField(name);
     const table = comptime tableFor(name);
-    const d = @field(data(table, cp), name);
 
-    switch (comptime @typeInfo(D)) {
+    switch (@typeInfo(D)) {
         .@"struct", .@"enum", .@"union", .@"opaque" => {
+            const d = @field(data(table, cp), name);
             if (@hasDecl(D, "is_optional") and D.is_optional) {
                 return d.optional(cp);
             } else if (@hasDecl(D, "optional") and !@hasDecl(D, "is_optional")) {
@@ -136,7 +136,7 @@ inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
                 return d;
             }
         },
-        else => return d,
+        else => return @field(data(table, cp), name),
     }
 }
 
