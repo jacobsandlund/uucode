@@ -38,6 +38,38 @@ const SpecialCasing = struct {
     special_casing_condition: []const types.SpecialCasingCondition,
 };
 
+pub const DerivedCoreProperties = struct {
+    is_math: bool = false,
+    is_alphabetic: bool = false,
+    is_lowercase: bool = false,
+    is_uppercase: bool = false,
+    is_cased: bool = false,
+    is_case_ignorable: bool = false,
+    changes_when_lowercased: bool = false,
+    changes_when_uppercased: bool = false,
+    changes_when_titlecased: bool = false,
+    changes_when_casefolded: bool = false,
+    changes_when_casemapped: bool = false,
+    is_id_start: bool = false,
+    is_id_continue: bool = false,
+    is_xid_start: bool = false,
+    is_xid_continue: bool = false,
+    is_default_ignorable_code_point: bool = false,
+    is_grapheme_extend: bool = false,
+    is_grapheme_base: bool = false,
+    is_grapheme_link: bool = false,
+    indic_conjunct_break: types.IndicConjunctBreak = .none,
+};
+
+pub const EmojiData = struct {
+    is_emoji: bool = false,
+    is_emoji_presentation: bool = false,
+    is_emoji_modifier: bool = false,
+    is_emoji_modifier_base: bool = false,
+    is_emoji_component: bool = false,
+    is_extended_pictographic: bool = false,
+};
+
 unicode_data: []UnicodeData,
 case_folding: std.AutoHashMapUnmanaged(u21, CaseFolding),
 special_casing: std.AutoHashMapUnmanaged(u21, SpecialCasing),

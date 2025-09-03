@@ -70,6 +70,12 @@ pub fn build(b: *std.Build) void {
         "Fields to build into table 9 for `get`",
     );
 
+    const build_log_level = b.option(
+        std.log.Level,
+        "build_log_level",
+        "Log level to use when building tables",
+    );
+
     const build_config_zig_opt = b.option(
         []const u8,
         "build_config.zig",
@@ -97,6 +103,7 @@ pub fn build(b: *std.Build) void {
             fields_7,
             fields_8,
             fields_9,
+            build_log_level,
         );
 
         break :blk b.addWriteFiles().add("build_config.zig", build_config_zig);
@@ -148,6 +155,7 @@ fn buildBuildConfig(
     fields_7: ?[]const []const u8,
     fields_8: ?[]const []const u8,
     fields_9: ?[]const []const u8,
+    build_log_level: ?std.log.Level,
 ) []const u8 {
     var bytes = std.ArrayList(u8).init(allocator);
     defer bytes.deinit();
@@ -161,6 +169,18 @@ fn buildBuildConfig(
         \\const config = @import("config.zig");
         \\const d = config.default;
         \\
+        \\
+    ) catch @panic("OOM");
+
+    if (build_log_level) |level| {
+        writer.print(
+            \\pub const log_level = {};
+            \\
+            \\
+        , .{level}) catch @panic("OOM");
+    }
+
+    writer.writeAll(
         \\pub const tables = [_]config.Table{
         \\    .{
         \\        .fields = &.{
@@ -269,6 +289,7 @@ fn buildTables(
     build_tables_mod.addImport("build_config", build_config_mod);
     build_tables_mod.addImport("types.zig", types_mod);
     const run_build_tables_exe = b.addRunArtifact(build_tables_exe);
+    run_build_tables_exe.setCwd(b.path(""));
     const tables_path = run_build_tables_exe.addOutputFileArg("tables.zig");
 
     return .{
@@ -385,12 +406,15 @@ test "simple build config with just fields/fields_0" {
         null,
         null,
         null,
+        .debug,
     );
     defer std.testing.allocator.free(build_config);
 
     try std.testing.expect(std.mem.eql(u8,
         \\const config = @import("config.zig");
         \\const d = config.default;
+        \\
+        \\pub const log_level = .debug;
         \\
         \\pub const tables = [_]config.Table{
         \\    .{
@@ -418,10 +442,12 @@ test "complex build config with all fields_0 through fields_9" {
         &.{ "special_lowercase_mapping", "special_titlecase_mapping" },
         &.{ "lowercase_mapping", "titlecase_mapping" },
         &.{ "uppercase_mapping", "is_emoji_presentation", "is_emoji_modifier" },
+        .info,
     );
     defer std.testing.allocator.free(build_config);
 
     const substrings = [_][]const u8{
+        "pub const log_level = .info;",
         "Table{",
         "fields",
         "name",

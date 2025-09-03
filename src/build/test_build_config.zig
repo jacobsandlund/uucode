@@ -2,6 +2,8 @@ const config = @import("config.zig");
 const config_x = @import("config.x.zig");
 const d = config.default;
 
+pub const log_level = .debug;
+
 fn computeFoo(cp: u21, data: anytype, b: anytype, t: anytype) void {
     _ = cp;
     _ = b;
