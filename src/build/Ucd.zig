@@ -73,10 +73,10 @@ pub const EmojiData = struct {
 unicode_data: []UnicodeData,
 case_folding: std.AutoHashMapUnmanaged(u21, CaseFolding),
 special_casing: std.AutoHashMapUnmanaged(u21, SpecialCasing),
-derived_core_properties: std.AutoHashMapUnmanaged(u21, types.DerivedCoreProperties),
+derived_core_properties: std.AutoHashMapUnmanaged(u21, DerivedCoreProperties),
 east_asian_width: std.AutoHashMapUnmanaged(u21, types.EastAsianWidth),
 original_grapheme_break: std.AutoHashMapUnmanaged(u21, types.OriginalGraphemeBreak),
-emoji_data: std.AutoHashMapUnmanaged(u21, types.EmojiData),
+emoji_data: std.AutoHashMapUnmanaged(u21, EmojiData),
 blocks: std.AutoHashMapUnmanaged(u21, types.Block),
 
 const Self = @This();
@@ -571,7 +571,7 @@ const special_casing_condition_map = std.StaticStringMap(types.SpecialCasingCond
 
 fn parseDerivedCoreProperties(
     allocator: std.mem.Allocator,
-    map: *std.AutoHashMapUnmanaged(u21, types.DerivedCoreProperties),
+    map: *std.AutoHashMapUnmanaged(u21, DerivedCoreProperties),
 ) !void {
     const file_path = "ucd/DerivedCoreProperties.txt";
 
@@ -603,7 +603,7 @@ fn parseDerivedCoreProperties(
         while (cp <= range.end) : (cp += 1) {
             const result = try map.getOrPut(allocator, cp);
             if (!result.found_existing) {
-                result.value_ptr.* = types.DerivedCoreProperties{};
+                result.value_ptr.* = DerivedCoreProperties{};
             }
             switch (property) {
                 .indic_conjunct_break => {
@@ -620,7 +620,7 @@ fn parseDerivedCoreProperties(
     }
 }
 
-const derived_core_property_map = std.StaticStringMap(std.meta.FieldEnum(types.DerivedCoreProperties)).initComptime(.{
+const derived_core_property_map = std.StaticStringMap(std.meta.FieldEnum(DerivedCoreProperties)).initComptime(.{
     .{ "Math", .is_math },
     .{ "Alphabetic", .is_alphabetic },
     .{ "Lowercase", .is_lowercase },
@@ -773,7 +773,7 @@ const grapheme_break_property_map = std.StaticStringMap(types.OriginalGraphemeBr
 
 fn parseEmojiData(
     allocator: std.mem.Allocator,
-    map: *std.AutoHashMapUnmanaged(u21, types.EmojiData),
+    map: *std.AutoHashMapUnmanaged(u21, EmojiData),
 ) !void {
     const file_path = "ucd/emoji/emoji-data.txt";
 
@@ -798,7 +798,7 @@ fn parseEmojiData(
         while (cp <= range.end) : (cp += 1) {
             const result = try map.getOrPut(allocator, cp);
             if (!result.found_existing) {
-                result.value_ptr.* = types.EmojiData{};
+                result.value_ptr.* = EmojiData{};
             }
 
             const property = emoji_data_property_map.get(prop_str) orelse {
@@ -815,7 +815,7 @@ fn parseEmojiData(
     }
 }
 
-const emoji_data_property_map = std.StaticStringMap(std.meta.FieldEnum(types.EmojiData)).initComptime(.{
+const emoji_data_property_map = std.StaticStringMap(std.meta.FieldEnum(EmojiData)).initComptime(.{
     .{ "Emoji", .is_emoji },
     .{ "Emoji_Presentation", .is_emoji_presentation },
     .{ "Emoji_Modifier", .is_emoji_modifier },
