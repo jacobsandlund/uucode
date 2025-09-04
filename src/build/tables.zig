@@ -224,7 +224,7 @@ fn DataMap(comptime Data: type) type {
             _ = self;
             var hasher = std.hash.Wyhash.init(128572459);
             inline for (@typeInfo(Data).@"struct".fields) |field| {
-                if (comptime hasAutoHash(field.type)) {
+                if (comptime @typeInfo(field.type) == .@"struct" and @hasDecl(field.type, "autoHash")) {
                     @field(data, field.name).autoHash(&hasher);
                 } else {
                     std.hash.autoHash(&hasher, @field(data, field.name));
@@ -235,16 +235,20 @@ fn DataMap(comptime Data: type) type {
 
         pub fn eql(self: @This(), a: Data, b: Data) bool {
             _ = self;
-            return a == b;
+            inline for (@typeInfo(Data).@"struct".fields) |field| {
+                if (comptime @typeInfo(field.type) == .@"struct" and @hasDecl(field.type, "eql")) {
+                    if (!@field(a, field.name).eql(@field(b, field.name))) {
+                        return false;
+                    }
+                } else {
+                    if (@field(a, field.name) != @field(b, field.name)) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         }
     }, std.hash_map.default_max_load_percentage);
-}
-
-fn hasAutoHash(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .@"struct", .@"union", .@"enum" => @hasDecl(T, "autoHash"),
-        else => false,
-    };
 }
 
 const block_size = 256;
@@ -940,10 +944,11 @@ pub fn writeTable(
 
         var d: Data = undefined;
 
-        const data_fields = @typeInfo(Data).@"struct".fields;
-        std.debug.assert(std.mem.eql(u8, data_fields[data_fields.len - 1].name, "_padding"));
+        //const data_fields = @typeInfo(Data).@"struct".fields;
+        //std.debug.assert(std.mem.eql(u8, data_fields[data_fields.len - 1].name, "_padding"));
 
-        inline for (data_fields[0 .. data_fields.len - 1]) |f| {
+        //inline for (data_fields[0 .. data_fields.len - 1]) |f| {
+        inline for (@typeInfo(Data).@"struct".fields) |f| {
             @field(d, f.name) = @field(a, f.name);
         }
 
@@ -1068,23 +1073,56 @@ pub fn writeTable(
         );
     }
 
-    const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
+    //const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
 
-    try writer.print(
+    try writer.writeAll(
         \\
-        \\        }},
-        \\        .data = @bitCast([{}]{s}{{
+        \\        },
+        \\        .data = .{
         \\
-    , .{ data_array.items.len, @typeName(IntEquivalent) });
+    );
+    //, .{ data_array.items.len, @typeName(IntEquivalent) });
 
     for (data_array.items) |item| {
-        const as_int: IntEquivalent = @bitCast(item);
-        try writer.print("{},", .{as_int});
+        //const as_int: IntEquivalent = @bitCast(item);
+        //try writer.print("{},", .{as_int});
+
+        try writer.writeAll(
+            \\            .{
+            \\
+        );
+
+        inline for (@typeInfo(Data).@"struct".fields) |field| {
+            try writer.print("                 .{s} = ", .{field.name});
+
+            switch (@typeInfo(field.type)) {
+                .@"struct" => {
+                    try @field(item, field.name).write(writer);
+                },
+                .@"enum" => {
+                    try writer.print(".{s}", .{
+                        @tagName(@field(item, field.name)),
+                    });
+                },
+                else => {
+                    try writer.print("{}", .{
+                        @field(item, field.name),
+                    });
+                },
+            }
+
+            try writer.writeAll(",\n");
+        }
+
+        try writer.writeAll(
+            \\            },
+            \\
+        );
     }
 
     try writer.writeAll(
         \\
-        \\        }),
+        \\        },
         \\        .stage2 = .{
         \\
     );

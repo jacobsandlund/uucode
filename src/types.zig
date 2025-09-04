@@ -517,8 +517,9 @@ pub fn Field(c: config.Field) type {
 
 pub fn Table(comptime c: config.Table) type {
     @setEvalBranchQuota(10_000);
-    var data_fields: [c.fields.len + 1]std.builtin.Type.StructField = undefined;
-    var data_bit_size: usize = 0;
+    var data_fields: [c.fields.len]std.builtin.Type.StructField = undefined;
+    //var data_fields: [c.fields.len + 1]std.builtin.Type.StructField = undefined;
+    //var data_bit_size: usize = 0;
 
     for (c.fields, 0..) |cf, i| {
         const F = Field(cf);
@@ -528,27 +529,29 @@ pub fn Table(comptime c: config.Table) type {
             .type = F,
             .default_value_ptr = null,
             .is_comptime = false,
-            .alignment = 0, // Required for packed structs
+            //.alignment = 0, // Required for packed structs
+            .alignment = @alignOf(F),
         };
-        data_bit_size += @bitSizeOf(F);
+        //data_bit_size += @bitSizeOf(F);
     }
 
-    const bits_over_byte = data_bit_size % 8;
-    const padding_bits = if (bits_over_byte == 0) 0 else 8 - bits_over_byte;
-    data_bit_size += padding_bits;
+    //const bits_over_byte = data_bit_size % 8;
+    //const padding_bits = if (bits_over_byte == 0) 0 else 8 - bits_over_byte;
+    //data_bit_size += padding_bits;
 
-    data_fields[c.fields.len] = .{
-        .name = "_padding",
-        .type = std.meta.Int(.unsigned, padding_bits),
-        .default_value_ptr = null,
-        .is_comptime = false,
-        .alignment = 0, // Required for packed structs
-    };
+    //data_fields[c.fields.len] = .{
+    //    .name = "_padding",
+    //    .type = std.meta.Int(.unsigned, padding_bits),
+    //    .default_value_ptr = null,
+    //    .is_comptime = false,
+    //    .alignment = 0, // Required for packed structs
+    //};
 
     const Data = @Type(.{
         .@"struct" = .{
-            .layout = .@"packed",
-            .backing_integer = std.meta.Int(.unsigned, data_bit_size),
+            .layout = .auto,
+            //.layout = .@"packed",
+            //.backing_integer = std.meta.Int(.unsigned, data_bit_size),
             .fields = &data_fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
@@ -766,24 +769,16 @@ pub fn VarLen(
         const EmbeddedArray = PackedArray(T, embedded_len);
         const ShiftSingleItem = if (c.cp_packing == .shift_single_item) Shift(c) else void;
 
-        const Len = std.math.IntFittingRange(
-            0,
-            max_len + @intFromBool(c.cp_packing == .sentinel_for_eql),
-        );
+        const Len = std.math.IntFittingRange(0, max_len);
 
         pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
-        pub const sentinel_for_eql_cp = max_len + 1;
-        pub const eql_cp = if (c.cp_packing == .sentinel_for_eql)
-            Self{ .len = sentinel_for_eql_cp, .data = .{ .offset = 0 } }
-        else
-            void{};
 
         pub const Tracking = VarLenTracking(T, max_len);
 
         pub const SliceBuffer = [
             @max(
                 embedded_len,
-                @intFromBool(c.cp_packing == .sentinel_for_eql or c.cp_packing == .shift_single_item),
+                @intFromBool(c.cp_packing == .shift_single_item),
             )
         ]T;
         pub const CopyBuffer = [max_len]T;
@@ -863,11 +858,6 @@ pub fn VarLen(
                         .shift = .initUntracked(cp, s[0]),
                     },
                 };
-            } else if (c.cp_packing == .sentinel_for_eql and
-                s.len == 1 and
-                s[0] == cp)
-            {
-                return .eql_cp;
             } else {
                 return ._fromSlice(allocator, backing, tracking, s);
             }
@@ -910,14 +900,6 @@ pub fn VarLen(
             cp: u21,
         ) []const T {
             switch (c.cp_packing) {
-                .sentinel_for_eql => {
-                    if (self.len == sentinel_for_eql_cp) {
-                        buffer[0] = cp;
-                        return buffer[0..1];
-                    } else {
-                        return self.directSlice(backing, buffer);
-                    }
-                },
                 .shift_single_item => {
                     if (self.len == 1) {
                         buffer[0] = self.data.shift.value(cp);
@@ -992,11 +974,6 @@ pub fn VarLen(
 
         fn _arrayFor(self: *const Self, cp: u21) [max_len]T {
             var a: [max_len]T = undefined;
-            if (c.cp_packing == .sentinel_for_eql and self.len == sentinel_for_eql_cp) {
-                a[0] = cp;
-                @memset(a[1..], 0);
-                return a;
-            }
             const s = lazyMemcpy(&a, self._sliceFor(&a, cp));
             @memset(a[s.len..], 0);
             return a;
@@ -1013,13 +990,61 @@ pub fn VarLen(
             std.hash.autoHash(hasher, self.len);
             if (comptime embedded_len == max_len) {
                 return std.hash.autoHash(hasher, self.data.embedded);
-            } else if (comptime embedded_len == 0) {
+            } else if (comptime embedded_len == 0 and c.cp_packing == .direct) {
                 return std.hash.autoHash(hasher, self.data.offset);
+            } else if (self.len == 1 and c.cp_packing == .shift_single_item) {
+                return std.hash.autoHash(hasher, self.data.shift);
             } else if (self.len <= embedded_len) {
                 return std.hash.autoHash(hasher, self.data.embedded);
             } else {
                 return std.hash.autoHash(hasher, self.data.offset);
             }
+        }
+
+        pub fn eql(a: Self, b: Self) bool {
+            if (a.len != b.len) {
+                return false;
+            }
+            if (comptime embedded_len == max_len) {
+                return a.data.embedded == b.data.embedded;
+            } else if (comptime embedded_len == 0 and c.cp_packing == .direct) {
+                return a.data.offset == b.data.offset;
+            } else if (a.len == 1 and c.cp_packing == .shift_single_item) {
+                return a.data.shift == b.data.shift;
+            } else if (a.len <= embedded_len) {
+                return a.data.embedded == b.data.embedded;
+            } else {
+                return a.data.offset == b.data.offset;
+            }
+        }
+
+        pub fn write(self: Self, writer: anytype) !void {
+            try writer.print(
+                \\.{{
+                \\    .len = {},
+                \\
+            , .{self.len});
+
+            if (self.len == 1 and c.cp_packing == .shift_single_item) {
+                try writer.writeAll("    .data = .{ .shift = ");
+                try self.data.shift.write(writer);
+                try writer.writeAll("},\n");
+            } else if (self.len <= embedded_len) {
+                try writer.print(
+                    \\    .data = .{{ .embedded = .{{ .bits = {} }} }},
+                    \\
+                , .{self.data.embedded.bits});
+            } else {
+                try writer.print(
+                    \\    .data = .{{ .offset = {} }},
+                    \\
+                , .{self.data.offset});
+            }
+
+            try writer.writeAll(
+                \\}
+                \\
+            );
         }
     };
 }
@@ -1185,6 +1210,15 @@ pub fn Optional(comptime c: config.Field) type {
                 return self.data;
             }
         }
+
+        pub fn write(self: Self, writer: anytype) !void {
+            try writer.print(
+                \\.{{
+                \\    .data = {},
+                \\}}
+                \\
+            , .{self.data});
+        }
     };
 }
 
@@ -1245,6 +1279,15 @@ pub fn Shift(comptime c: config.Field) type {
             } else {
                 return self.value(cp);
             }
+        }
+
+        pub fn write(self: Self, writer: anytype) !void {
+            try writer.print(
+                \\.{{
+                \\    .data = {},
+                \\}}
+                \\
+            , .{self.data});
         }
     };
 }

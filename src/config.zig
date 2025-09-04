@@ -260,7 +260,6 @@ pub const Field = struct {
     pub const CpPacking = enum {
         direct,
         shift, // Shift only
-        sentinel_for_eql, // VarLen only
         shift_single_item, // VarLen only
     };
 
@@ -442,16 +441,13 @@ pub const Field = struct {
             } else if (std.mem.eql(u8, f.name, "cp_packing")) {
                 switch (self.cp_packing) {
                     .shift => {
-                        switch (overrides.cp_packing) {
-                            .sentinel_for_eql, .shift_single_item => {
-                                @panic("Cannot override shift with shift_single_item or sentinel_for_eql");
-                            },
-                            else => {},
+                        if (overrides.cp_packing == .shift_single_item) {
+                            @panic("Cannot override shift with shift_single_item");
                         }
                     },
-                    .sentinel_for_eql, .shift_single_item => {
+                    .shift_single_item => {
                         if (overrides.cp_packing == .shift) {
-                            @panic("Cannot override shift_single_item or sentinel_for_eql with shift");
+                            @panic("Cannot override shift_single_item with shift");
                         }
                     },
                     else => {},

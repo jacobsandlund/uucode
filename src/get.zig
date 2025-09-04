@@ -68,8 +68,9 @@ pub fn PackedTypeOf(comptime table_name: []const u8) type {
 const FieldEnum = blk: {
     var fields_len: usize = 0;
     for (tables) |table| {
-        // subtract 1 for _padding
-        fields_len += @typeInfo(DataFor(table)).@"struct".fields.len - 1;
+        //// subtract 1 for _padding
+        //fields_len += @typeInfo(DataFor(table)).@"struct".fields.len - 1;
+        fields_len += @typeInfo(DataFor(table)).@"struct".fields.len;
     }
 
     var fields: [fields_len]std.builtin.Type.EnumField = undefined;
@@ -77,7 +78,7 @@ const FieldEnum = blk: {
 
     for (tables) |table| {
         for (@typeInfo(DataFor(table)).@"struct".fields) |f| {
-            if (std.mem.eql(u8, f.name, "_padding")) continue;
+            //if (std.mem.eql(u8, f.name, "_padding")) continue;
 
             fields[i] = .{
                 .name = f.name,
