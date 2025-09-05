@@ -133,9 +133,9 @@ fn Field(comptime field: []const u8) type {
 
 inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
     const D = DataField(name);
-    const stages = comptime stagesFor(name);
 
     if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "optional") or @hasDecl(D, "value"))) {
+        const stages = comptime stagesFor(name);
         const d = @field(data(stages, cp), name);
         if (@hasDecl(D, "is_optional") and D.is_optional) {
             return d.optional(cp);
@@ -145,7 +145,10 @@ inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
             return d.value(cp);
         }
     } else {
-        return @field(data(stages, cp), name);
+        const stages = &@field(tables, tableInfoFor(name).name).stages;
+        const stage1_idx = cp >> 8;
+        const stage2_idx = cp & 0xFF;
+        return @field(stages.data[stages.stage2[stages.stage1[stage1_idx] + stage2_idx]], name);
     }
 }
 
