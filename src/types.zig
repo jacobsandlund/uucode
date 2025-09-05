@@ -563,17 +563,36 @@ pub fn Table(comptime c: config.Table) type {
         else => .{ .stage1 = 0, .stage2 = 0, .data = 0 },
     };
 
-    const DataArray = @Type(.{
-        .array = .{
-            .len = len.data,
+    const DataSlice = @Type(.{
+        .pointer = .{
+            .size = .slice,
+            .is_const = true,
+            .is_volatile = false,
+            .alignment = @alignOf(Data),
+            .address_space = .generic,
             .child = Data,
+            .is_allowzero = false,
             .sentinel_ptr = null,
         },
     });
 
     const BackingBuffers = StructFromDecls(Data, "BackingBuffer");
 
+    const BackingPointer = @Type(.{
+        .pointer = .{
+            .size = .one,
+            .is_const = true,
+            .is_volatile = false,
+            .alignment = @alignOf(BackingBuffers),
+            .address_space = .generic,
+            .child = BackingBuffers,
+            .is_allowzero = false,
+            .sentinel_ptr = null,
+        },
+    });
+
     var table_fields: [5]std.builtin.Type.StructField = .{
+        // TODO: remove name, keep only in config
         .{
             .name = "name",
             .type = []const u8,
@@ -583,17 +602,17 @@ pub fn Table(comptime c: config.Table) type {
         },
         .{
             .name = "backing",
-            .type = BackingBuffers,
+            .type = BackingPointer,
             .default_value_ptr = null,
             .is_comptime = false,
-            .alignment = @alignOf(BackingBuffers),
+            .alignment = @alignOf(BackingPointer),
         },
         .{
             .name = "data",
-            .type = DataArray,
+            .type = DataSlice,
             .default_value_ptr = null,
             .is_comptime = false,
-            .alignment = @alignOf(Data),
+            .alignment = @alignOf(DataSlice),
         },
         undefined,
         undefined,
@@ -604,9 +623,14 @@ pub fn Table(comptime c: config.Table) type {
         const DataOffset = std.math.IntFittingRange(0, len.data);
 
         const Stage2 = @Type(.{
-            .array = .{
-                .len = len.stage2,
+            .pointer = .{
+                .size = .slice,
+                .is_const = true,
+                .is_volatile = false,
+                .alignment = @alignOf(DataOffset),
+                .address_space = .generic,
                 .child = DataOffset,
+                .is_allowzero = false,
                 .sentinel_ptr = null,
             },
         });
@@ -616,7 +640,7 @@ pub fn Table(comptime c: config.Table) type {
             .type = Stage2,
             .default_value_ptr = null,
             .is_comptime = false,
-            .alignment = @alignOf(DataOffset),
+            .alignment = @alignOf(Stage2),
         };
         table_fields_len += 1;
     }
@@ -626,9 +650,14 @@ pub fn Table(comptime c: config.Table) type {
         const BlockOffset = std.math.IntFittingRange(0, next_stage_len);
 
         const Stage1 = @Type(.{
-            .array = .{
-                .len = len.stage1,
+            .pointer = .{
+                .size = .slice,
+                .is_const = true,
+                .is_volatile = false,
+                .alignment = @alignOf(BlockOffset),
+                .address_space = .generic,
                 .child = BlockOffset,
+                .is_allowzero = false,
                 .sentinel_ptr = null,
             },
         });
@@ -638,7 +667,7 @@ pub fn Table(comptime c: config.Table) type {
             .type = Stage1,
             .default_value_ptr = null,
             .is_comptime = false,
-            .alignment = @alignOf(BlockOffset),
+            .alignment = @alignOf(Stage1),
         };
         table_fields_len += 1;
     }
@@ -915,7 +944,7 @@ pub fn VarLen(
 
         // Note: while it would be better for modularity to pass `backing`
         // in, this makes for a nicer API without having to wrap VarLen.
-        const hardcoded_backing = &@field(@import("get.zig").tableFor(c.name).backing, c.name);
+        const hardcoded_backing = &@field(@import("get.zig").backingFor(c.name), c.name);
 
         fn _slice(self: *const Self, buffer: []T) []const T {
             return self.sliceWithBacking(hardcoded_backing, buffer);

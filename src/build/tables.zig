@@ -406,7 +406,7 @@ pub fn writeTable(
     writer: anytype,
 ) !void {
     const Table = types.Table(table_config);
-    const Data = @typeInfo(@FieldType(Table, "data")).array.child;
+    const Data = @typeInfo(@FieldType(Table, "data")).pointer.child;
     const AllData = TableAllData(table_config);
     const Backing = types.StructFromDecls(AllData, "BackingBuffer");
     const Tracking = types.StructFromDecls(AllData, "Tracking");
@@ -1049,7 +1049,7 @@ pub fn writeTable(
     }
 
     try writer.writeAll(
-        \\        .backing = .{
+        \\        .backing = &.{
         \\
     );
 
@@ -1078,7 +1078,7 @@ pub fn writeTable(
     try writer.writeAll(
         \\
         \\        },
-        \\        .data = .{
+        \\        .data = &.{
         \\
     );
     //, .{ data_array.items.len, @typeName(IntEquivalent) });
@@ -1123,7 +1123,7 @@ pub fn writeTable(
     try writer.writeAll(
         \\
         \\        },
-        \\        .stage2 = .{
+        \\        .stage2 = &.{
         \\
     );
 
@@ -1134,7 +1134,7 @@ pub fn writeTable(
     try writer.writeAll(
         \\
         \\        },
-        \\        .stage1 = .{
+        \\        .stage1 = &.{
         \\
     );
 
