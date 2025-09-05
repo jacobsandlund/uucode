@@ -145,10 +145,18 @@ inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
             return d.value(cp);
         }
     } else {
-        const stages = &@field(tables, tableInfoFor(name).name).stages;
         const stage1_idx = cp >> 8;
         const stage2_idx = cp & 0xFF;
-        return @field(stages.data[stages.stage2[stages.stage1[stage1_idx] + stage2_idx]], name);
+
+        // Access everything directly from the global tables without any copies
+        return @field(
+            @field(tables, tableInfoFor(name).name).stages.data[
+                @field(tables, tableInfoFor(name).name).stages.stage2[
+                    @field(tables, tableInfoFor(name).name).stages.stage1[stage1_idx] + stage2_idx
+                ]
+            ],
+            name
+        );
     }
 }
 
