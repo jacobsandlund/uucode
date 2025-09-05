@@ -12,6 +12,7 @@ pub const max_code_point = config.max_code_point;
 pub const code_point_range_end = config.code_point_range_end;
 
 pub const get = getpkg.get;
+pub const getWidth = getpkg.getWidth;
 pub const getX = getpkg.getX;
 pub const TypeOf = getpkg.TypeOf;
 pub const TypeOfX = getpkg.TypeOfX;

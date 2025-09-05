@@ -160,6 +160,16 @@ inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
     }
 }
 
+pub fn getWidth(cp: u21) u2 {
+    const stage1_idx = cp >> 8;
+    const stage2_idx = cp & 0xFF;
+    return tables.@"1".stages.data[
+        tables.@"1".stages.stage2[
+            tables.@"1".stages.stage1[stage1_idx] + stage2_idx
+        ]
+    ].width;
+}
+
 // Note: `getX` and `TypeOfX` are only needed because `get` and`TypeOf` use a
 // known field enum so that the LSP can complete the field names, and for user
 // extensions we wouldn't know all the field names. If the LSP ever gets smart
