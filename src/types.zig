@@ -576,29 +576,7 @@ pub fn Table(comptime c: config.Table) type {
         },
     });
 
-    const BackingBuffers = StructFromDecls(Data, "BackingBuffer");
-
-    const BackingPointer = @Type(.{
-        .pointer = .{
-            .size = .one,
-            .is_const = true,
-            .is_volatile = false,
-            .alignment = @alignOf(BackingBuffers),
-            .address_space = .generic,
-            .child = BackingBuffers,
-            .is_allowzero = false,
-            .sentinel_ptr = null,
-        },
-    });
-
-    var table_fields: [4]std.builtin.Type.StructField = .{
-        .{
-            .name = "backing",
-            .type = BackingPointer,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(BackingPointer),
-        },
+    var stages_fields = [_]std.builtin.Type.StructField{
         .{
             .name = "data",
             .type = DataSlice,
@@ -609,7 +587,7 @@ pub fn Table(comptime c: config.Table) type {
         undefined,
         undefined,
     };
-    var table_fields_len: usize = 2;
+    var stages_fields_len: usize = 1;
 
     if (len.stage2 > 0) {
         const DataOffset = std.math.IntFittingRange(0, len.data);
@@ -627,14 +605,14 @@ pub fn Table(comptime c: config.Table) type {
             },
         });
 
-        table_fields[table_fields_len] = .{
+        stages_fields[stages_fields_len] = .{
             .name = "stage2",
             .type = Stage2,
             .default_value_ptr = null,
             .is_comptime = false,
             .alignment = @alignOf(Stage2),
         };
-        table_fields_len += 1;
+        stages_fields_len += 1;
     }
 
     if (len.stage1 > 0) {
@@ -654,20 +632,59 @@ pub fn Table(comptime c: config.Table) type {
             },
         });
 
-        table_fields[table_fields_len] = .{
+        stages_fields[stages_fields_len] = .{
             .name = "stage1",
             .type = Stage1,
             .default_value_ptr = null,
             .is_comptime = false,
             .alignment = @alignOf(Stage1),
         };
-        table_fields_len += 1;
+        stages_fields_len += 1;
     }
+
+    const Stages = @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = stages_fields[0..stages_fields_len],
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+
+    const BackingBuffers = StructFromDecls(Data, "BackingBuffer");
+
+    const BackingPointer = @Type(.{
+        .pointer = .{
+            .size = .one,
+            .is_const = true,
+            .is_volatile = false,
+            .alignment = @alignOf(BackingBuffers),
+            .address_space = .generic,
+            .child = BackingBuffers,
+            .is_allowzero = false,
+            .sentinel_ptr = null,
+        },
+    });
 
     return @Type(.{
         .@"struct" = .{
             .layout = .auto,
-            .fields = table_fields[0..table_fields_len],
+            .fields = &.{
+                .{
+                    .name = "backing",
+                    .type = BackingPointer,
+                    .default_value_ptr = null,
+                    .is_comptime = false,
+                    .alignment = @alignOf(BackingPointer),
+                },
+                .{
+                    .name = "stages",
+                    .type = Stages,
+                    .default_value_ptr = null,
+                    .is_comptime = false,
+                    .alignment = @alignOf(Stages),
+                },
+            },
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },

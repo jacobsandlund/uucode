@@ -5,14 +5,18 @@ const std = @import("std");
 const tables = @import("tables").tables;
 const types = @import("types.zig");
 
-fn DataFor(comptime Table: anytype) type {
-    const DataSlice = @FieldType(Table, "data");
+fn TableData(comptime Table: anytype) type {
+    return StagesData(@FieldType(Table, "stages"));
+}
+
+fn StagesData(comptime Stages: anytype) type {
+    const DataSlice = @FieldType(Stages, "data");
     return @typeInfo(DataSlice).pointer.child;
 }
 
 fn tableInfoFor(comptime field: []const u8) std.builtin.Type.StructField {
     inline for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
-        if (@hasField(DataFor(tableInfo.type), field)) {
+        if (@hasField(TableData(tableInfo.type), field)) {
             return tableInfo;
         }
     }
@@ -32,7 +36,7 @@ fn getTableInfo(comptime table_name: []const u8) std.builtin.Type.StructField {
 
 fn BackingFor(comptime field: []const u8) type {
     const tableInfo = tableInfoFor(field);
-    return @TypeOf(@field(tables, tableInfo.name).backing);
+    return @FieldType(@FieldType(@TypeOf(tables), tableInfo.name), "backing");
 }
 
 pub fn backingFor(comptime field: []const u8) BackingFor(field) {
@@ -40,52 +44,54 @@ pub fn backingFor(comptime field: []const u8) BackingFor(field) {
     return @field(tables, tableInfo.name).backing;
 }
 
-fn TableFor(comptime field: []const u8) type {
-    return @TypeOf(@field(tables, tableInfoFor(field).name));
+fn StagesFor(comptime field: []const u8) type {
+    const tableInfo = tableInfoFor(field);
+    return @FieldType(@FieldType(@TypeOf(tables), tableInfo.name), "stages");
 }
 
-fn tableFor(comptime field: []const u8) TableFor(field) {
-    return @field(tables, tableInfoFor(field).name);
+fn stagesFor(comptime field: []const u8) StagesFor(field) {
+    return @field(tables, tableInfoFor(field).name).stages;
 }
 
-fn GetTable(comptime table_name: []const u8) type {
-    return @TypeOf(@field(tables, getTableInfo(table_name).name));
+fn GetTableStages(comptime table_name: []const u8) type {
+    const tableInfo = getTableInfo(table_name);
+    return @FieldType(@FieldType(@TypeOf(tables), tableInfo.name), "stages");
 }
 
-fn getTable(comptime table_name: []const u8) GetTable(table_name) {
-    return @field(tables, getTableInfo(table_name).name);
+fn getTableStages(comptime table_name: []const u8) GetTableStages(table_name) {
+    return @field(tables, getTableInfo(table_name).name).stages;
 }
 
 // TODO: benchmark if needing an explicit `inline`
 // TODO: support two stage (stage1 and data) tables
-fn data(comptime table: anytype, cp: u21) DataFor(@TypeOf(table)) {
+fn data(comptime stages: anytype, cp: u21) StagesData(@TypeOf(stages)) {
     const stage1_idx = cp >> 8;
     const stage2_idx = cp & 0xFF;
-    return table.data[table.stage2[table.stage1[stage1_idx] + stage2_idx]];
+    return stages.data[stages.stage2[stages.stage1[stage1_idx] + stage2_idx]];
 }
 
 pub fn getPacked(comptime table_name: []const u8, cp: u21) PackedTypeOf(table_name) {
-    const table = comptime getTable(table_name);
-    return data(table, cp);
+    const stages = comptime getTableStages(table_name);
+    return data(stages, cp);
 }
 
 pub fn PackedTypeOf(comptime table_name: []const u8) type {
-    return DataFor(getTableInfo(table_name).type);
+    return TableData(getTableInfo(table_name).type);
 }
 
 const FieldEnum = blk: {
     var fields_len: usize = 0;
     for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
         //// subtract 1 for _padding
-        //fields_len += @typeInfo(DataFor(table)).@"struct".fields.len - 1;
-        fields_len += @typeInfo(DataFor(tableInfo.type)).@"struct".fields.len;
+        //fields_len += @typeInfo(TableData(table)).@"struct".fields.len - 1;
+        fields_len += @typeInfo(TableData(tableInfo.type)).@"struct".fields.len;
     }
 
     var fields: [fields_len]std.builtin.Type.EnumField = undefined;
     var i: usize = 0;
 
     for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
-        for (@typeInfo(DataFor(tableInfo.type)).@"struct".fields) |f| {
+        for (@typeInfo(TableData(tableInfo.type)).@"struct".fields) |f| {
             //if (std.mem.eql(u8, f.name, "_padding")) continue;
 
             fields[i] = .{
@@ -107,7 +113,7 @@ const FieldEnum = blk: {
 };
 
 fn DataField(comptime field: []const u8) type {
-    return @FieldType(DataFor(tableInfoFor(field).type), field);
+    return @FieldType(TableData(tableInfoFor(field).type), field);
 }
 
 fn Field(comptime field: []const u8) type {
@@ -127,10 +133,10 @@ fn Field(comptime field: []const u8) type {
 
 inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
     const D = DataField(name);
-    const table = comptime tableFor(name);
+    const stages = comptime stagesFor(name);
 
     if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "optional") or @hasDecl(D, "value"))) {
-        const d = @field(data(table, cp), name);
+        const d = @field(data(stages, cp), name);
         if (@hasDecl(D, "is_optional") and D.is_optional) {
             return d.optional(cp);
         } else if (@hasDecl(D, "optional") and !@hasDecl(D, "is_optional")) {
@@ -139,7 +145,7 @@ inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
             return d.value(cp);
         }
     } else {
-        return @field(data(table, cp), name);
+        return @field(data(stages, cp), name);
     }
 }
 

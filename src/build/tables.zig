@@ -406,7 +406,7 @@ pub fn writeTable(
     writer: anytype,
 ) !void {
     const Table = types.Table(table_config);
-    const Data = @typeInfo(@FieldType(Table, "data")).pointer.child;
+    const Data = @typeInfo(@FieldType(@FieldType(Table, "stages"), "data")).pointer.child;
     const AllData = TableAllData(table_config);
     const Backing = types.StructFromDecls(AllData, "BackingBuffer");
     const Tracking = types.StructFromDecls(AllData, "Tracking");
@@ -1068,7 +1068,8 @@ pub fn writeTable(
     try writer.writeAll(
         \\
         \\        },
-        \\        .data = &.{
+        \\        .stages = .{
+        \\            .data = &.{
         \\
     );
     //, .{ data_array.items.len, @typeName(IntEquivalent) });
@@ -1078,12 +1079,12 @@ pub fn writeTable(
         //try writer.print("{},", .{as_int});
 
         try writer.writeAll(
-            \\            .{
+            \\                .{
             \\
         );
 
         inline for (@typeInfo(Data).@"struct".fields) |field| {
-            try writer.print("                 .{s} = ", .{field.name});
+            try writer.print("                     .{s} = ", .{field.name});
 
             switch (@typeInfo(field.type)) {
                 .@"struct" => {
@@ -1105,15 +1106,15 @@ pub fn writeTable(
         }
 
         try writer.writeAll(
-            \\            },
+            \\                },
             \\
         );
     }
 
     try writer.writeAll(
         \\
-        \\        },
-        \\        .stage2 = &.{
+        \\            },
+        \\            .stage2 = &.{
         \\
     );
 
@@ -1123,8 +1124,8 @@ pub fn writeTable(
 
     try writer.writeAll(
         \\
-        \\        },
-        \\        .stage1 = &.{
+        \\            },
+        \\            .stage1 = &.{
         \\
     );
 
@@ -1134,6 +1135,7 @@ pub fn writeTable(
 
     try writer.writeAll(
         \\
+        \\            },
         \\        },
         \\    },
         \\
