@@ -591,15 +591,7 @@ pub fn Table(comptime c: config.Table) type {
         },
     });
 
-    var table_fields: [5]std.builtin.Type.StructField = .{
-        // TODO: remove name, keep only in config
-        .{
-            .name = "name",
-            .type = []const u8,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(?[]const u8),
-        },
+    var table_fields: [4]std.builtin.Type.StructField = .{
         .{
             .name = "backing",
             .type = BackingPointer,
@@ -617,7 +609,7 @@ pub fn Table(comptime c: config.Table) type {
         undefined,
         undefined,
     };
-    var table_fields_len: usize = 3;
+    var table_fields_len: usize = 2;
 
     if (len.stage2 > 0) {
         const DataOffset = std.math.IntFittingRange(0, len.data);

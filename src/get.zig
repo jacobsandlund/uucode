@@ -22,8 +22,7 @@ fn tableInfoFor(comptime field: []const u8) std.builtin.Type.StructField {
 
 fn getTableInfo(comptime table_name: []const u8) std.builtin.Type.StructField {
     inline for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
-        const name = @field(tables, tableInfo.name).name;
-        if (std.mem.eql(u8, name, table_name)) {
+        if (std.mem.eql(u8, tableInfo.name, table_name)) {
             return tableInfo;
         }
     }

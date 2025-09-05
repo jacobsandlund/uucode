@@ -987,8 +987,14 @@ pub fn writeTable(
     const build_data_end = try std.time.Instant.now();
     std.log.debug("Building data time: {d}ms\n", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
 
+    if (table_config.name) |name| {
+        try writer.print("    .{s} = ", .{name});
+    } else {
+        try writer.print("    .@\"{d}\" = ", .{table_index});
+    }
+
     try writer.print(
-        \\    types.Table(.{{
+        \\types.Table(.{{
         \\        .stages = .{{ .len = .{{
         \\            .stage1 = {},
         \\            .stage2 = {},
@@ -1033,22 +1039,6 @@ pub fn writeTable(
     try writer.writeAll(
         \\        },
         \\    }){
-        \\
-    );
-
-    if (table_config.name) |name| {
-        try writer.print(
-            \\        .name = "{s}",
-            \\
-        , .{name});
-    } else {
-        try writer.print(
-            \\        .name = "{d}",
-            \\
-        , .{table_index});
-    }
-
-    try writer.writeAll(
         \\        .backing = &.{
         \\
     );
