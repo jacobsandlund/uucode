@@ -219,7 +219,7 @@ const updating_ucd = config.Table{
 };
 
 fn DataMap(comptime Data: type) type {
-    return std.HashMapUnmanaged(Data, u24, struct {
+    return std.HashMapUnmanaged(Data, u16, struct {
         pub fn hash(self: @This(), data: Data) u64 {
             _ = self;
             var hasher = std.hash.Wyhash.init(128572459);
@@ -252,9 +252,9 @@ fn DataMap(comptime Data: type) type {
 }
 
 const block_size = 256;
-const Block = [block_size]u24;
+const Block = [block_size]u16;
 
-const BlockMap = std.HashMapUnmanaged(Block, usize, struct {
+const BlockMap = std.HashMapUnmanaged(Block, u16, struct {
     pub fn hash(self: @This(), block: Block) u64 {
         _ = self;
         var hasher = std.hash.Wyhash.init(915296157);
@@ -264,12 +264,12 @@ const BlockMap = std.HashMapUnmanaged(Block, usize, struct {
 
     pub fn eql(self: @This(), a: Block, b: Block) bool {
         _ = self;
-        return std.mem.eql(u24, &a, &b);
+        return std.mem.eql(u16, &a, &b);
     }
 }, std.hash_map.default_max_load_percentage);
 
 fn TableAllData(comptime c: config.Table) type {
-    var fields_len_bound: usize = c.fields.len;
+    var fields_len_bound: u16 = c.fields.len;
     for (c.extensions) |x| {
         fields_len_bound += x.inputs.len;
         fields_len_bound += x.fields.len;
@@ -438,9 +438,9 @@ pub fn writeTable(
     defer data_array.deinit(allocator);
     var block_map: BlockMap = .empty;
     defer block_map.deinit(allocator);
-    var stage2: std.ArrayListUnmanaged(u24) = .empty;
+    var stage2: std.ArrayListUnmanaged(u16) = .empty;
     defer stage2.deinit(allocator);
-    var stage1: std.ArrayListUnmanaged(usize) = .empty;
+    var stage1: std.ArrayListUnmanaged(u16) = .empty;
     defer stage1.deinit(allocator);
 
     var block: Block = undefined;
@@ -955,7 +955,7 @@ pub fn writeTable(
         // TODO: support two stage (stage1 and data) tables
 
         const gop = try data_map.getOrPut(allocator, d);
-        var data_index: u24 = undefined;
+        var data_index: u16 = undefined;
         if (gop.found_existing) {
             data_index = gop.value_ptr.*;
         } else {
@@ -970,11 +970,11 @@ pub fn writeTable(
         if (block_len == block_size or cp == config.code_point_range_end - 1) {
             if (block_len < block_size) @memset(block[block_len..block_size], 0);
             const gop_block = try block_map.getOrPut(allocator, block);
-            var block_offset: usize = undefined;
+            var block_offset: u16 = undefined;
             if (gop_block.found_existing) {
                 block_offset = gop_block.value_ptr.*;
             } else {
-                block_offset = stage2.items.len;
+                block_offset = @intCast(stage2.items.len);
                 gop_block.value_ptr.* = block_offset;
                 try stage2.appendSlice(allocator, block[0..block_len]);
             }

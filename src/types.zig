@@ -590,16 +590,14 @@ pub fn Table(comptime c: config.Table) type {
     var stages_fields_len: usize = 1;
 
     if (len.stage2 > 0) {
-        const DataOffset = std.math.IntFittingRange(0, len.data);
-
         const Stage2 = @Type(.{
             .pointer = .{
                 .size = .slice,
                 .is_const = true,
                 .is_volatile = false,
-                .alignment = @alignOf(DataOffset),
+                .alignment = @alignOf(u16),
                 .address_space = .generic,
-                .child = DataOffset,
+                .child = u16,
                 .is_allowzero = false,
                 .sentinel_ptr = null,
             },
@@ -616,17 +614,14 @@ pub fn Table(comptime c: config.Table) type {
     }
 
     if (len.stage1 > 0) {
-        const next_stage_len = if (len.stage2 > 0) len.stage2 else len.data;
-        const BlockOffset = std.math.IntFittingRange(0, next_stage_len);
-
         const Stage1 = @Type(.{
             .pointer = .{
                 .size = .slice,
                 .is_const = true,
                 .is_volatile = false,
-                .alignment = @alignOf(BlockOffset),
+                .alignment = @alignOf(u16),
                 .address_space = .generic,
-                .child = BlockOffset,
+                .child = u16,
                 .is_allowzero = false,
                 .sentinel_ptr = null,
             },
