@@ -339,6 +339,7 @@ fn createLibMod(
     config_x_mod.addImport("types.zig", types_mod);
     config_x_mod.addImport("config.zig", config_mod);
 
+    // TODO: expose this to see if importing can work?
     const build_config_mod = b.createModule(.{
         .root_source_file = build_config_path,
         .target = target,

@@ -62,6 +62,7 @@ pub fn isBreakXEmoji(
 ) bool {
     const table = comptime uucode.grapheme.precomputeGraphemeBreak(
         types_x.GraphemeBreakXEmoji,
+        uucode.grapheme.BreakState,
         computeGraphemeBreakXEmoji,
     );
     const gb1 = uucode.get(.grapheme_break_x_emoji, cp1);
