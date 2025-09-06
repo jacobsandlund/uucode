@@ -91,6 +91,8 @@ pub fn build(b: *std.Build) void {
     const tables_path_opt = b.option(std.Build.LazyPath, "tables.zig", "Built tables source file");
 
     const build_config_path = build_config_path_opt orelse blk: {
+        std.debug.print("build_config_path_opt not defined, so building a build_config.zig\n", .{});
+
         const build_config_zig = build_config_zig_opt orelse buildBuildConfig(
             b.allocator,
             fields orelse fields_0,
@@ -106,7 +108,7 @@ pub fn build(b: *std.Build) void {
             build_log_level,
         );
 
-        break :blk b.addWriteFiles().add("build_config.zig", build_config_zig);
+        break :blk b.addWriteFiles().add("build_config2.zig", build_config_zig);
     };
 
     const mod = createLibMod(b, target, optimize, tables_path_opt, build_config_path);
