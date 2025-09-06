@@ -48,6 +48,7 @@ pub fn main() !void {
         \\const config = @import("config.zig");
         \\const build_config = @import("build_config");
         \\
+        \\
     );
 
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -72,8 +73,6 @@ pub fn main() !void {
         std.log.debug("`writeTableData` for table_config {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
     }
 
-    const start_tables = try std.time.Instant.now();
-
     try writer.writeAll(
         \\
         \\pub const tables = .{
@@ -96,7 +95,6 @@ pub fn main() !void {
     );
 
     const total_end = try std.time.Instant.now();
-    std.log.debug("`writeTable` (all) time: {d}ms\n", .{total_end.since(start_tables) / std.time.ns_per_ms});
     std.log.debug("Total time: {d}ms\n", .{total_end.since(total_start) / std.time.ns_per_ms});
 
     if (config.is_updating_ucd) {
@@ -923,7 +921,6 @@ pub fn writeTableData(
         // GraphemeBreak field (derived)
         if (@hasField(AllData, "grapheme_break")) {
             if (emoji_data.is_extended_pictographic) {
-                // std.log.err("cp={x}: original_grapheme_break={}", .{ cp, original_grapheme_break });
                 std.debug.assert(original_grapheme_break == .other);
                 a.grapheme_break = .extended_pictographic;
             } else {
@@ -951,18 +948,15 @@ pub fn writeTableData(
                         if (cp == types.zero_width_joiner) {
                             a.grapheme_break = .zwj;
                         } else {
-                            // std.log.err("cp={x}: original_grapheme_break={}", .{ cp, original_grapheme_break });
                             std.debug.assert(original_grapheme_break == .extend);
                             a.grapheme_break = .indic_conjunct_break_extend;
                         }
                     },
                     .linker => {
-                        // std.log.err("cp={x}: original_grapheme_break={}", .{ cp, original_grapheme_break });
                         std.debug.assert(original_grapheme_break == .extend);
                         a.grapheme_break = .indic_conjunct_break_linker;
                     },
                     .consonant => {
-                        // std.log.err("cp={x}: original_grapheme_break={}", .{ cp, original_grapheme_break });
                         std.debug.assert(original_grapheme_break == .other);
                         a.grapheme_break = .indic_conjunct_break_consonant;
                     },
@@ -976,10 +970,6 @@ pub fn writeTableData(
 
         var d: Data = undefined;
 
-        //const data_fields = @typeInfo(Data).@"struct".fields;
-        //std.debug.assert(std.mem.eql(u8, data_fields[data_fields.len - 1].name, "_padding"));
-
-        //inline for (data_fields[0 .. data_fields.len - 1]) |f| {
         inline for (@typeInfo(Data).@"struct".fields) |f| {
             @field(d, f.name) = @field(a, f.name);
         }
@@ -1198,6 +1188,7 @@ pub fn writeTableData(
 
     try writer.writeAll(
         \\};
+        \\
         \\
     );
 }
