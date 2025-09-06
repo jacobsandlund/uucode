@@ -577,17 +577,35 @@ pub fn Table(comptime c: config.Table) type {
     });
 
     var stages_fields = [_]std.builtin.Type.StructField{
-        .{
-            .name = "data",
-            .type = DataSlice,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(DataSlice),
-        },
+        undefined,
         undefined,
         undefined,
     };
-    var stages_fields_len: usize = 1;
+    var stages_fields_len: usize = 0;
+
+    if (len.stage1 > 0) {
+        const Stage1 = @Type(.{
+            .pointer = .{
+                .size = .slice,
+                .is_const = true,
+                .is_volatile = false,
+                .alignment = @alignOf(u16),
+                .address_space = .generic,
+                .child = u16,
+                .is_allowzero = false,
+                .sentinel_ptr = null,
+            },
+        });
+
+        stages_fields[stages_fields_len] = .{
+            .name = "stage1",
+            .type = Stage1,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(Stage1),
+        };
+        stages_fields_len += 1;
+    }
 
     if (len.stage2 > 0) {
         const Stage2 = @Type(.{
@@ -613,29 +631,14 @@ pub fn Table(comptime c: config.Table) type {
         stages_fields_len += 1;
     }
 
-    if (len.stage1 > 0) {
-        const Stage1 = @Type(.{
-            .pointer = .{
-                .size = .slice,
-                .is_const = true,
-                .is_volatile = false,
-                .alignment = @alignOf(u16),
-                .address_space = .generic,
-                .child = u16,
-                .is_allowzero = false,
-                .sentinel_ptr = null,
-            },
-        });
-
-        stages_fields[stages_fields_len] = .{
-            .name = "stage1",
-            .type = Stage1,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(Stage1),
-        };
-        stages_fields_len += 1;
-    }
+    stages_fields[stages_fields_len] = .{
+        .name = "data",
+        .type = DataSlice,
+        .default_value_ptr = null,
+        .is_comptime = false,
+        .alignment = @alignOf(DataSlice),
+    };
+    stages_fields_len += 1;
 
     const Stages = @Type(.{
         .@"struct" = .{

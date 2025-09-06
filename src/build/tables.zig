@@ -448,7 +448,7 @@ pub fn writeTable(
 
     const build_data_start = try std.time.Instant.now();
 
-    var last_data_index: u16 = undefined;
+    var last_block_offset: u16 = undefined;
 
     for (0..config.max_valid_cp + 1) |cp_usize| {
         const cp: u21 = @intCast(cp_usize);
@@ -963,8 +963,6 @@ pub fn writeTable(
             try data_array.append(allocator, d);
         }
 
-        last_data_index = data_index;
-
         block[block_len] = data_index;
         block_len += 1;
 
@@ -980,22 +978,9 @@ pub fn writeTable(
             }
 
             try stage1.append(allocator, block_offset);
+            last_block_offset = block_offset;
             block_len = 0;
         }
-    }
-
-    for (0..block_size) |i| {
-        block[i] = last_data_index;
-    }
-
-    const last_gop_block = try block_map.getOrPut(allocator, block);
-    var last_block_offset: u16 = undefined;
-    if (last_gop_block.found_existing) {
-        last_block_offset = last_gop_block.value_ptr.*;
-    } else {
-        last_block_offset = @intCast(stage2.items.len);
-        last_gop_block.value_ptr.* = last_block_offset;
-        try stage2.appendSlice(allocator, &block);
     }
 
     var cp: usize = config.max_valid_cp + block_size;
@@ -1090,10 +1075,32 @@ pub fn writeTable(
         \\
         \\        },
         \\        .stages = .{
-        \\            .data = &.{
+        \\            .stage1 = &.{
         \\
     );
     //, .{ data_array.items.len, @typeName(IntEquivalent) });
+
+    for (stage1.items) |item| {
+        try writer.print("{},", .{item});
+    }
+
+    try writer.writeAll(
+        \\
+        \\            },
+        \\            .stage2 = &.{
+        \\
+    );
+
+    for (stage2.items) |item| {
+        try writer.print("{},", .{item});
+    }
+
+    try writer.writeAll(
+        \\
+        \\            },
+        \\            .data = &.{
+        \\
+    );
 
     for (data_array.items) |item| {
         //const as_int: IntEquivalent = @bitCast(item);
@@ -1130,28 +1137,6 @@ pub fn writeTable(
             \\                },
             \\
         );
-    }
-
-    try writer.writeAll(
-        \\
-        \\            },
-        \\            .stage2 = &.{
-        \\
-    );
-
-    for (stage2.items) |item| {
-        try writer.print("{},", .{item});
-    }
-
-    try writer.writeAll(
-        \\
-        \\            },
-        \\            .stage1 = &.{
-        \\
-    );
-
-    for (stage1.items) |item| {
-        try writer.print("{},", .{item});
     }
 
     try writer.writeAll(
