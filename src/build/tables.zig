@@ -48,8 +48,6 @@ pub fn main() !void {
         \\const config = @import("config.zig");
         \\const build_config = @import("build_config");
         \\
-        \\pub const tables = .{
-        \\
     );
 
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -59,7 +57,7 @@ pub fn main() !void {
     inline for (table_configs, 0..) |table_config, i| {
         const start = try std.time.Instant.now();
 
-        try writeTable(
+        try writeTableData(
             table_config,
             i,
             arena_alloc,
@@ -71,7 +69,24 @@ pub fn main() !void {
         _ = arena.reset(.retain_capacity);
 
         const end = try std.time.Instant.now();
-        std.log.debug("`writeTable` for table_config {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
+        std.log.debug("`writeTableData` for table_config {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
+    }
+
+    const start_tables = try std.time.Instant.now();
+
+    try writer.writeAll(
+        \\
+        \\pub const tables = .{
+        \\
+    );
+
+    inline for (table_configs, 0..) |table_config, i| {
+        try writeTable(
+            table_config,
+            i,
+            arena_alloc,
+            writer,
+        );
     }
 
     try writer.writeAll(
@@ -81,6 +96,7 @@ pub fn main() !void {
     );
 
     const total_end = try std.time.Instant.now();
+    std.log.debug("`writeTable` (all) time: {d}ms\n", .{total_end.since(start_tables) / std.time.ns_per_ms});
     std.log.debug("Total time: {d}ms\n", .{total_end.since(total_start) / std.time.ns_per_ms});
 
     if (config.is_updating_ucd) {
@@ -398,17 +414,34 @@ fn singleInit(
     }
 }
 
-pub fn writeTable(
+fn tablePrefix(
+    comptime table_config: config.Table,
+    table_index: usize,
+    allocator: std.mem.Allocator,
+) !struct { []const u8, []const u8 } {
+    const prefix = if (table_config.name) |name|
+        try std.fmt.allocPrint(allocator, "table_{s}", .{name})
+    else
+        try std.fmt.allocPrint(allocator, "table_{d}", .{table_index});
+
+    const TypePrefix = if (table_config.name) |name|
+        try std.fmt.allocPrint(allocator, "Table_{s}", .{name})
+    else
+        try std.fmt.allocPrint(allocator, "Table_{d}", .{table_index});
+
+    return .{ prefix, TypePrefix };
+}
+
+pub fn writeTableData(
     comptime table_config: config.Table,
     table_index: usize,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
     writer: anytype,
 ) !void {
-    const Table = types.Table(table_config);
-    const Data = @typeInfo(@FieldType(@FieldType(Table, "stages"), "data")).pointer.child;
+    const Data = types.Data(table_config);
     const AllData = TableAllData(table_config);
-    const Backing = types.StructFromDecls(AllData, "BackingBuffer");
+    const Backing = types.Backing(AllData);
     const Tracking = types.StructFromDecls(AllData, "Tracking");
 
     var backing = blk: {
@@ -993,23 +1026,19 @@ pub fn writeTable(
     const build_data_end = try std.time.Instant.now();
     std.log.debug("Building data time: {d}ms\n", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
 
-    if (table_config.name) |name| {
-        try writer.print("    .{s} = ", .{name});
-    } else {
-        try writer.print("    .@\"{d}\" = ", .{table_index});
-    }
+    const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
 
     try writer.print(
-        \\types.Table(.{{
-        \\        .stages = .{{ .len = .{{
-        \\            .stage1 = {},
-        \\            .stage2 = {},
-        \\            .data = {},
-        \\         }}}},
-        \\        .extensions = &.{{}},
-        \\        .fields = &.{{
+        \\const {s}_config = config.Table{{
+        \\    .stages = .{{ .len = .{{
+        \\        .stage1 = {},
+        \\        .stage2 = {},
+        \\        .data = {},
+        \\     }}}},
+        \\    .extensions = &.{{}},
+        \\    .fields = &.{{
         \\
-    , .{ stage1.items.len, stage2.items.len, data_array.items.len });
+    , .{ prefix, stage1.items.len, stage2.items.len, data_array.items.len });
 
     var all_fields_okay = true;
 
@@ -1042,18 +1071,30 @@ pub fn writeTable(
         @panic("Table config doesn't match actual. See above for details");
     }
 
-    try writer.writeAll(
-        \\        },
-        \\    }){
-        \\        .backing = &.{
+    try writer.print(
+        \\    }},
+        \\}};
         \\
+        \\const {s}_Data = types.Data({s}_config);
+        \\const {s}_Backing = types.Backing({s}_Data);
+        \\
+    ,
+        .{ TypePrefix, prefix, TypePrefix, TypePrefix },
+    );
+
+    try writer.print(
+        \\
+        \\const {s}_backing = {s}_Backing{{
+        \\
+    ,
+        .{ prefix, TypePrefix },
     );
 
     inline for (@typeInfo(Backing).@"struct".fields) |field| {
         if (!@hasField(Data, field.name)) continue;
 
         try writer.print(
-            \\            .{s} = .{{
+            \\    .{s} = .{{
         , .{field.name});
 
         const b = @field(backing, field.name);
@@ -1064,55 +1105,71 @@ pub fn writeTable(
         }
 
         try writer.writeAll(
-            \\            },
+            \\    },
             \\
         );
     }
 
-    //const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Data));
-
-    try writer.writeAll(
+    try writer.print(
         \\
-        \\        },
-        \\        .stages = .{
-        \\            .stage1 = &.{
+        \\}};
         \\
+        \\const {s}_stage1: [{d}]u16 align({d}) = .{{
+        \\
+    ,
+        .{
+            prefix,
+            stage1.items.len,
+            types.stageAlignment(@sizeOf(u16), stage1.items.len),
+        },
     );
-    //, .{ data_array.items.len, @typeName(IntEquivalent) });
 
     for (stage1.items) |item| {
         try writer.print("{},", .{item});
     }
 
-    try writer.writeAll(
+    try writer.print(
         \\
-        \\            },
-        \\            .stage2 = &.{
+        \\}};
         \\
+        \\const {s}_stage2: [{d}]u16 align({d}) = .{{
+        \\
+    ,
+        .{
+            prefix,
+            stage2.items.len,
+            types.stageAlignment(@sizeOf(u16), stage2.items.len),
+        },
     );
 
     for (stage2.items) |item| {
         try writer.print("{},", .{item});
     }
 
-    try writer.writeAll(
+    // TODO: fix @sizeOf(Data). runtime config can support size?
+    try writer.print(
         \\
-        \\            },
-        \\            .data = &.{
+        \\}};
         \\
+        \\const {s}_data: [{d}]{s}_Data align({d}) = .{{
+        \\
+    ,
+        .{
+            prefix,
+            data_array.items.len,
+            TypePrefix,
+            types.stageAlignment(@sizeOf(Data), data_array.items.len),
+        },
     );
 
     for (data_array.items) |item| {
-        //const as_int: IntEquivalent = @bitCast(item);
-        //try writer.print("{},", .{as_int});
-
         try writer.writeAll(
-            \\                .{
+            \\    .{
             \\
         );
 
         inline for (@typeInfo(Data).@"struct".fields) |field| {
-            try writer.print("                     .{s} = ", .{field.name});
+            try writer.print("        .{s} = ", .{field.name});
 
             switch (@typeInfo(field.type)) {
                 .@"struct" => {
@@ -1134,18 +1191,50 @@ pub fn writeTable(
         }
 
         try writer.writeAll(
-            \\                },
+            \\    },
             \\
         );
     }
 
     try writer.writeAll(
-        \\
-        \\            },
-        \\        },
-        \\    },
+        \\};
         \\
     );
+}
+
+fn writeTable(
+    comptime table_config: config.Table,
+    table_index: usize,
+    allocator: std.mem.Allocator,
+    writer: anytype,
+) !void {
+    if (table_config.name) |name| {
+        try writer.print("    .{s} = ", .{name});
+    } else {
+        try writer.print("    .@\"{d}\" = ", .{table_index});
+    }
+
+    const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
+
+    try writer.print(
+        \\types.Table({s}_config, {s}_Data, {s}_Backing){{
+        \\        .stages = .{{
+        \\            .stage1 = &{s}_stage1,
+        \\            .stage2 = &{s}_stage2,
+        \\            .data = &{s}_data,
+        \\        }},
+        \\        .backing = &{s}_backing,
+        \\    }},
+        \\
+    , .{
+        prefix,
+        TypePrefix,
+        TypePrefix,
+        prefix,
+        prefix,
+        prefix,
+        prefix,
+    });
 }
 
 test {

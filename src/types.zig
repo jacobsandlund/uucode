@@ -515,11 +515,15 @@ pub fn Field(c: config.Field) type {
     };
 }
 
-pub fn Table(comptime c: config.Table) type {
-    @setEvalBranchQuota(10_000);
+pub fn stageAlignment(elem_size: usize, len: usize) u16 {
+    return @min(
+        std.math.ceilPowerOfTwoAssert(usize, @intCast(len * elem_size)),
+        std.math.floorPowerOfTwo(u16, std.math.maxInt(u16)),
+    );
+}
+
+pub fn Data(comptime c: config.Table) type {
     var data_fields: [c.fields.len]std.builtin.Type.StructField = undefined;
-    //var data_fields: [c.fields.len + 1]std.builtin.Type.StructField = undefined;
-    //var data_bit_size: usize = 0;
 
     for (c.fields, 0..) |cf, i| {
         const F = Field(cf);
@@ -529,38 +533,34 @@ pub fn Table(comptime c: config.Table) type {
             .type = F,
             .default_value_ptr = null,
             .is_comptime = false,
-            //.alignment = 0, // Required for packed structs
             .alignment = @alignOf(F),
         };
-        //data_bit_size += @bitSizeOf(F);
     }
 
-    //const bits_over_byte = data_bit_size % 8;
-    //const padding_bits = if (bits_over_byte == 0) 0 else 8 - bits_over_byte;
-    //data_bit_size += padding_bits;
-
-    //data_fields[c.fields.len] = .{
-    //    .name = "_padding",
-    //    .type = std.meta.Int(.unsigned, padding_bits),
-    //    .default_value_ptr = null,
-    //    .is_comptime = false,
-    //    .alignment = 0, // Required for packed structs
-    //};
-
-    const Data = @Type(.{
+    return @Type(.{
         .@"struct" = .{
             .layout = .auto,
-            //.layout = .@"packed",
-            //.backing_integer = std.meta.Int(.unsigned, data_bit_size),
             .fields = &data_fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },
     });
+}
+
+pub fn Backing(comptime D: type) type {
+    return StructFromDecls(D, "BackingBuffer");
+}
+
+pub fn Table(
+    comptime c: config.Table,
+    comptime Data_: type,
+    comptime Backing_: type,
+) type {
+    @setEvalBranchQuota(10_000);
 
     const len: config.Table.Stages.Len = switch (c.stages) {
         .len => |len| len,
-        else => .{ .stage1 = 0, .stage2 = 0, .data = 0 },
+        else => .{ .stage1 = 0, .stage2 = 0, .data = 1 },
     };
 
     const DataSlice = @Type(.{
@@ -568,9 +568,9 @@ pub fn Table(comptime c: config.Table) type {
             .size = .slice,
             .is_const = true,
             .is_volatile = false,
-            .alignment = @alignOf(Data),
+            .alignment = stageAlignment(@sizeOf(Data_), len.data),
             .address_space = .generic,
-            .child = Data,
+            .child = Data_,
             .is_allowzero = false,
             .sentinel_ptr = null,
         },
@@ -589,7 +589,7 @@ pub fn Table(comptime c: config.Table) type {
                 .size = .slice,
                 .is_const = true,
                 .is_volatile = false,
-                .alignment = @alignOf(u16),
+                .alignment = stageAlignment(@sizeOf(u16), len.stage1),
                 .address_space = .generic,
                 .child = u16,
                 .is_allowzero = false,
@@ -613,7 +613,7 @@ pub fn Table(comptime c: config.Table) type {
                 .size = .slice,
                 .is_const = true,
                 .is_volatile = false,
-                .alignment = @alignOf(u16),
+                .alignment = stageAlignment(@sizeOf(u16), len.stage2),
                 .address_space = .generic,
                 .child = u16,
                 .is_allowzero = false,
@@ -649,16 +649,14 @@ pub fn Table(comptime c: config.Table) type {
         },
     });
 
-    const BackingBuffers = StructFromDecls(Data, "BackingBuffer");
-
     const BackingPointer = @Type(.{
         .pointer = .{
             .size = .one,
             .is_const = true,
             .is_volatile = false,
-            .alignment = @alignOf(BackingBuffers),
+            .alignment = @alignOf(Backing_),
             .address_space = .generic,
-            .child = BackingBuffers,
+            .child = Backing_,
             .is_allowzero = false,
             .sentinel_ptr = null,
         },
@@ -689,6 +687,7 @@ pub fn Table(comptime c: config.Table) type {
     });
 }
 
+// TODO: better alignment?
 pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
     var decl_fields_len: usize = 0;
     for (@typeInfo(Struct).@"struct".fields) |f| {
