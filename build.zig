@@ -91,7 +91,9 @@ pub fn build(b: *std.Build) void {
     const tables_path_opt = b.option(std.Build.LazyPath, "tables.zig", "Built tables source file");
 
     const build_config_path = build_config_path_opt orelse blk: {
-        std.debug.print("build_config_path_opt not defined, so building a build_config.zig\n", .{});
+        std.debug.print("build_config_path_opt not defined, so building a build_config.zig; {}\n", .{
+            build_config_path_opt == null,
+        });
 
         const build_config_zig = build_config_zig_opt orelse buildBuildConfig(
             b.allocator,
