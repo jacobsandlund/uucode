@@ -8,9 +8,6 @@ pub const utf8 = @import("utf8.zig");
 pub const x = @import("x/root.zig");
 const testing = std.testing;
 
-pub const max_code_point = config.max_code_point;
-pub const code_point_range_end = config.code_point_range_end;
-
 pub const get = getpkg.get;
 pub const getWidth = getpkg.getWidth;
 pub const getSpecial = getpkg.getSpecial;

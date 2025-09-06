@@ -11,7 +11,7 @@ pub const std_options: std.Options = .{
         .info,
 };
 
-const buffer_size = 150_000_000; // Actual is ~149 MiB
+const buffer_size = 150_000_000; // Actual is ~148 MiB
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
@@ -90,7 +90,7 @@ pub fn main() !void {
 
 const updating_ucd_fields = brk: {
     const d = config.default;
-    const max_cp = config.max_code_point;
+    const max_cp: u21 = 0x10FFFF;
 
     @setEvalBranchQuota(5_000);
     var fields: [d.fields.len]config.Field = undefined;
@@ -448,8 +448,10 @@ pub fn writeTable(
 
     const build_data_start = try std.time.Instant.now();
 
-    var cp: u21 = 0;
-    while (cp < config.code_point_range_end) : (cp += 1) {
+    var last_data_index: u16 = undefined;
+
+    for (0..config.max_valid_cp + 1) |cp_usize| {
+        const cp: u21 = @intCast(cp_usize);
         const unicode_data = ucd.unicode_data[cp];
         const case_folding = ucd.case_folding.get(cp);
         const special_casing = ucd.special_casing.get(cp);
@@ -460,7 +462,6 @@ pub fn writeTable(
         const block_value = ucd.blocks.get(cp) orelse types.Block.no_block;
 
         var a: AllData = undefined;
-        var prev: AllData = undefined;
 
         // UnicodeData fields
         if (@hasField(AllData, "name")) {
@@ -940,8 +941,6 @@ pub fn writeTable(
             extension.compute(cp, &a, &backing, &tracking);
         }
 
-        prev = a;
-
         var d: Data = undefined;
 
         //const data_fields = @typeInfo(Data).@"struct".fields;
@@ -964,11 +963,12 @@ pub fn writeTable(
             try data_array.append(allocator, d);
         }
 
+        last_data_index = data_index;
+
         block[block_len] = data_index;
         block_len += 1;
 
-        if (block_len == block_size or cp == config.code_point_range_end - 1) {
-            if (block_len < block_size) @memset(block[block_len..block_size], 0);
+        if (block_len == block_size) {
             const gop_block = try block_map.getOrPut(allocator, block);
             var block_offset: u16 = undefined;
             if (gop_block.found_existing) {
@@ -976,13 +976,34 @@ pub fn writeTable(
             } else {
                 block_offset = @intCast(stage2.items.len);
                 gop_block.value_ptr.* = block_offset;
-                try stage2.appendSlice(allocator, block[0..block_len]);
+                try stage2.appendSlice(allocator, &block);
             }
 
             try stage1.append(allocator, block_offset);
             block_len = 0;
         }
     }
+
+    for (0..block_size) |i| {
+        block[i] = last_data_index;
+    }
+
+    const last_gop_block = try block_map.getOrPut(allocator, block);
+    var last_block_offset: u16 = undefined;
+    if (last_gop_block.found_existing) {
+        last_block_offset = last_gop_block.value_ptr.*;
+    } else {
+        last_block_offset = @intCast(stage2.items.len);
+        last_gop_block.value_ptr.* = last_block_offset;
+        try stage2.appendSlice(allocator, &block);
+    }
+
+    var cp: usize = config.max_valid_cp + block_size;
+    while (cp < std.math.maxInt(u21) + 1) : (cp += block_size) {
+        try stage1.append(allocator, last_block_offset);
+    }
+
+    std.debug.assert(stage1.items.len == (std.math.maxInt(u21) + 1) / block_size);
 
     const build_data_end = try std.time.Instant.now();
     std.log.debug("Building data time: {d}ms\n", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});

@@ -95,7 +95,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
         .blocks = .{},
     };
 
-    ucd.unicode_data = try allocator.alloc(UnicodeData, config.code_point_range_end + 30);
+    ucd.unicode_data = try allocator.alloc(UnicodeData, config.max_valid_cp + 1);
     errdefer allocator.free(ucd.unicode_data);
 
     try parseUnicodeData(allocator, &ucd);
@@ -165,7 +165,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
-    var next_cp: u21 = 0x0000;
+    var next_cp: u21 = 0;
     const gap_data = UnicodeData{
         .name = &.{},
         .general_category = types.GeneralCategory.other_not_assigned,
@@ -327,8 +327,8 @@ fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
     }
 
     // Fill any remaining gaps at the end with default values
-    while (next_cp < config.code_point_range_end) : (next_cp += 1) {
-        ucd.unicode_data[next_cp] = gap_data;
+    for (next_cp..config.max_valid_cp + 1) |cp| {
+        ucd.unicode_data[cp] = gap_data;
     }
 }
 
