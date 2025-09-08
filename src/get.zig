@@ -62,7 +62,6 @@ fn getTableStages(comptime table_name: []const u8) GetTableStages(table_name) {
     return @field(tables, getTableInfo(table_name).name).stages;
 }
 
-// TODO: benchmark if needing an explicit `inline`
 // TODO: support two stage (stage1 and data) tables
 fn data(comptime stages: anytype, cp: u21) StagesData(@TypeOf(stages)) {
     const stage1_idx = cp >> 8;
@@ -145,39 +144,9 @@ inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
             return d.value(cp);
         }
     } else {
-        const stage1_idx = cp >> 8;
-        const stage2_idx = cp & 0xFF;
-
-        // Access everything directly from the global tables without any copies
-        return @field(
-            @field(tables, tableInfoFor(name).name).stages.data[
-                @field(tables, tableInfoFor(name).name).stages.stage2[
-                    @field(tables, tableInfoFor(name).name).stages.stage1[stage1_idx] + stage2_idx
-                ]
-            ],
-            name
-        );
+        const stages = comptime stagesFor(name);
+        return @field(data(stages, cp), name);
     }
-}
-
-pub fn getWidth(cp: u21) u2 {
-    const stage1_idx = cp >> 8;
-    const stage2_idx = cp & 0xFF;
-    return tables.@"1".stages.data[
-        tables.@"1".stages.stage2[
-            tables.@"1".stages.stage1[stage1_idx] + stage2_idx
-        ]
-    ].width;
-}
-
-pub fn getSpecial(cp: u21) PackedTypeOf("1") {
-    const stage1_idx = cp >> 8;
-    const stage2_idx = cp & 0xFF;
-    return tables.@"1".stages.data[
-        tables.@"1".stages.stage2[
-            tables.@"1".stages.stage1[stage1_idx] + stage2_idx
-        ]
-    ];
 }
 
 // Note: `getX` and `TypeOfX` are only needed because `get` and`TypeOf` use a
