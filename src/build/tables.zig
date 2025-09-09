@@ -1104,7 +1104,7 @@ pub fn writeTableData(
         \\
         \\}};
         \\
-        \\const {s}_stage1: [{d}]u16 = .{{
+        \\const {s}_stage1: [{d}]u16 align(std.atomic.cache_line) = .{{
         \\
     ,
         .{ prefix, stage1.items.len },
@@ -1118,7 +1118,7 @@ pub fn writeTableData(
         \\
         \\}};
         \\
-        \\const {s}_stage2: [{d}]u16 = .{{
+        \\const {s}_stage2: [{d}]u16 align(std.atomic.cache_line) = .{{
         \\
     ,
         .{ prefix, stage2.items.len },
@@ -1133,10 +1133,10 @@ pub fn writeTableData(
         \\
         \\}};
         \\
-        \\const {s}_data: [{d}]{s}_Data = .{{
+        \\const {s}_data: [{d}]{s}_Data align(@max(std.atomic.cache_line, @alignOf({s}_Data))) = .{{
         \\
     ,
-        .{ prefix, data_array.items.len, TypePrefix },
+        .{ prefix, data_array.items.len, TypePrefix, TypePrefix },
     );
 
     for (data_array.items) |item| {
