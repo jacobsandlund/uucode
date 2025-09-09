@@ -14,9 +14,7 @@ pub const std_options: std.Options = .{
 const buffer_size = 150_000_000; // Actual is ~148 MiB
 
 // TODO: also choose between stage1 and stage2
-const WriteTableConfig = struct {
-    has_backing: bool,
-};
+const WriteTableConfig = struct {};
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
@@ -1063,65 +1061,42 @@ pub fn writeTableData(
         \\}};
         \\
         \\const {s}_Data = types.Data({s}_config);
+        \\const {s}_Backing = types.Backing({s}_Data);
         \\
     ,
-        .{ TypePrefix, prefix },
+        .{ TypePrefix, prefix, TypePrefix, TypePrefix },
     );
 
-    const backing_fields = @typeInfo(Backing).@"struct".fields;
-    var has_backing = false;
+    try writer.print(
+        \\
+        \\const {s}_backing = {s}_Backing{{
+        \\
+    ,
+        .{ prefix, TypePrefix },
+    );
 
-    inline for (backing_fields) |field| {
-        if (@hasField(Data, field.name)) {
-            has_backing = true;
-            break;
-        }
-    }
-
-    if (has_backing) {
-        try writer.print(
-            \\
-            \\const {s}_Backing = types.Backing({s}_Data);
-            \\
-        ,
-            .{ TypePrefix, TypePrefix },
-        );
+    inline for (@typeInfo(Backing).@"struct".fields) |field| {
+        if (!@hasField(Data, field.name)) continue;
 
         try writer.print(
-            \\
-            \\const {s}_backing = {s}_Backing{{
-            \\
-        ,
-            .{ prefix, TypePrefix },
-        );
+            \\    .{s} = .{{
+        , .{field.name});
 
-        inline for (backing_fields) |field| {
-            if (!@hasField(Data, field.name)) continue;
+        const b = @field(backing, field.name);
+        const t = @field(tracking, field.name);
 
-            try writer.print(
-                \\    .{s} = .{{
-            , .{field.name});
-
-            const b = @field(backing, field.name);
-            const t = @field(tracking, field.name);
-
-            for (b[0..t.max_offset]) |item| {
-                try writer.print("{},", .{item});
-            }
-
-            try writer.writeAll(
-                \\    },
-                \\
-            );
+        for (b[0..t.max_offset]) |item| {
+            try writer.print("{},", .{item});
         }
 
         try writer.writeAll(
-            \\};
+            \\    },
             \\
         );
     }
 
     try writer.print(
+        \\}};
         \\
         \\const {s}_stage1: [{d}]u16 align(std.atomic.cache_line) = .{{
         \\
@@ -1197,7 +1172,7 @@ pub fn writeTableData(
         \\
     );
 
-    return .{ .has_backing = has_backing };
+    return .{};
 }
 
 fn writeTable(
@@ -1207,6 +1182,8 @@ fn writeTable(
     allocator: std.mem.Allocator,
     writer: anytype,
 ) !void {
+    _ = write_config;
+
     if (table_config.name) |name| {
         try writer.print("    .{s} = ", .{name});
     } else {
@@ -1215,40 +1192,22 @@ fn writeTable(
 
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
 
-    if (write_config.has_backing) {
-        try writer.print(
-            \\types.Table3Backed({s}_Data, {s}_Backing){{
-            \\
-        , .{ TypePrefix, TypePrefix });
-    } else {
-        try writer.print(
-            \\types.Table3({s}_Data){{
-            \\
-        , .{TypePrefix});
-    }
-
     try writer.print(
+        \\types.Table3({s}_Data, {s}_Backing){{
         \\        .stage1 = &{s}_stage1,
         \\        .stage2 = &{s}_stage2,
         \\        .data = &{s}_data,
+        \\        .backing = &{s}_backing,
+        \\    }},
         \\
     , .{
+        TypePrefix,
+        TypePrefix,
+        prefix,
         prefix,
         prefix,
         prefix,
     });
-
-    if (write_config.has_backing) {
-        try writer.print(
-            \\        .backing = &{s}_backing,
-            \\
-        , .{prefix});
-    }
-
-    try writer.writeAll(
-        \\    },
-        \\
-    );
 }
 
 test {

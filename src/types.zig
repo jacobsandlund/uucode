@@ -547,16 +547,6 @@ pub fn Backing(comptime D: type) type {
 
 pub fn Table3(
     comptime Data_: type,
-) type {
-    return struct {
-        stage1: []const u16,
-        stage2: []const u16,
-        data: []const Data_,
-    };
-}
-
-pub fn Table3Backed(
-    comptime Data_: type,
     comptime Backing_: type,
 ) type {
     return struct {
