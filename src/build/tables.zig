@@ -446,16 +446,24 @@ pub fn writeTableData(
 ) !WriteTableConfig {
     const Data = types.Data(table_config);
     const AllData = TableAllData(table_config);
-    const Backing = types.Backing(AllData);
+    const Backing = types.StructFromDecls(AllData, "MutableBackingBuffer");
     const Tracking = types.StructFromDecls(AllData, "Tracking");
 
     var backing = blk: {
-        const b: *Backing = try allocator.create(Backing);
-        b.* = std.mem.zeroInit(Backing, .{});
+        var b: Backing = undefined;
+        inline for (@typeInfo(Backing).@"struct".fields) |field| {
+            const c = table_config.field(field.name);
+            const T = @typeInfo(field.type).pointer.child;
+            @field(b, field.name) = try allocator.alloc(T, c.max_offset);
+        }
 
         break :blk b;
     };
-    defer allocator.destroy(backing);
+    defer {
+        inline for (@typeInfo(Backing).@"struct".fields) |field| {
+            allocator.free(@field(backing, field.name));
+        }
+    }
 
     var tracking = blk: {
         var t: Tracking = undefined;
@@ -503,7 +511,7 @@ pub fn writeTableData(
         if (@hasField(AllData, "name")) {
             a.name = try .fromSlice(
                 allocator,
-                &backing.name,
+                backing.name,
                 &tracking.name,
                 unicode_data.name,
             );
@@ -523,7 +531,7 @@ pub fn writeTableData(
         if (@hasField(AllData, "decomposition_mapping")) {
             a.decomposition_mapping = try .fromSliceFor(
                 allocator,
-                &backing.decomposition_mapping,
+                backing.decomposition_mapping,
                 &tracking.decomposition_mapping,
                 unicode_data.decomposition_mapping,
                 cp,
@@ -541,7 +549,7 @@ pub fn writeTableData(
         if (@hasField(AllData, "numeric_value_numeric")) {
             a.numeric_value_numeric = try .fromSlice(
                 allocator,
-                &backing.numeric_value_numeric,
+                backing.numeric_value_numeric,
                 &tracking.numeric_value_numeric,
                 unicode_data.numeric_value_numeric,
             );
@@ -552,7 +560,7 @@ pub fn writeTableData(
         if (@hasField(AllData, "unicode_1_name")) {
             a.unicode_1_name = try .fromSlice(
                 allocator,
-                &backing.unicode_1_name,
+                backing.unicode_1_name,
                 &tracking.unicode_1_name,
                 unicode_data.unicode_1_name,
             );
@@ -608,7 +616,7 @@ pub fn writeTableData(
                 if (cf.case_folding_full_only.len > 0) {
                     a.case_folding_full = try .fromSliceFor(
                         allocator,
-                        &backing.case_folding_full,
+                        backing.case_folding_full,
                         &tracking.case_folding_full,
                         cf.case_folding_full_only,
                         cp,
@@ -616,7 +624,7 @@ pub fn writeTableData(
                 } else {
                     a.case_folding_full = try .fromSliceFor(
                         allocator,
-                        &backing.case_folding_full,
+                        backing.case_folding_full,
                         &tracking.case_folding_full,
                         &.{cf.case_folding_common_only orelse cp},
                         cp,
@@ -625,7 +633,7 @@ pub fn writeTableData(
             } else {
                 a.case_folding_full = try .fromSliceFor(
                     allocator,
-                    &backing.case_folding_full,
+                    backing.case_folding_full,
                     &tracking.case_folding_full,
                     &.{cp},
                     cp,
@@ -637,7 +645,7 @@ pub fn writeTableData(
                 if (cf.case_folding_turkish_only) |t| {
                     a.case_folding_turkish_only = try .fromSliceFor(
                         allocator,
-                        &backing.case_folding_turkish_only,
+                        backing.case_folding_turkish_only,
                         &tracking.case_folding_turkish_only,
                         &.{t},
                         cp,
@@ -654,7 +662,7 @@ pub fn writeTableData(
                 if (cf.case_folding_common_only) |c| {
                     a.case_folding_common_only = try .fromSliceFor(
                         allocator,
-                        &backing.case_folding_common_only,
+                        backing.case_folding_common_only,
                         &tracking.case_folding_common_only,
                         &.{c},
                         cp,
@@ -671,7 +679,7 @@ pub fn writeTableData(
                 if (cf.case_folding_simple_only) |s| {
                     a.case_folding_simple_only = try .fromSliceFor(
                         allocator,
-                        &backing.case_folding_simple_only,
+                        backing.case_folding_simple_only,
                         &tracking.case_folding_simple_only,
                         &.{s},
                         cp,
@@ -687,7 +695,7 @@ pub fn writeTableData(
             if (case_folding) |cf| {
                 a.case_folding_full_only = try .fromSliceFor(
                     allocator,
-                    &backing.case_folding_full_only,
+                    backing.case_folding_full_only,
                     &tracking.case_folding_full_only,
                     cf.case_folding_full_only,
                     cp,
@@ -702,7 +710,7 @@ pub fn writeTableData(
             if (special_casing) |sc| {
                 a.special_lowercase_mapping = try .fromSliceFor(
                     allocator,
-                    &backing.special_lowercase_mapping,
+                    backing.special_lowercase_mapping,
                     &tracking.special_lowercase_mapping,
                     sc.special_lowercase_mapping,
                     cp,
@@ -715,7 +723,7 @@ pub fn writeTableData(
             if (special_casing) |sc| {
                 a.special_titlecase_mapping = try .fromSliceFor(
                     allocator,
-                    &backing.special_titlecase_mapping,
+                    backing.special_titlecase_mapping,
                     &tracking.special_titlecase_mapping,
                     sc.special_titlecase_mapping,
                     cp,
@@ -728,7 +736,7 @@ pub fn writeTableData(
             if (special_casing) |sc| {
                 a.special_uppercase_mapping = try .fromSliceFor(
                     allocator,
-                    &backing.special_uppercase_mapping,
+                    backing.special_uppercase_mapping,
                     &tracking.special_uppercase_mapping,
                     sc.special_uppercase_mapping,
                     cp,
@@ -741,7 +749,7 @@ pub fn writeTableData(
             if (special_casing) |sc| {
                 a.special_casing_condition = try .fromSlice(
                     allocator,
-                    &backing.special_casing_condition,
+                    backing.special_casing_condition,
                     &tracking.special_casing_condition,
                     sc.special_casing_condition,
                 );
@@ -760,7 +768,7 @@ pub fn writeTableData(
             if (use_special) {
                 a.lowercase_mapping = try .fromSliceFor(
                     allocator,
-                    &backing.lowercase_mapping,
+                    backing.lowercase_mapping,
                     &tracking.lowercase_mapping,
                     special_casing.?.special_lowercase_mapping,
                     cp,
@@ -768,7 +776,7 @@ pub fn writeTableData(
             } else {
                 a.lowercase_mapping = try .fromSliceFor(
                     allocator,
-                    &backing.lowercase_mapping,
+                    backing.lowercase_mapping,
                     &tracking.lowercase_mapping,
                     &.{unicode_data.simple_lowercase_mapping orelse cp},
                     cp,
@@ -785,7 +793,7 @@ pub fn writeTableData(
             if (use_special) {
                 a.titlecase_mapping = try .fromSliceFor(
                     allocator,
-                    &backing.titlecase_mapping,
+                    backing.titlecase_mapping,
                     &tracking.titlecase_mapping,
                     special_casing.?.special_titlecase_mapping,
                     cp,
@@ -793,7 +801,7 @@ pub fn writeTableData(
             } else {
                 a.titlecase_mapping = try .fromSliceFor(
                     allocator,
-                    &backing.titlecase_mapping,
+                    backing.titlecase_mapping,
                     &tracking.titlecase_mapping,
                     &.{unicode_data.simple_titlecase_mapping orelse cp},
                     cp,
@@ -810,7 +818,7 @@ pub fn writeTableData(
             if (use_special) {
                 a.uppercase_mapping = try .fromSliceFor(
                     allocator,
-                    &backing.uppercase_mapping,
+                    backing.uppercase_mapping,
                     &tracking.uppercase_mapping,
                     special_casing.?.special_uppercase_mapping,
                     cp,
@@ -818,7 +826,7 @@ pub fn writeTableData(
             } else {
                 a.uppercase_mapping = try .fromSliceFor(
                     allocator,
-                    &backing.uppercase_mapping,
+                    backing.uppercase_mapping,
                     &tracking.uppercase_mapping,
                     &.{unicode_data.simple_uppercase_mapping orelse cp},
                     cp,
@@ -1067,6 +1075,36 @@ pub fn writeTableData(
         .{ TypePrefix, prefix, TypePrefix, TypePrefix },
     );
 
+    inline for (@typeInfo(Backing).@"struct".fields) |field| {
+        if (!@hasField(Data, field.name)) continue;
+
+        const T = @typeInfo(field.type).pointer.child;
+
+        try writer.print("const {s}_backing_{s}: []const {s} = ", .{
+            prefix,
+            field.name,
+            @typeName(T),
+        });
+
+        const b = @field(backing, field.name);
+        const t = @field(tracking, field.name);
+
+        if (T == u8) {
+            try writer.print("\"{s}\";\n", .{b[0..t.max_offset]});
+        } else {
+            try writer.writeAll("&.{");
+
+            for (b[0..t.max_offset]) |item| {
+                try writer.print("{},", .{item});
+            }
+
+            try writer.writeAll(
+                \\};
+                \\
+            );
+        }
+    }
+
     try writer.print(
         \\
         \\const {s}_backing = {s}_Backing{{
@@ -1079,20 +1117,13 @@ pub fn writeTableData(
         if (!@hasField(Data, field.name)) continue;
 
         try writer.print(
-            \\    .{s} = .{{
-        , .{field.name});
-
-        const b = @field(backing, field.name);
-        const t = @field(tracking, field.name);
-
-        for (b[0..t.max_offset]) |item| {
-            try writer.print("{},", .{item});
-        }
-
-        try writer.writeAll(
-            \\    },
+            \\    .{s} = {s}_backing_{s},
             \\
-        );
+        , .{
+            field.name,
+            prefix,
+            field.name,
+        });
     }
 
     try writer.print(

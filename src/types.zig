@@ -687,11 +687,12 @@ pub fn VarLen(
             )
         ]T;
         pub const CopyBuffer = [max_len]T;
-        pub const BackingBuffer = [max_offset]T;
+        pub const BackingBuffer = []const T;
+        pub const MutableBackingBuffer = []T;
 
         inline fn _fromSlice(
             allocator: std.mem.Allocator,
-            backing: *BackingBuffer,
+            backing: []T,
             tracking: *Tracking,
             s: []const T,
         ) !Self {
@@ -734,7 +735,7 @@ pub fn VarLen(
 
         pub fn fromSlice(
             allocator: std.mem.Allocator,
-            backing: *BackingBuffer,
+            backing: []T,
             tracking: *Tracking,
             s: []const T,
         ) !Self {
@@ -747,7 +748,7 @@ pub fn VarLen(
 
         pub fn fromSliceFor(
             allocator: std.mem.Allocator,
-            backing: *BackingBuffer,
+            backing: []T,
             tracking: *Tracking,
             s: []const T,
             cp: u21,
@@ -770,7 +771,7 @@ pub fn VarLen(
 
         fn directSlice(
             self: *const Self,
-            backing: *const BackingBuffer,
+            backing: []const T,
             buffer: []T,
         ) []const T {
             // Repeat the two return cases, first with two `comptime` checks,
@@ -788,7 +789,7 @@ pub fn VarLen(
 
         pub fn sliceWithBacking(
             self: *const Self,
-            backing: *const BackingBuffer,
+            backing: []const T,
             buffer: []T,
         ) []const T {
             if (c.cp_packing != .direct) {
@@ -800,7 +801,7 @@ pub fn VarLen(
 
         pub fn sliceForWithBacking(
             self: *const Self,
-            backing: *const BackingBuffer,
+            backing: []const T,
             buffer: []T,
             cp: u21,
         ) []const T {
@@ -820,7 +821,7 @@ pub fn VarLen(
 
         // Note: while it would be better for modularity to pass `backing`
         // in, this makes for a nicer API without having to wrap VarLen.
-        const hardcoded_backing = &@field(@import("get.zig").backingFor(c.name), c.name);
+        const hardcoded_backing = @import("get.zig").backingFor(c.name);
 
         fn _slice(self: *const Self, buffer: []T) []const T {
             return self.sliceWithBacking(hardcoded_backing, buffer);

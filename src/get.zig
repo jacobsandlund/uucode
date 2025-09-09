@@ -32,12 +32,13 @@ fn getTableInfo(comptime table_name: []const u8) std.builtin.Type.StructField {
 
 fn BackingFor(comptime field: []const u8) type {
     const tableInfo = tableInfoFor(field);
-    return @FieldType(@FieldType(@TypeOf(tables), tableInfo.name), "backing");
+    const Backing = @FieldType(@FieldType(@TypeOf(tables), tableInfo.name), "backing");
+    return @FieldType(@typeInfo(Backing).pointer.child, field);
 }
 
 pub fn backingFor(comptime field: []const u8) BackingFor(field) {
     const tableInfo = tableInfoFor(field);
-    return @field(tables, tableInfo.name).backing;
+    return @field(@field(tables, tableInfo.name).backing, field);
 }
 
 fn TableFor(comptime field: []const u8) type {
