@@ -480,8 +480,6 @@ pub fn writeTableData(
 
     const build_data_start = try std.time.Instant.now();
 
-    var last_block_offset: u16 = undefined;
-
     for (0..config.max_valid_cp + 1) |cp_usize| {
         const cp: u21 = @intCast(cp_usize);
         const unicode_data = ucd.unicode_data[cp];
@@ -1002,17 +1000,11 @@ pub fn writeTableData(
             }
 
             try stage1.append(allocator, block_offset);
-            last_block_offset = block_offset;
             block_len = 0;
         }
     }
 
-    var cp: usize = config.max_valid_cp + block_size;
-    while (cp < std.math.maxInt(u21) + 1) : (cp += block_size) {
-        try stage1.append(allocator, last_block_offset);
-    }
-
-    std.debug.assert(stage1.items.len == (std.math.maxInt(u21) + 1) / block_size);
+    std.debug.assert(block_len == 0);
 
     const build_data_end = try std.time.Instant.now();
     std.log.debug("Building data time: {d}ms\n", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
@@ -1129,7 +1121,6 @@ pub fn writeTableData(
         try writer.print("{},", .{item});
     }
 
-    // TODO: fix @sizeOf(Data). runtime config can support size?
     try writer.print(
         \\
         \\}};
