@@ -20,9 +20,9 @@ pub fn main() !void {
     const total_start = try std.time.Instant.now();
     const table_configs: []const config.Table = if (config.is_updating_ucd) &.{updating_ucd} else &build_config.tables;
 
-    const buffer = try std.heap.page_allocator.alloc(u8, buffer_size);
-    defer std.heap.page_allocator.free(buffer);
-    var fba = std.heap.FixedBufferAllocator.init(buffer);
+    const buffer_for_fba = try std.heap.page_allocator.alloc(u8, buffer_size);
+    defer std.heap.page_allocator.free(buffer_for_fba);
+    var fba = std.heap.FixedBufferAllocator.init(buffer_for_fba);
     const allocator = fba.allocator();
 
     var ucd = try Ucd.init(allocator);
@@ -41,7 +41,9 @@ pub fn main() !void {
 
     var out_file = try std.fs.cwd().createFile(output_path, .{});
     defer out_file.close();
-    const writer = out_file.writer();
+    var buffer: [4096]u8 = undefined;
+    var file_writer = out_file.writer(&buffer);
+    var writer = &file_writer.interface;
 
     try writer.writeAll(
         \\//! This file is auto-generated. Do not edit.
@@ -100,6 +102,8 @@ pub fn main() !void {
         \\};
         \\
     );
+
+    try writer.flush();
 
     const total_end = try std.time.Instant.now();
     std.log.debug("Total time: {d}ms\n", .{total_end.since(total_start) / std.time.ns_per_ms});
@@ -442,7 +446,7 @@ pub fn writeTableData(
     table_index: usize,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
-    writer: anytype,
+    writer: *std.Io.Writer,
 ) !WriteTableConfig {
     const Data = types.Data(table_config);
     const AllData = TableAllData(table_config);
@@ -1041,13 +1045,16 @@ pub fn writeTableData(
             if (config.is_updating_ucd) {
                 const min_config = t.minBitsConfig(f.runtime());
                 if (!config.default.field(f.name).runtime().eql(min_config)) {
-                    const w = std.io.getStdErr().writer();
+                    var buffer: [4096]u8 = undefined;
+                    var stderr_writer = &std.fs.File.stderr().writer(&buffer);
+                    var w = &stderr_writer.interface;
                     try w.writeAll(
                         \\
                         \\Update default config in `config.zig` with the correct field config:
                         \\
                     );
                     try min_config.write(w);
+                    try w.flush();
                 }
             } else {
                 const r = f.runtime();
