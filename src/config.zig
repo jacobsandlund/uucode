@@ -1,7 +1,7 @@
 const std = @import("std");
 const types = @import("types.zig");
 
-pub const max_valid_cp = 0x10FFFF;
+pub const max_code_point = 0x10FFFF;
 
 pub const default = Table{
     .fields = &.{

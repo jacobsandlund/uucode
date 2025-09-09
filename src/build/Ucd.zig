@@ -95,7 +95,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
         .blocks = .{},
     };
 
-    ucd.unicode_data = try allocator.alloc(UnicodeData, config.max_valid_cp + 1);
+    ucd.unicode_data = try allocator.alloc(UnicodeData, config.max_code_point + 1);
     errdefer allocator.free(ucd.unicode_data);
 
     try parseUnicodeData(allocator, &ucd);
@@ -327,7 +327,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
     }
 
     // Fill any remaining gaps at the end with default values
-    for (next_cp..config.max_valid_cp + 1) |cp| {
+    for (next_cp..config.max_code_point + 1) |cp| {
         ucd.unicode_data[cp] = gap_data;
     }
 }

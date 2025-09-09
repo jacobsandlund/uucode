@@ -480,7 +480,7 @@ pub fn writeTableData(
 
     const build_data_start = try std.time.Instant.now();
 
-    for (0..config.max_valid_cp + 1) |cp_usize| {
+    for (0..config.max_code_point + 1) |cp_usize| {
         const cp: u21 = @intCast(cp_usize);
         const unicode_data = ucd.unicode_data[cp];
         const case_folding = ucd.case_folding.get(cp);
