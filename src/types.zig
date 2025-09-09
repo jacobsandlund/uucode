@@ -515,13 +515,6 @@ pub fn Field(c: config.Field) type {
     };
 }
 
-pub fn stageAlignment(elem_size: usize, len: usize) u16 {
-    return @min(
-        std.math.ceilPowerOfTwoAssert(usize, @intCast(len * elem_size)),
-        std.math.floorPowerOfTwo(u16, std.math.maxInt(u16)),
-    );
-}
-
 pub fn Data(comptime c: config.Table) type {
     var data_fields: [c.fields.len]std.builtin.Type.StructField = undefined;
 
@@ -568,7 +561,7 @@ pub fn Table(
             .size = .slice,
             .is_const = true,
             .is_volatile = false,
-            .alignment = stageAlignment(@sizeOf(Data_), len.data),
+            .alignment = @alignOf(Data_),
             .address_space = .generic,
             .child = Data_,
             .is_allowzero = false,
@@ -589,7 +582,7 @@ pub fn Table(
                 .size = .slice,
                 .is_const = true,
                 .is_volatile = false,
-                .alignment = stageAlignment(@sizeOf(u16), len.stage1),
+                .alignment = @alignOf(u16),
                 .address_space = .generic,
                 .child = u16,
                 .is_allowzero = false,
@@ -613,7 +606,7 @@ pub fn Table(
                 .size = .slice,
                 .is_const = true,
                 .is_volatile = false,
-                .alignment = stageAlignment(@sizeOf(u16), len.stage2),
+                .alignment = @alignOf(u16),
                 .address_space = .generic,
                 .child = u16,
                 .is_allowzero = false,

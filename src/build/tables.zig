@@ -1104,14 +1104,10 @@ pub fn writeTableData(
         \\
         \\}};
         \\
-        \\const {s}_stage1: [{d}]u16 align({d}) = .{{
+        \\const {s}_stage1: [{d}]u16 = .{{
         \\
     ,
-        .{
-            prefix,
-            stage1.items.len,
-            types.stageAlignment(@sizeOf(u16), stage1.items.len),
-        },
+        .{ prefix, stage1.items.len },
     );
 
     for (stage1.items) |item| {
@@ -1122,14 +1118,10 @@ pub fn writeTableData(
         \\
         \\}};
         \\
-        \\const {s}_stage2: [{d}]u16 align({d}) = .{{
+        \\const {s}_stage2: [{d}]u16 = .{{
         \\
     ,
-        .{
-            prefix,
-            stage2.items.len,
-            types.stageAlignment(@sizeOf(u16), stage2.items.len),
-        },
+        .{ prefix, stage2.items.len },
     );
 
     for (stage2.items) |item| {
@@ -1141,15 +1133,10 @@ pub fn writeTableData(
         \\
         \\}};
         \\
-        \\const {s}_data: [{d}]{s}_Data align({d}) = .{{
+        \\const {s}_data: [{d}]{s}_Data = .{{
         \\
     ,
-        .{
-            prefix,
-            data_array.items.len,
-            TypePrefix,
-            types.stageAlignment(@sizeOf(Data), data_array.items.len),
-        },
+        .{ prefix, data_array.items.len, TypePrefix },
     );
 
     for (data_array.items) |item| {
