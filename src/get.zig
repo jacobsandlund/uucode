@@ -130,7 +130,7 @@ fn Field(comptime field: []const u8) type {
     }
 }
 
-inline fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
+fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
     const D = DataField(name);
 
     if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "optional") or @hasDecl(D, "value"))) {
