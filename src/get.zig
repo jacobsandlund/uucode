@@ -6,11 +6,7 @@ const tables = @import("tables").tables;
 const types = @import("types.zig");
 
 fn TableData(comptime Table: anytype) type {
-    return StagesData(@FieldType(Table, "stages"));
-}
-
-fn StagesData(comptime Stages: anytype) type {
-    const DataSlice = @FieldType(Stages, "data");
+    const DataSlice = @FieldType(Table, "data");
     return @typeInfo(DataSlice).pointer.child;
 }
 
@@ -44,34 +40,34 @@ pub fn backingFor(comptime field: []const u8) BackingFor(field) {
     return @field(tables, tableInfo.name).backing;
 }
 
-fn StagesFor(comptime field: []const u8) type {
+fn TableFor(comptime field: []const u8) type {
     const tableInfo = tableInfoFor(field);
-    return @FieldType(@FieldType(@TypeOf(tables), tableInfo.name), "stages");
+    return @FieldType(@TypeOf(tables), tableInfo.name);
 }
 
-fn stagesFor(comptime field: []const u8) StagesFor(field) {
-    return @field(tables, tableInfoFor(field).name).stages;
+fn tableFor(comptime field: []const u8) TableFor(field) {
+    return @field(tables, tableInfoFor(field).name);
 }
 
-fn GetTableStages(comptime table_name: []const u8) type {
+fn GetTable(comptime table_name: []const u8) type {
     const tableInfo = getTableInfo(table_name);
-    return @FieldType(@FieldType(@TypeOf(tables), tableInfo.name), "stages");
+    return @FieldType(@TypeOf(tables), tableInfo.name);
 }
 
-fn getTableStages(comptime table_name: []const u8) GetTableStages(table_name) {
-    return @field(tables, getTableInfo(table_name).name).stages;
+fn getTable(comptime table_name: []const u8) GetTable(table_name) {
+    return @field(tables, getTableInfo(table_name).name);
 }
 
 // TODO: support two stage (stage1 and data) tables
-fn data(comptime stages: anytype, cp: u21) StagesData(@TypeOf(stages)) {
+fn data(comptime table: anytype, cp: u21) TableData(@TypeOf(table)) {
     const stage1_idx = cp >> 8;
     const stage2_idx = cp & 0xFF;
-    return stages.data[stages.stage2[stages.stage1[stage1_idx] + stage2_idx]];
+    return table.data[table.stage2[table.stage1[stage1_idx] + stage2_idx]];
 }
 
 pub fn getPacked(comptime table_name: []const u8, cp: u21) PackedTypeOf(table_name) {
-    const stages = comptime getTableStages(table_name);
-    return data(stages, cp);
+    const table = comptime getTable(table_name);
+    return data(table, cp);
 }
 
 pub fn PackedTypeOf(comptime table_name: []const u8) type {
@@ -134,8 +130,8 @@ fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
     const D = DataField(name);
 
     if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "optional") or @hasDecl(D, "value"))) {
-        const stages = comptime stagesFor(name);
-        const d = @field(data(stages, cp), name);
+        const table = comptime tableFor(name);
+        const d = @field(data(table, cp), name);
         if (@hasDecl(D, "is_optional") and D.is_optional) {
             return d.optional(cp);
         } else if (@hasDecl(D, "optional") and !@hasDecl(D, "is_optional")) {
@@ -144,8 +140,8 @@ fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
             return d.value(cp);
         }
     } else {
-        const stages = comptime stagesFor(name);
-        return @field(data(stages, cp), name);
+        const table = comptime tableFor(name);
+        return @field(data(table, cp), name);
     }
 }
 

@@ -540,134 +540,31 @@ pub fn Data(comptime c: config.Table) type {
     });
 }
 
+// TODO: make this actually a struct of slices of backing data, write in tables like how stages are done. also optimize []const u8 to be a string
 pub fn Backing(comptime D: type) type {
     return StructFromDecls(D, "BackingBuffer");
 }
 
-pub fn Table(
+pub fn Table3(
+    comptime Data_: type,
+) type {
+    return struct {
+        stage1: []const u16,
+        stage2: []const u16,
+        data: []const Data_,
+    };
+}
+
+pub fn Table3Backed(
     comptime Data_: type,
     comptime Backing_: type,
 ) type {
-    @setEvalBranchQuota(10_000);
-
-    const DataSlice = @Type(.{
-        .pointer = .{
-            .size = .slice,
-            .is_const = true,
-            .is_volatile = false,
-            .alignment = @alignOf(Data_),
-            .address_space = .generic,
-            .child = Data_,
-            .is_allowzero = false,
-            .sentinel_ptr = null,
-        },
-    });
-
-    var stages_fields = [_]std.builtin.Type.StructField{
-        undefined,
-        undefined,
-        undefined,
+    return struct {
+        stage1: []const u16,
+        stage2: []const u16,
+        data: []const Data_,
+        backing: *const Backing_,
     };
-    var stages_fields_len: usize = 0;
-
-    const Stage1 = @Type(.{
-        .pointer = .{
-            .size = .slice,
-            .is_const = true,
-            .is_volatile = false,
-            .alignment = @alignOf(u16),
-            .address_space = .generic,
-            .child = u16,
-            .is_allowzero = false,
-            .sentinel_ptr = null,
-        },
-    });
-
-    stages_fields[stages_fields_len] = .{
-        .name = "stage1",
-        .type = Stage1,
-        .default_value_ptr = null,
-        .is_comptime = false,
-        .alignment = @alignOf(Stage1),
-    };
-    stages_fields_len += 1;
-
-    const Stage2 = @Type(.{
-        .pointer = .{
-            .size = .slice,
-            .is_const = true,
-            .is_volatile = false,
-            .alignment = @alignOf(u16),
-            .address_space = .generic,
-            .child = u16,
-            .is_allowzero = false,
-            .sentinel_ptr = null,
-        },
-    });
-
-    stages_fields[stages_fields_len] = .{
-        .name = "stage2",
-        .type = Stage2,
-        .default_value_ptr = null,
-        .is_comptime = false,
-        .alignment = @alignOf(Stage2),
-    };
-    stages_fields_len += 1;
-
-    stages_fields[stages_fields_len] = .{
-        .name = "data",
-        .type = DataSlice,
-        .default_value_ptr = null,
-        .is_comptime = false,
-        .alignment = @alignOf(DataSlice),
-    };
-    stages_fields_len += 1;
-
-    const Stages = @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &stages_fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
-
-    const BackingPointer = @Type(.{
-        .pointer = .{
-            .size = .one,
-            .is_const = true,
-            .is_volatile = false,
-            .alignment = @alignOf(Backing_),
-            .address_space = .generic,
-            .child = Backing_,
-            .is_allowzero = false,
-            .sentinel_ptr = null,
-        },
-    });
-
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &.{
-                .{
-                    .name = "backing",
-                    .type = BackingPointer,
-                    .default_value_ptr = null,
-                    .is_comptime = false,
-                    .alignment = @alignOf(BackingPointer),
-                },
-                .{
-                    .name = "stages",
-                    .type = Stages,
-                    .default_value_ptr = null,
-                    .is_comptime = false,
-                    .alignment = @alignOf(Stages),
-                },
-            },
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
 }
 
 // TODO: better alignment?
