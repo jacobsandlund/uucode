@@ -43,6 +43,7 @@ pub fn main() !void {
     try writer.writeAll(
         \\//! This file is auto-generated. Do not edit.
         \\
+        \\const std = @import("std");
         \\const types = @import("types.zig");
         \\const types_x = @import("types.x.zig");
         \\const config = @import("config.zig");
