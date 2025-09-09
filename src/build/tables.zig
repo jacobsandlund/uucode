@@ -1013,15 +1013,11 @@ pub fn writeTableData(
 
     try writer.print(
         \\const {s}_config = config.Table{{
-        \\    .stages = .{{ .len = .{{
-        \\        .stage1 = {},
-        \\        .stage2 = {},
-        \\        .data = {},
-        \\     }}}},
+        \\    .stages = .auto,
         \\    .extensions = &.{{}},
         \\    .fields = &.{{
         \\
-    , .{ prefix, stage1.items.len, stage2.items.len, data_array.items.len });
+    , .{prefix});
 
     var all_fields_okay = true;
 
@@ -1187,7 +1183,7 @@ fn writeTable(
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
 
     try writer.print(
-        \\types.Table({s}_config, {s}_Data, {s}_Backing){{
+        \\types.Table({s}_Data, {s}_Backing){{
         \\        .stages = .{{
         \\            .stage1 = &{s}_stage1,
         \\            .stage2 = &{s}_stage2,
@@ -1197,7 +1193,6 @@ fn writeTable(
         \\    }},
         \\
     , .{
-        prefix,
         TypePrefix,
         TypePrefix,
         prefix,

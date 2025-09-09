@@ -466,19 +466,11 @@ pub const Table = struct {
     extensions: []const Extension = &.{},
     fields: []const Field,
 
-    pub const Stages = union(enum) {
+    pub const Stages = enum {
         // TODO: support two stage tables (and actually support auto)
-        auto: void,
+        auto,
         //two: void,
         //three: void,
-
-        len: Len,
-
-        pub const Len = struct {
-            stage1: usize,
-            stage2: usize,
-            data: usize,
-        };
     };
 
     pub fn hasField(self: *const Table, name: []const u8) bool {

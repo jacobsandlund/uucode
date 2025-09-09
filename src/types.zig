@@ -545,16 +545,10 @@ pub fn Backing(comptime D: type) type {
 }
 
 pub fn Table(
-    comptime c: config.Table,
     comptime Data_: type,
     comptime Backing_: type,
 ) type {
     @setEvalBranchQuota(10_000);
-
-    const len: config.Table.Stages.Len = switch (c.stages) {
-        .len => |len| len,
-        else => .{ .stage1 = 0, .stage2 = 0, .data = 1 },
-    };
 
     const DataSlice = @Type(.{
         .pointer = .{
@@ -576,53 +570,49 @@ pub fn Table(
     };
     var stages_fields_len: usize = 0;
 
-    if (len.stage1 > 0) {
-        const Stage1 = @Type(.{
-            .pointer = .{
-                .size = .slice,
-                .is_const = true,
-                .is_volatile = false,
-                .alignment = @alignOf(u16),
-                .address_space = .generic,
-                .child = u16,
-                .is_allowzero = false,
-                .sentinel_ptr = null,
-            },
-        });
+    const Stage1 = @Type(.{
+        .pointer = .{
+            .size = .slice,
+            .is_const = true,
+            .is_volatile = false,
+            .alignment = @alignOf(u16),
+            .address_space = .generic,
+            .child = u16,
+            .is_allowzero = false,
+            .sentinel_ptr = null,
+        },
+    });
 
-        stages_fields[stages_fields_len] = .{
-            .name = "stage1",
-            .type = Stage1,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(Stage1),
-        };
-        stages_fields_len += 1;
-    }
+    stages_fields[stages_fields_len] = .{
+        .name = "stage1",
+        .type = Stage1,
+        .default_value_ptr = null,
+        .is_comptime = false,
+        .alignment = @alignOf(Stage1),
+    };
+    stages_fields_len += 1;
 
-    if (len.stage2 > 0) {
-        const Stage2 = @Type(.{
-            .pointer = .{
-                .size = .slice,
-                .is_const = true,
-                .is_volatile = false,
-                .alignment = @alignOf(u16),
-                .address_space = .generic,
-                .child = u16,
-                .is_allowzero = false,
-                .sentinel_ptr = null,
-            },
-        });
+    const Stage2 = @Type(.{
+        .pointer = .{
+            .size = .slice,
+            .is_const = true,
+            .is_volatile = false,
+            .alignment = @alignOf(u16),
+            .address_space = .generic,
+            .child = u16,
+            .is_allowzero = false,
+            .sentinel_ptr = null,
+        },
+    });
 
-        stages_fields[stages_fields_len] = .{
-            .name = "stage2",
-            .type = Stage2,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(Stage2),
-        };
-        stages_fields_len += 1;
-    }
+    stages_fields[stages_fields_len] = .{
+        .name = "stage2",
+        .type = Stage2,
+        .default_value_ptr = null,
+        .is_comptime = false,
+        .alignment = @alignOf(Stage2),
+    };
+    stages_fields_len += 1;
 
     stages_fields[stages_fields_len] = .{
         .name = "data",
@@ -636,7 +626,7 @@ pub fn Table(
     const Stages = @Type(.{
         .@"struct" = .{
             .layout = .auto,
-            .fields = stages_fields[0..stages_fields_len],
+            .fields = &stages_fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },
