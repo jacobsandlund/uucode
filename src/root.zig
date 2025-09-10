@@ -54,14 +54,14 @@ test "generalCategory" {
 }
 
 test "getPacked" {
-    const d0 = getPacked("0", 65);
-    try testing.expect(d0.general_category == .letter_uppercase);
-    try testing.expect(d0.case_folding_simple.optional(65).? == 97);
+    const d1 = getPacked("1", 65);
+    try testing.expect(d1.general_category == .letter_uppercase);
+    try testing.expect(d1.case_folding_simple.optional(65).? == 97);
 
-    const d1 = getPacked("checks", 65);
-    try testing.expect(d1.is_alphabetic);
-    try testing.expect(d1.is_uppercase);
-    try testing.expect(!d1.is_lowercase);
+    const d_checks = getPacked("checks", 65);
+    try testing.expect(d_checks.is_alphabetic);
+    try testing.expect(d_checks.is_uppercase);
+    try testing.expect(!d_checks.is_lowercase);
 }
 
 test "get extension foo" {
