@@ -13,9 +13,6 @@ pub const std_options: std.Options = .{
 
 const buffer_size = 150_000_000; // Actual is ~148 MiB
 
-// TODO: also choose between stage1 and stage2
-const WriteTableConfig = struct {};
-
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
     const table_configs: []const config.Table = if (config.is_updating_ucd) &.{updating_ucd} else &build_config.tables;
@@ -61,12 +58,12 @@ pub fn main() !void {
     defer arena.deinit();
     const arena_alloc = arena.allocator();
 
-    var write_configs: [table_configs.len]WriteTableConfig = undefined;
+    var stages: [table_configs.len]TableStages = undefined;
 
     inline for (table_configs, 0..) |table_config, i| {
         const start = try std.time.Instant.now();
 
-        write_configs[i] = try writeTableData(
+        stages[i] = try writeTableData(
             table_config,
             i,
             arena_alloc,
@@ -90,7 +87,7 @@ pub fn main() !void {
     inline for (table_configs, 0..) |table_config, i| {
         try writeTable(
             table_config,
-            write_configs[i],
+            stages[i],
             i,
             arena_alloc,
             writer,
@@ -243,55 +240,91 @@ const updating_ucd = config.Table{
     .fields = &updating_ucd_fields,
 };
 
+const TableStages = enum {
+    two,
+    three,
+};
+
+fn hashData(comptime Data: type, hasher: anytype, data: Data) void {
+    inline for (@typeInfo(Data).@"struct".fields) |field| {
+        if (comptime @typeInfo(field.type) == .@"struct" and @hasDecl(field.type, "autoHash")) {
+            @field(data, field.name).autoHash(hasher);
+        } else {
+            std.hash.autoHash(hasher, @field(data, field.name));
+        }
+    }
+}
+
+fn eqlData(comptime Data: type, a: Data, b: Data) bool {
+    inline for (@typeInfo(Data).@"struct".fields) |field| {
+        if (comptime @typeInfo(field.type) == .@"struct" and @hasDecl(field.type, "eql")) {
+            if (!@field(a, field.name).eql(@field(b, field.name))) {
+                return false;
+            }
+        } else {
+            if (@field(a, field.name) != @field(b, field.name)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 fn DataMap(comptime Data: type) type {
     return std.HashMapUnmanaged(Data, u16, struct {
         pub fn hash(self: @This(), data: Data) u64 {
             _ = self;
             var hasher = std.hash.Wyhash.init(128572459);
-            inline for (@typeInfo(Data).@"struct".fields) |field| {
-                if (comptime @typeInfo(field.type) == .@"struct" and @hasDecl(field.type, "autoHash")) {
-                    @field(data, field.name).autoHash(&hasher);
-                } else {
-                    std.hash.autoHash(&hasher, @field(data, field.name));
-                }
-            }
+            hashData(Data, &hasher, data);
             return hasher.final();
         }
 
         pub fn eql(self: @This(), a: Data, b: Data) bool {
             _ = self;
-            inline for (@typeInfo(Data).@"struct".fields) |field| {
-                if (comptime @typeInfo(field.type) == .@"struct" and @hasDecl(field.type, "eql")) {
-                    if (!@field(a, field.name).eql(@field(b, field.name))) {
-                        return false;
-                    }
-                } else {
-                    if (@field(a, field.name) != @field(b, field.name)) {
-                        return false;
-                    }
-                }
-            }
-            return true;
+            return eqlData(Data, a, b);
         }
     }, std.hash_map.default_max_load_percentage);
 }
 
 const block_size = 256;
-const Block = [block_size]u16;
 
-const BlockMap = std.HashMapUnmanaged(Block, u16, struct {
-    pub fn hash(self: @This(), block: Block) u64 {
-        _ = self;
-        var hasher = std.hash.Wyhash.init(915296157);
-        std.hash.autoHash(&hasher, block);
-        return hasher.final();
-    }
+fn Block(comptime T: type) type {
+    std.debug.assert(T == u16 or @typeInfo(T) == .@"struct");
+    return [block_size]T;
+}
 
-    pub fn eql(self: @This(), a: Block, b: Block) bool {
-        _ = self;
-        return std.mem.eql(u16, &a, &b);
-    }
-}, std.hash_map.default_max_load_percentage);
+fn BlockMap(comptime B: type) type {
+    const T = @typeInfo(B).array.child;
+    return std.HashMapUnmanaged(B, u16, struct {
+        pub fn hash(self: @This(), block: B) u64 {
+            _ = self;
+            var hasher = std.hash.Wyhash.init(915296157);
+            if (T == u16) {
+                std.hash.autoHash(&hasher, block);
+            } else {
+                for (block) |item| {
+                    hashData(T, &hasher, item);
+                }
+            }
+            return hasher.final();
+        }
+
+        pub fn eql(self: @This(), a: B, b: B) bool {
+            _ = self;
+            if (T == u16) {
+                return std.mem.eql(T, &a, &b);
+            } else {
+                for (a, b) |a_item, b_item| {
+                    if (!eqlData(T, a_item, b_item)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }
+    }, std.hash_map.default_max_load_percentage);
+}
 
 fn TableAllData(comptime c: config.Table) type {
     var fields_len_bound: u16 = c.fields.len;
@@ -447,7 +480,7 @@ pub fn writeTableData(
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
     writer: *std.Io.Writer,
-) !WriteTableConfig {
+) !TableStages {
     const Data = types.Data(table_config);
     const AllData = TableAllData(table_config);
     const Backing = types.StructFromDecls(AllData, "MutableBackingBuffer");
@@ -482,18 +515,31 @@ pub fn writeTableData(
         }
     }
 
+    const stages: TableStages = if (table_config.stages == .two)
+        .two
+    else
+        .three;
+    const num_stages: u2 = if (stages == .three) 3 else 2;
+
+    const Stage2Elem = if (stages == .three)
+        u16
+    else
+        Data;
+
+    const B = Block(Stage2Elem);
+
     var data_map: DataMap(Data) = .empty;
     defer data_map.deinit(allocator);
-    var data_array: std.ArrayListUnmanaged(Data) = .empty;
-    defer data_array.deinit(allocator);
-    var block_map: BlockMap = .empty;
+    var stage3: std.ArrayListUnmanaged(Data) = .empty;
+    defer stage3.deinit(allocator);
+    var block_map: BlockMap(B) = .empty;
     defer block_map.deinit(allocator);
-    var stage2: std.ArrayListUnmanaged(u16) = .empty;
+    var stage2: std.ArrayListUnmanaged(Stage2Elem) = .empty;
     defer stage2.deinit(allocator);
     var stage1: std.ArrayListUnmanaged(u16) = .empty;
     defer stage1.deinit(allocator);
 
-    var block: Block = undefined;
+    var block: B = undefined;
     var block_len: usize = 0;
 
     const build_data_start = try std.time.Instant.now();
@@ -991,20 +1037,23 @@ pub fn writeTableData(
             @field(d, f.name) = @field(a, f.name);
         }
 
-        // TODO: support two stage (stage1 and data) tables
+        if (stages == .three) {
+            const gop = try data_map.getOrPut(allocator, d);
+            var data_index: u16 = undefined;
+            if (gop.found_existing) {
+                data_index = gop.value_ptr.*;
+            } else {
+                data_index = @intCast(stage3.items.len);
+                gop.value_ptr.* = data_index;
+                try stage3.append(allocator, d);
+            }
 
-        const gop = try data_map.getOrPut(allocator, d);
-        var data_index: u16 = undefined;
-        if (gop.found_existing) {
-            data_index = gop.value_ptr.*;
+            block[block_len] = data_index;
+            block_len += 1;
         } else {
-            data_index = @intCast(data_array.items.len);
-            gop.value_ptr.* = data_index;
-            try data_array.append(allocator, d);
+            block[block_len] = d;
+            block_len += 1;
         }
-
-        block[block_len] = data_index;
-        block_len += 1;
 
         if (block_len == block_size) {
             const gop_block = try block_map.getOrPut(allocator, block);
@@ -1031,8 +1080,6 @@ pub fn writeTableData(
 
     try writer.print(
         \\const {s}_config = config.Table{{
-        \\    .stages = .auto,
-        \\    .extensions = &.{{}},
         \\    .fields = &.{{
         \\
     , .{prefix});
@@ -1146,31 +1193,35 @@ pub fn writeTableData(
         try writer.print("{},", .{item});
     }
 
-    try writer.print(
-        \\
-        \\}};
-        \\
-        \\const {s}_stage2: [{d}]u16 align(std.atomic.cache_line) = .{{
-        \\
-    ,
-        .{ prefix, stage2.items.len },
-    );
+    if (stages == .three) {
+        try writer.print(
+            \\
+            \\}};
+            \\
+            \\const {s}_stage2: [{d}]u16 align(std.atomic.cache_line) = .{{
+            \\
+        ,
+            .{ prefix, stage2.items.len },
+        );
 
-    for (stage2.items) |item| {
-        try writer.print("{},", .{item});
+        for (stage2.items) |item| {
+            try writer.print("{},", .{item});
+        }
     }
 
+    const data_items = if (stages == .three) stage3.items else stage2.items;
+
     try writer.print(
         \\
         \\}};
         \\
-        \\const {s}_data: [{d}]{s}_Data align(@max(std.atomic.cache_line, @alignOf({s}_Data))) = .{{
+        \\const {s}_stage{d}: [{d}]{s}_Data align(@max(std.atomic.cache_line, @alignOf({s}_Data))) = .{{
         \\
     ,
-        .{ prefix, data_array.items.len, TypePrefix, TypePrefix },
+        .{ prefix, num_stages, data_items.len, TypePrefix, TypePrefix },
     );
 
-    for (data_array.items) |item| {
+    for (data_items) |item| {
         try writer.writeAll(
             \\    .{
             \\
@@ -1210,18 +1261,16 @@ pub fn writeTableData(
         \\
     );
 
-    return .{};
+    return stages;
 }
 
 fn writeTable(
     comptime table_config: config.Table,
-    write_config: WriteTableConfig,
+    stages: TableStages,
     table_index: usize,
     allocator: std.mem.Allocator,
     writer: anytype,
 ) !void {
-    _ = write_config;
-
     if (table_config.name) |name| {
         try writer.print("    .{s} = ", .{name});
     } else {
@@ -1229,23 +1278,33 @@ fn writeTable(
     }
 
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
+    const num_stages: u2 = if (stages == .three) 3 else 2;
 
     try writer.print(
-        \\types.Table3({s}_Data, {s}_Backing){{
+        \\types.Table{d}({s}_Data, {s}_Backing){{
         \\        .stage1 = &{s}_stage1,
         \\        .stage2 = &{s}_stage2,
-        \\        .data = &{s}_data,
-        \\        .backing = &{s}_backing,
-        \\    }},
         \\
     , .{
+        num_stages,
         TypePrefix,
         TypePrefix,
-        prefix,
-        prefix,
         prefix,
         prefix,
     });
+
+    if (stages == .three) {
+        try writer.print(
+            \\        .stage3 = &{s}_stage3,
+            \\
+        , .{prefix});
+    }
+
+    try writer.print(
+        \\        .backing = &{s}_backing,
+        \\    }},
+        \\
+    , .{prefix});
 }
 
 test {

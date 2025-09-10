@@ -6,7 +6,10 @@ const tables = @import("tables").tables;
 const types = @import("types.zig");
 
 fn TableData(comptime Table: anytype) type {
-    const DataSlice = @FieldType(Table, "data");
+    const DataSlice = if (@hasField(Table, "stage3"))
+        @FieldType(Table, "stage3")
+    else
+        @FieldType(Table, "stage2");
     return @typeInfo(DataSlice).pointer.child;
 }
 
@@ -59,11 +62,14 @@ fn getTable(comptime table_name: []const u8) GetTable(table_name) {
     return @field(tables, getTableInfo(table_name).name);
 }
 
-// TODO: support two stage (stage1 and data) tables
 fn data(comptime table: anytype, cp: u21) TableData(@TypeOf(table)) {
     const stage1_idx = cp >> 8;
     const stage2_idx = cp & 0xFF;
-    return table.data[table.stage2[table.stage1[stage1_idx] + stage2_idx]];
+    if (@hasField(@TypeOf(table), "stage3")) {
+        return table.stage3[table.stage2[table.stage1[stage1_idx] + stage2_idx]];
+    } else {
+        return table.stage2[table.stage1[stage1_idx] + stage2_idx];
+    }
 }
 
 pub fn getPacked(comptime table_name: []const u8, cp: u21) PackedTypeOf(table_name) {

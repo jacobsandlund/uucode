@@ -467,10 +467,9 @@ pub const Table = struct {
     fields: []const Field,
 
     pub const Stages = enum {
-        // TODO: support two stage tables (and actually support auto)
         auto,
-        //two: void,
-        //three: void,
+        two,
+        three,
     };
 
     pub fn hasField(self: *const Table, name: []const u8) bool {

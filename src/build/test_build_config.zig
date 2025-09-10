@@ -60,13 +60,18 @@ pub const tables = [_]config.Table{
             d.field("simple_uppercase_mapping"),
             foo.field("foo"),
             emoji_odd_or_even.field("emoji_odd_or_even"),
-            d.field("general_category"),
-            d.field("case_folding_simple"),
             d.field("name").override(.{
                 .embedded_len = 15,
                 .max_offset = 986096,
             }),
             d.field("grapheme_break"),
+        },
+    },
+    .{
+        .stages = .two,
+        .fields = &.{
+            d.field("general_category"),
+            d.field("case_folding_simple"),
         },
     },
     .{

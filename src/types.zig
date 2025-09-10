@@ -540,7 +540,6 @@ pub fn Data(comptime c: config.Table) type {
     });
 }
 
-// TODO: make this actually a struct of slices of backing data, write in tables like how stages are done. also optimize []const u8 to be a string
 pub fn Backing(comptime D: type) type {
     return StructFromDecls(D, "BackingBuffer");
 }
@@ -552,12 +551,22 @@ pub fn Table3(
     return struct {
         stage1: []const u16,
         stage2: []const u16,
-        data: []const Data_,
+        stage3: []const Data_,
         backing: *const Backing_,
     };
 }
 
-// TODO: better alignment?
+pub fn Table2(
+    comptime Data_: type,
+    comptime Backing_: type,
+) type {
+    return struct {
+        stage1: []const u16,
+        stage2: []const Data_,
+        backing: *const Backing_,
+    };
+}
+
 pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
     var decl_fields_len: usize = 0;
     for (@typeInfo(Struct).@"struct".fields) |f| {
