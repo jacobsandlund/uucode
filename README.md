@@ -27,13 +27,14 @@ uucode.get(.uppercase_mapping, cp).slice(&buffer1, cp) // "SS", but might not be
 var buffer2: uucode.TypeOf(.uppercase_mapping).CopyBuffer = undefined;
 uucode.get(.uppercase_mapping, cp).copy(&buffer2, cp) // "SS", copied into buffer2
 
-// Use `getPacked` to get a group of properties for a code point together.
+// Use `getAll` to get a group of properties for a code point together.
 // The first argument is the name/index of the table ("0" for `fields`).
 cp = 0x03C2; // ς
-const data = uucode.getPacked("0", cp);
+const data = uucode.getAll("0", cp);
 
 data.simple_uppercase_mapping // U+03A3 == Σ
 data.general_category // .letter_lowercase
+std.debug.assert(@TypeOf(data) == uucode.TypeOfAll("0"))
 
 //////////////////////
 // grapheme_break

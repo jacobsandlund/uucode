@@ -14,8 +14,8 @@ pub const getSpecial = getpkg.getSpecial;
 pub const getX = getpkg.getX;
 pub const TypeOf = getpkg.TypeOf;
 pub const TypeOfX = getpkg.TypeOfX;
-pub const getPacked = getpkg.getPacked;
-pub const PackedTypeOf = getpkg.PackedTypeOf;
+pub const getAll = getpkg.getAll;
+pub const TypeOfAll = getpkg.TypeOfAll;
 
 test {
     std.testing.refAllDeclsRecursive(config);
@@ -53,12 +53,12 @@ test "generalCategory" {
     try testing.expect(get(.general_category, 65) == .letter_uppercase); // 'A'
 }
 
-test "getPacked" {
-    const d1 = getPacked("1", 65);
+test "getAll" {
+    const d1 = getAll("1", 65);
     try testing.expect(d1.general_category == .letter_uppercase);
     try testing.expect(d1.case_folding_simple.optional(65).? == 97);
 
-    const d_checks = getPacked("checks", 65);
+    const d_checks = getAll("checks", 65);
     try testing.expect(d_checks.is_alphabetic);
     try testing.expect(d_checks.is_uppercase);
     try testing.expect(!d_checks.is_lowercase);
