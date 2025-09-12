@@ -1222,37 +1222,7 @@ pub fn writeTableData(
     );
 
     for (data_items) |item| {
-        try writer.writeAll(
-            \\    .{
-            \\
-        );
-
-        inline for (@typeInfo(Data).@"struct".fields) |field| {
-            try writer.print("        .{s} = ", .{field.name});
-
-            switch (@typeInfo(field.type)) {
-                .@"struct" => {
-                    try @field(item, field.name).write(writer);
-                },
-                .@"enum" => {
-                    try writer.print(".{s}", .{
-                        @tagName(@field(item, field.name)),
-                    });
-                },
-                else => {
-                    try writer.print("{}", .{
-                        @field(item, field.name),
-                    });
-                },
-            }
-
-            try writer.writeAll(",\n");
-        }
-
-        try writer.writeAll(
-            \\    },
-            \\
-        );
+        try types.writeData(Data, writer, item);
     }
 
     try writer.writeAll(
@@ -1269,7 +1239,7 @@ fn writeTable(
     stages: TableStages,
     table_index: usize,
     allocator: std.mem.Allocator,
-    writer: anytype,
+    writer: *std.Io.Writer,
 ) !void {
     if (table_config.name) |name| {
         try writer.print("    .{s} = ", .{name});
