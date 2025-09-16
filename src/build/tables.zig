@@ -998,7 +998,7 @@ pub fn writeTableData(
                     .none => {
                         a.grapheme_break = switch (original_grapheme_break) {
                             .extend => blk: {
-                                if (cp == types.zero_width_non_joiner) {
+                                if (cp == config.zero_width_non_joiner) {
                                     break :blk .zwnj;
                                 } else {
                                     std.log.err(
@@ -1015,7 +1015,7 @@ pub fn writeTableData(
                         };
                     },
                     .extend => {
-                        if (cp == types.zero_width_joiner) {
+                        if (cp == config.zero_width_joiner) {
                             a.grapheme_break = .zwj;
                         } else {
                             std.debug.assert(original_grapheme_break == .extend);

@@ -147,9 +147,6 @@ pub const GraphemeBreak = enum(u5) {
     indic_conjunct_break_consonant,
 };
 
-pub const zero_width_non_joiner = 0x200C;
-pub const zero_width_joiner = 0x200D;
-
 pub const SpecialCasingCondition = enum(u4) {
     none,
     final_sigma,

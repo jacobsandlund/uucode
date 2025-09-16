@@ -2,6 +2,32 @@ const std = @import("std");
 const uucode = @import("../root.zig");
 const types_x = @import("types.x.zig");
 
+// TODO: verify if this is reasonable, and see if this is the best API.
+// This only takes the width of the first > 0 width code point, as the theory
+// is that all these code points are combined into one grapheme cluster.
+// However, if there is a zero width joiner, then consider the width to be 2
+// (wide), since it's likely to be a wide grapheme cluster.
+pub fn unverifiedWcwidth(const_it: anytype) i3 {
+    var it = const_it;
+    var width: i3 = 0;
+    while (it.next()) |result| {
+        if (result.cp == uucode.config.zero_width_joiner) {
+            width = 2;
+        } else if (width <= 0) {
+            width = uucode.get(.wcwidth, result.cp);
+        }
+    }
+
+    return width;
+}
+
+test "unverifiedWcwidth" {
+    const str = "क्‍ष";
+    const utf8_it = uucode.utf8.Iterator.init(str);
+    const it = uucode.grapheme.Iterator(uucode.utf8.Iterator).init(utf8_it);
+    try std.testing.expect(unverifiedWcwidth(it) == 2);
+}
+
 pub fn PedanticEmojiIterator(comptime CodePointIterator: type) type {
     return uucode.grapheme.CustomIterator(
         CodePointIterator,
