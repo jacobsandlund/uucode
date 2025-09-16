@@ -49,7 +49,7 @@ uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
 cp1 = cp2;
 cp2 = 0x1F37C; // 🍼
 
-// combined grapheme cluster is 👩‍🍼 (woman feeding baby)
+// The combined grapheme cluster is 👩‍🍼 (woman feeding baby)
 uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
 
 //////////////////////
@@ -128,15 +128,26 @@ b.dependency("uucode", .{
 // `src/build/uucode_config.zig`:
 const config = @import("config.zig");
 
-// Use `config.x.zig` for extensions already built into `uucode`.
+// Use `config.x.zig` for extensions already built into `uucode`:
 const config_x = @import("config.x.zig");
 
 const d = config.default;
 const wcwidth = config_x.wcwidth;
 
+// Or build your own extension:
+const emoji_odd_or_even = config.Extension{
+    .inputs = &.{"is_emoji"},
+    .compute = &computeEmojiOddOrEven,
+    .fields = &.{
+        .{ .name = "emoji_odd_or_even", .type = EmojiOddOrEven },
+    },
+};
+
 fn computeEmojiOddOrEven(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
+    // backing and tracking are only used for slice types
     _ = backing;
     _ = tracking;
+
     if (!data.is_emoji) {
         data.emoji_odd_or_even = .not_emoji;
     } else if (cp % 2 == 0) {
@@ -146,19 +157,11 @@ fn computeEmojiOddOrEven(cp: u21, data: anytype, backing: anytype, tracking: any
     }
 }
 
-// types must be marked `pub` and be able to be part of a packed struct.
+// Types must be marked `pub`
 pub const EmojiOddOrEven = enum(u2) {
     not_emoji,
     even_emoji,
     odd_emoji,
-};
-
-const emoji_odd_or_even = config.Extension{
-    .inputs = &.{"is_emoji"},
-    .compute = &computeEmojiOddOrEven,
-    .fields = &.{
-        .{ .name = "emoji_odd_or_even", .type = EmojiOddOrEven },
-    },
 };
 
 pub const tables = [_]config.Table{
@@ -169,7 +172,7 @@ pub const tables = [_]config.Table{
         },
         .fields = &.{
             emoji_odd_or_even.field("emoji_odd_or_even"),
-            //wcwidth.field("wcwidth"),
+            wcwidth.field("wcwidth"),
             d.field("general_category"),
             d.field("block"),
             // ...
@@ -182,7 +185,7 @@ pub const tables = [_]config.Table{
 const uucode = @import("uucode");
 
 // This uses `getX` because `get` only includes known properties to aid with
-// LSP completion
+// LSP completion.
 uucode.getX(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
 
 // Built-in extensions can still use `get`
