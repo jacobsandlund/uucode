@@ -200,7 +200,7 @@ pub const tables = [_]config.Table{
 
             // See `src/config.zig` for everything that can be overriden.
             // In this example, we're embedding 15 bytes into the `stage3` data,
-            // and only names longer that need to use the `backing` slice.
+            // and only names longer than that need to use the `backing` slice.
             d.field("name").override(.{
                 .embedded_len = 15,
                 .max_offset = 986096, // run once to get the correct number
@@ -218,10 +218,11 @@ pub const log_level = .debug;
 
 ///////////////////////////////////////////////////////////
 // In your code:
+
 const uucode = @import("uucode");
 
-// This uses `getX` because `get` only includes known properties to aid with
-// LSP completion.
+// `get` only includes known properties to aid with LSP completion, but
+// `getX` works for any custom extension.
 uucode.getX(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
 
 // Built-in extensions can still use `get`
