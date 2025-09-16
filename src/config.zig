@@ -2,6 +2,8 @@ const std = @import("std");
 const types = @import("types.zig");
 
 pub const max_code_point = 0x10FFFF;
+pub const zero_width_non_joiner = 0x200C;
+pub const zero_width_joiner = 0x200D;
 
 pub const default = Table{
     .fields = &.{

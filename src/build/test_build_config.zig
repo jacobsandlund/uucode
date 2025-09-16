@@ -86,12 +86,14 @@ pub const tables = [_]config.Table{
         },
     },
     .{
-        .name = "needed_for_ref_all_decls",
+        .name = "needed_for_tests",
         .extensions = &.{
             config_x.grapheme_break_pedantic_emoji,
+            config_x.wcwidth,
         },
         .fields = &.{
             config_x.grapheme_break_pedantic_emoji.field("grapheme_break_pedantic_emoji"),
+            config_x.wcwidth.field("wcwidth"),
         },
     },
 };
