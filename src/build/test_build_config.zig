@@ -57,7 +57,6 @@ pub const tables = [_]config.Table{
             emoji_odd_or_even,
         },
         .fields = &.{
-            d.field("simple_uppercase_mapping"),
             foo.field("foo"),
             emoji_odd_or_even.field("emoji_odd_or_even"),
             d.field("name").override(.{
@@ -65,6 +64,8 @@ pub const tables = [_]config.Table{
                 .max_offset = 986096,
             }),
             d.field("grapheme_break"),
+            d.field("special_casing_condition"),
+            d.field("special_lowercase_mapping"),
         },
     },
     .{
@@ -78,11 +79,10 @@ pub const tables = [_]config.Table{
         .name = "checks",
         .extensions = &.{},
         .fields = &.{
+            d.field("simple_uppercase_mapping"),
             d.field("is_alphabetic"),
             d.field("is_lowercase"),
             d.field("is_uppercase"),
-            d.field("special_casing_condition"),
-            d.field("special_lowercase_mapping"),
         },
     },
     .{

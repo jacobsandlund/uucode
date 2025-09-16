@@ -72,12 +72,12 @@ fn data(comptime table: anytype, cp: u21) TableData(@TypeOf(table)) {
     }
 }
 
-pub fn getPacked(comptime table_name: []const u8, cp: u21) PackedTypeOf(table_name) {
+pub fn getAll(comptime table_name: []const u8, cp: u21) TypeOfAll(table_name) {
     const table = comptime getTable(table_name);
     return data(table, cp);
 }
 
-pub fn PackedTypeOf(comptime table_name: []const u8) type {
+pub fn TypeOfAll(comptime table_name: []const u8) type {
     return TableData(getTableInfo(table_name).type);
 }
 

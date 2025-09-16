@@ -56,13 +56,16 @@ pub fn main() !void {
     defer arena.deinit();
     const arena_alloc = arena.allocator();
 
-    var stages: [table_configs.len]TableStages = undefined;
-
+    comptime var resolved_tables: [table_configs.len]config.Table = undefined;
     inline for (table_configs, 0..) |table_config, i| {
+        resolved_tables[i] = table_config.resolve();
+    }
+
+    inline for (resolved_tables, 0..) |resolved_table, i| {
         const start = try std.time.Instant.now();
 
-        stages[i] = try writeTableData(
-            table_config,
+        try writeTableData(
+            resolved_table,
             i,
             arena_alloc,
             &ucd,
@@ -82,10 +85,9 @@ pub fn main() !void {
         \\
     );
 
-    inline for (table_configs, 0..) |table_config, i| {
+    inline for (resolved_tables, 0..) |resolved_table, i| {
         try writeTable(
-            table_config,
-            stages[i],
+            resolved_table,
             i,
             arena_alloc,
             writer,
@@ -236,11 +238,6 @@ const updating_ucd = config.Table{
     .fields = &updating_ucd_fields,
 };
 
-const TableStages = enum {
-    two,
-    three,
-};
-
 fn hashData(comptime Data: type, hasher: anytype, data: Data) void {
     inline for (@typeInfo(Data).@"struct".fields) |field| {
         if (comptime @typeInfo(field.type) == .@"struct" and @hasDecl(field.type, "autoHash")) {
@@ -323,39 +320,34 @@ fn BlockMap(comptime B: type) type {
 }
 
 fn TableAllData(comptime c: config.Table) type {
+    var x_fields_len: u16 = 0;
     var fields_len_bound: u16 = c.fields.len;
     for (c.extensions) |x| {
-        fields_len_bound += x.inputs.len;
+        x_fields_len += x.fields.len;
         fields_len_bound += x.fields.len;
+        fields_len_bound += x.inputs.len;
     }
-    var fields: [fields_len_bound]std.builtin.Type.StructField = undefined;
-    var x_fields: [fields_len_bound]config.Field = undefined;
-    var i: usize = 0;
+    var x_fields: [x_fields_len]config.Field = undefined;
+    var x_i: usize = 0;
 
-    // Add extension fields:
+    // Union extension fields:
     for (c.extensions) |x| {
         for (x.fields) |xf| {
-            for (fields[0..i]) |existing| {
+            for (x_fields[0..x_i]) |existing| {
                 if (std.mem.eql(u8, existing.name, xf.name)) {
                     @compileError("Extension field '" ++ xf.name ++ "' already exists in table");
                 }
             }
 
-            const F = types.Field(xf);
-            x_fields[i] = xf;
-            fields[i] = .{
-                .name = xf.name,
-                .type = F,
-                .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = @alignOf(F),
-            };
-            i += 1;
+            x_fields[x_i] = xf;
+            x_i += 1;
         }
     }
 
-    const extension_fields_len = i;
+    var fields: [fields_len_bound]std.builtin.Type.StructField = undefined;
+    var i: usize = 0;
 
+    // Add Data fields:
     for (c.fields, 0..) |cf, c_i| {
         for (c.fields[0..c_i]) |existing| {
             if (std.mem.eql(u8, existing.name, cf.name)) {
@@ -363,10 +355,10 @@ fn TableAllData(comptime c: config.Table) type {
             }
         }
 
-        // If a field isn't in `default` it's an extension field, which
-        // should've been added above.
+        // If a field isn't in `default` it's an extension field, which should
+        // be in x_fields.
         if (!config.default.hasField(cf.name)) {
-            const x_field: ?config.Field = for (x_fields[0..extension_fields_len]) |xf| {
+            const x_field: ?config.Field = for (x_fields) |xf| {
                 if (std.mem.eql(u8, xf.name, cf.name)) break xf;
             } else null;
 
@@ -377,13 +369,31 @@ fn TableAllData(comptime c: config.Table) type {
             } else {
                 @compileError("Table field '" ++ cf.name ++ "' not found in any of the table's extensions");
             }
-
-            continue;
         }
 
-        const F = types.Field(cf);
+        const F = types.Field(cf, c.packing);
         fields[i] = .{
             .name = cf.name,
+            .type = F,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(F),
+        };
+        i += 1;
+    }
+
+    // Add extension fields not part of Data:
+    const data_fields = fields[0..i];
+    loop_x_fields: for (x_fields[0..x_i]) |xf| {
+        for (data_fields) |f| {
+            if (std.mem.eql(u8, xf.name, f.name)) {
+                continue :loop_x_fields;
+            }
+        }
+
+        const F = types.Field(xf, .unpacked);
+        fields[i] = .{
+            .name = xf.name,
             .type = F,
             .default_value_ptr = null,
             .is_comptime = false,
@@ -401,7 +411,7 @@ fn TableAllData(comptime c: config.Table) type {
                 }
             }
 
-            const F = types.Field(config.default.field(input));
+            const F = types.Field(config.default.field(input), .unpacked);
             fields[i] = .{
                 .name = input,
                 .type = F,
@@ -476,7 +486,7 @@ pub fn writeTableData(
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
     writer: anytype,
-) !TableStages {
+) !void {
     const Data = types.Data(table_config);
     const AllData = TableAllData(table_config);
     const Backing = types.StructFromDecls(AllData, "MutableBackingBuffer");
@@ -511,10 +521,7 @@ pub fn writeTableData(
         }
     }
 
-    const stages: TableStages = if (table_config.stages == .two)
-        .two
-    else
-        .three;
+    const stages = table_config.stages;
     const num_stages: u2 = if (stages == .three) 3 else 2;
 
     const Stage2Elem = if (stages == .three)
@@ -1076,17 +1083,27 @@ pub fn writeTableData(
 
     try writer.print(
         \\const {s}_config = config.Table{{
-        \\    .fields = &.{{
         \\
     , .{prefix});
+
+    try writer.writeAll("    .packing = ");
+    try table_config.packing.write(writer);
+
+    try writer.writeAll(
+        \\,
+        \\    .fields = &.{
+        \\
+    );
 
     var all_fields_okay = true;
 
     inline for (table_config.fields) |f| {
+        const r = f.runtime();
+
         if (@hasField(Tracking, f.name)) {
             const t = @field(tracking, f.name);
             if (config.is_updating_ucd) {
-                const min_config = t.minBitsConfig(f.runtime());
+                const min_config = t.minBitsConfig(r);
                 if (!config.default.field(f.name).runtime().eql(min_config)) {
                     const w = std.io.getStdErr().writer();
                     try w.writeAll(
@@ -1097,14 +1114,13 @@ pub fn writeTableData(
                     try min_config.write(w);
                 }
             } else {
-                const r = f.runtime();
                 if (!r.compareActual(t.actualConfig(r))) {
                     all_fields_okay = false;
                 }
             }
         }
 
-        try f.runtime().write(writer);
+        try r.write(writer);
     }
 
     if (!all_fields_okay) {
@@ -1204,62 +1220,28 @@ pub fn writeTableData(
 
     const data_items = if (stages == .three) stage3.items else stage2.items;
 
-    try writer.print(
-        \\
-        \\}};
-        \\
-        \\const {s}_stage{d}: [{d}]{s}_Data align(@max(std.atomic.cache_line, @alignOf({s}_Data))) = .{{
-        \\
-    ,
-        .{ prefix, num_stages, data_items.len, TypePrefix, TypePrefix },
-    );
-
-    for (data_items) |item| {
-        try writer.writeAll(
-            \\    .{
-            \\
-        );
-
-        inline for (@typeInfo(Data).@"struct".fields) |field| {
-            try writer.print("        .{s} = ", .{field.name});
-
-            switch (@typeInfo(field.type)) {
-                .@"struct" => {
-                    try @field(item, field.name).write(writer);
-                },
-                .@"enum" => {
-                    try writer.print(".{s}", .{
-                        @tagName(@field(item, field.name)),
-                    });
-                },
-                else => {
-                    try writer.print("{}", .{
-                        @field(item, field.name),
-                    });
-                },
-            }
-
-            try writer.writeAll(",\n");
-        }
-
-        try writer.writeAll(
-            \\    },
-            \\
-        );
-    }
-
     try writer.writeAll(
+        \\
         \\};
         \\
         \\
     );
 
-    return stages;
+    try writer.print(
+        "const {s}_stage{d}: [{d}]{s}_Data align(@max(std.atomic.cache_line, @alignOf({s}_Data))) = ",
+        .{ prefix, num_stages, data_items.len, TypePrefix, TypePrefix },
+    );
+
+    try types.writeDataItems(Data, writer, data_items);
+
+    try writer.writeAll(
+        \\
+        \\
+    );
 }
 
 fn writeTable(
     comptime table_config: config.Table,
-    stages: TableStages,
     table_index: usize,
     allocator: std.mem.Allocator,
     writer: anytype,
@@ -1271,7 +1253,7 @@ fn writeTable(
     }
 
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
-    const num_stages: u2 = if (stages == .three) 3 else 2;
+    const num_stages: u2 = if (table_config.stages == .three) 3 else 2;
 
     try writer.print(
         \\types.Table{d}({s}_Data, {s}_Backing){{
@@ -1286,7 +1268,7 @@ fn writeTable(
         prefix,
     });
 
-    if (stages == .three) {
+    if (table_config.stages == .three) {
         try writer.print(
             \\        .stage3 = &{s}_stage3,
             \\

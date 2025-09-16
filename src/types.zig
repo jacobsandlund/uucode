@@ -506,38 +506,107 @@ pub const Block = enum(u9) {
 
 // The following types are internal to `uucode`:
 
-pub fn Field(c: config.Field) type {
-    return switch (c.kind()) {
-        .var_len => VarLen(c),
-        .shift => Shift(c),
-        .optional => Optional(c),
-        .basic => c.type,
-    };
+pub fn Field(comptime c: config.Field, comptime packing: config.Table.Packing) type {
+    switch (packing) {
+        .unpacked => return switch (c.kind()) {
+            .var_len => VarLen(c),
+            .shift => Shift(c, packing),
+            .basic, .optional => c.type,
+        },
+        .@"packed" => return switch (c.kind()) {
+            .var_len => @compileError("Packed var_len fields are not supported"),
+            .shift => Shift(c, packing),
+            .optional => PackedOptional(c),
+            .basic => c.type,
+        },
+        .auto => @compileError("Packing should be resolved by the time Field is called"),
+    }
 }
 
 pub fn Data(comptime c: config.Table) type {
     var data_fields: [c.fields.len]std.builtin.Type.StructField = undefined;
 
     for (c.fields, 0..) |cf, i| {
-        const F = Field(cf);
+        const F = Field(cf, c.packing);
 
         data_fields[i] = .{
             .name = cf.name,
             .type = F,
             .default_value_ptr = null,
             .is_comptime = false,
-            .alignment = @alignOf(F),
+            .alignment = if (c.packing == .@"packed") 0 else @alignOf(F),
         };
     }
 
     return @Type(.{
         .@"struct" = .{
-            .layout = .auto,
+            .layout = if (c.packing == .@"packed") .@"packed" else .auto,
             .fields = &data_fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },
     });
+}
+
+pub fn writeDataItems(comptime D: type, writer: anytype, data_items: []const D) !void {
+    if (@typeInfo(D).@"struct".layout == .@"packed") {
+        const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(D));
+
+        try writer.print("@bitCast([_]{s}{{\n", .{@typeName(IntEquivalent)});
+
+        for (data_items) |item| {
+            try writer.print("{d},", .{@as(IntEquivalent, @bitCast(item))});
+        }
+
+        try writer.writeAll(
+            \\});
+            \\
+        );
+    } else {
+        try writer.writeAll(
+            \\.{
+            \\
+        );
+
+        for (data_items) |item| {
+            try writer.writeAll(
+                \\.{
+                \\
+            );
+
+            inline for (@typeInfo(D).@"struct".fields) |field| {
+                try writer.print("    .{s} = ", .{field.name});
+
+                try writeDataField(field.type, writer, @field(item, field.name));
+
+                try writer.writeAll(",\n");
+            }
+
+            try writer.writeAll(
+                \\},
+                \\
+            );
+        }
+
+        try writer.writeAll(
+            \\};
+            \\
+        );
+    }
+}
+
+pub fn writeDataField(comptime F: type, writer: anytype, field: F) !void {
+    switch (@typeInfo(F)) {
+        .@"struct" => {
+            try field.write(writer);
+        },
+        .@"enum" => {
+            try writer.print(".{s}", .{@tagName(field)});
+        },
+        else => {
+            try writer.print("{}", .{field});
+        },
+    }
 }
 
 pub fn Backing(comptime D: type) type {
@@ -602,52 +671,6 @@ pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
     });
 }
 
-fn PackedArray(comptime T: type, comptime capacity: comptime_int) type {
-    return packed struct {
-        bits: Bits,
-
-        const Self = @This();
-        const is_enum = @typeInfo(T) == .@"enum";
-        const Int = if (is_enum) @typeInfo(T).@"enum".tag_type else T;
-        const item_bits = @bitSizeOf(T);
-        const Bits = std.meta.Int(.unsigned, item_bits * capacity);
-        const ShiftBits = std.math.Log2Int(Bits);
-
-        pub fn fromSlice(s: []const T) Self {
-            if ((comptime capacity == 0) or s.len == 0) return .{ .bits = 0 };
-
-            // This may make 1 length slices slightly faster, but it's
-            // primarily avoiding an issue where `item_bits` is actually too
-            // big to be a valid shift value, and zig can't tell that `i` would
-            // never be anything other than 0.
-            if (comptime capacity == 1) return .{
-                .bits = @as(Bits, if (is_enum) @intFromEnum(s[0]) else s[0]),
-            };
-
-            std.debug.assert(s.len <= capacity);
-            var bits: Bits = 0;
-            for (s, 0..) |item, i| {
-                bits |= @as(
-                    Bits,
-                    if (is_enum) @intFromEnum(item) else item,
-                ) << item_bits * @as(ShiftBits, @intCast(i));
-            }
-            return .{ .bits = bits };
-        }
-
-        pub fn slice(self: Self, buffer: []T, len: usize) []T {
-            inline for (0..capacity) |i| {
-                const item: Int = @truncate(self.bits >> item_bits * i);
-                buffer[i] = @as(
-                    T,
-                    if (is_enum) @enumFromInt(item) else item,
-                );
-            }
-            return buffer[0..len];
-        }
-    };
-}
-
 pub fn VarLen(
     comptime c: config.Field,
 ) type {
@@ -669,8 +692,8 @@ pub fn VarLen(
         @compileError("`shift` packing is not supported for VarLen: use `shift_single_item` or `direct` instead");
     }
 
-    return packed struct {
-        data: packed union {
+    return struct {
+        data: union {
             offset: Offset,
             embedded: EmbeddedArray,
             shift: ShiftSingleItem,
@@ -680,8 +703,8 @@ pub fn VarLen(
         const Self = @This();
         pub const T = @typeInfo(c.type).pointer.child;
         pub const Offset = std.math.IntFittingRange(0, max_offset);
-        const EmbeddedArray = PackedArray(T, embedded_len);
-        const ShiftSingleItem = if (c.cp_packing == .shift_single_item) Shift(c) else void;
+        const EmbeddedArray = [embedded_len]T;
+        const ShiftSingleItem = if (c.cp_packing == .shift_single_item) Shift(c, .unpacked) else void;
 
         const Len = std.math.IntFittingRange(0, max_len);
 
@@ -705,18 +728,14 @@ pub fn VarLen(
             tracking: *Tracking,
             s: []const T,
         ) !Self {
-            if (comptime embedded_len == 0 and max_offset == 0) {
-                return .empty;
-            } else if ((comptime embedded_len == max_len) or s.len <= embedded_len) {
-                return .{
-                    .len = @intCast(s.len),
-                    .data = .{
-                        .embedded = EmbeddedArray.fromSlice(s),
-                    },
-                };
-            } else {
+            if ((comptime embedded_len == 0) or s.len > embedded_len) {
+                if (s.len == 0) {
+                    return .empty;
+                }
+
                 const len: Len = @intCast(s.len);
                 const gop = try tracking.offset_map.getOrPut(allocator, s);
+
                 if (gop.found_existing) {
                     return .{
                         .len = len,
@@ -737,6 +756,27 @@ pub fn VarLen(
                     .len = len,
                     .data = .{
                         .offset = @intCast(offset),
+                    },
+                };
+            } else {
+                var embedded: [embedded_len]T = undefined;
+                @memcpy(embedded[0..s.len], s);
+                switch (@typeInfo(T)) {
+                    .@"struct" => {
+                        @memset(embedded[s.len..], 0);
+                    },
+                    .@"enum" => {
+                        @memset(embedded[s.len..], @enumFromInt(0));
+                    },
+                    else => {
+                        @memset(embedded[s.len..], 0);
+                    },
+                }
+
+                return .{
+                    .len = @intCast(s.len),
+                    .data = .{
+                        .embedded = embedded,
                     },
                 };
             }
@@ -786,11 +826,13 @@ pub fn VarLen(
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
             if (comptime embedded_len == max_len) {
-                return self.data.embedded.slice(buffer, self.len);
+                @memcpy(buffer[0..self.len], self.data.embedded[0..self.len]);
+                return buffer[0..self.len];
             } else if (comptime embedded_len == 0) {
                 return backing[self.data.offset .. @as(usize, self.data.offset) + @as(usize, self.len)];
             } else if (self.len <= embedded_len) {
-                return self.data.embedded.slice(buffer, self.len);
+                @memcpy(buffer[0..self.len], self.data.embedded[0..self.len]);
+                return buffer[0..self.len];
             } else {
                 return backing[self.data.offset .. @as(usize, self.data.offset) + @as(usize, self.len)];
             }
@@ -903,16 +945,12 @@ pub fn VarLen(
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
             std.hash.autoHash(hasher, self.len);
-            if (comptime embedded_len == max_len) {
-                return std.hash.autoHash(hasher, self.data.embedded);
-            } else if (comptime embedded_len == 0 and c.cp_packing == .direct) {
-                return std.hash.autoHash(hasher, self.data.offset);
-            } else if (self.len == 1 and c.cp_packing == .shift_single_item) {
+            if ((comptime c.cp_packing == .shift_single_item) and self.len == 1) {
                 return std.hash.autoHash(hasher, self.data.shift);
-            } else if (self.len <= embedded_len) {
-                return std.hash.autoHash(hasher, self.data.embedded);
-            } else {
+            } else if ((comptime embedded_len == 0) or self.len > embedded_len) {
                 return std.hash.autoHash(hasher, self.data.offset);
+            } else {
+                return std.hash.autoHash(hasher, self.data.embedded);
             }
         }
 
@@ -920,16 +958,12 @@ pub fn VarLen(
             if (a.len != b.len) {
                 return false;
             }
-            if (comptime embedded_len == max_len) {
-                return a.data.embedded == b.data.embedded;
-            } else if (comptime embedded_len == 0 and c.cp_packing == .direct) {
+            if ((comptime c.cp_packing == .shift_single_item) and a.len == 1) {
+                return a.data.shift.eql(b.data.shift);
+            } else if ((comptime embedded_len == 0) or a.len > embedded_len) {
                 return a.data.offset == b.data.offset;
-            } else if (a.len == 1 and c.cp_packing == .shift_single_item) {
-                return a.data.shift == b.data.shift;
-            } else if (a.len <= embedded_len) {
-                return a.data.embedded == b.data.embedded;
             } else {
-                return a.data.offset == b.data.offset;
+                return std.mem.eql(T, &a.data.embedded, &b.data.embedded);
             }
         }
 
@@ -940,20 +974,27 @@ pub fn VarLen(
                 \\
             , .{self.len});
 
-            if (self.len == 1 and c.cp_packing == .shift_single_item) {
+            if ((comptime c.cp_packing == .shift_single_item) and self.len == 1) {
                 try writer.writeAll("    .data = .{ .shift = ");
                 try self.data.shift.write(writer);
                 try writer.writeAll("},\n");
-            } else if (self.len <= embedded_len) {
-                try writer.print(
-                    \\    .data = .{{ .embedded = .{{ .bits = {} }} }},
-                    \\
-                , .{self.data.embedded.bits});
-            } else {
+            } else if ((comptime embedded_len == 0) or self.len > embedded_len) {
                 try writer.print(
                     \\    .data = .{{ .offset = {} }},
                     \\
                 , .{self.data.offset});
+            } else {
+                try writer.writeAll(
+                    \\    .data = .{ .embedded = .{
+                );
+                for (self.data.embedded) |item| {
+                    try writeDataField(T, writer, item);
+                    try writer.writeAll(",");
+                }
+                try writer.writeAll(
+                    \\} },
+                    \\
+                );
             }
 
             try writer.writeAll(
@@ -1097,7 +1138,7 @@ pub fn SliceMap(comptime T: type, comptime V: type) type {
 
 // Note: this can only be used for types where the max value isn't a valid
 // value, which is the case for all optional types in `config.default`
-pub fn Optional(comptime c: config.Field) type {
+pub fn PackedOptional(comptime c: config.Field) type {
     return packed struct {
         data: T,
 
@@ -1137,7 +1178,7 @@ pub fn Optional(comptime c: config.Field) type {
     };
 }
 
-pub fn Shift(comptime c: config.Field) type {
+pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) type {
     const is_optional_ = c.kind() == .shift and @typeInfo(c.type) == .optional;
 
     if (c.kind() == .shift and !((is_optional_ and @typeInfo(c.type).optional.child == u21) or
@@ -1150,22 +1191,18 @@ pub fn Shift(comptime c: config.Field) type {
         @compileError("VarLen field '" ++ c.name ++ "' must be type []const u21");
     }
 
-    return packed struct {
+    const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional_));
+    // Only valid if `is_optional`
+    const null_data = std.math.maxInt(Int);
+
+    return if (packing == .unpacked) struct {
         data: Int,
 
         const Self = @This();
-
         pub const T = u21;
         pub const is_optional = is_optional_;
-        const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional));
-
         pub const Tracking = ShiftTracking;
-
-        // Only valid if `is_optional`
-        const null_data = std.math.maxInt(Int);
         pub const @"null" = Self{ .data = null_data };
-
-        pub const no_shift = Self{ .data = 0 };
 
         pub fn initUntracked(cp: u21, d: u21) Self {
             return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
@@ -1196,6 +1233,10 @@ pub fn Shift(comptime c: config.Field) type {
             }
         }
 
+        pub fn eql(a: Self, b: Self) bool {
+            return a.data == b.data;
+        }
+
         pub fn write(self: Self, writer: anytype) !void {
             try writer.print(
                 \\.{{
@@ -1203,6 +1244,39 @@ pub fn Shift(comptime c: config.Field) type {
                 \\}}
                 \\
             , .{self.data});
+        }
+    } else packed struct {
+        data: Int,
+
+        const Self = @This();
+        pub const T = u21;
+        pub const is_optional = is_optional_;
+        pub const Tracking = ShiftTracking;
+        pub const @"null" = Self{ .data = null_data };
+
+        pub fn init(tracking: *Tracking, cp: u21, d: u21) Self {
+            tracking.track(cp, d);
+            return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
+        }
+
+        pub fn initOptional(tracking: *Tracking, cp: u21, o: ?u21) Self {
+            if (o) |d| {
+                return .init(tracking, cp, d);
+            } else {
+                return .null;
+            }
+        }
+
+        pub fn value(self: Self, cp: u21) u21 {
+            return @intCast(@as(isize, cp) + @as(isize, self.data));
+        }
+
+        pub fn optional(self: Self, cp: u21) ?u21 {
+            if (self.data == null_data) {
+                return null;
+            } else {
+                return self.value(cp);
+            }
         }
     };
 }

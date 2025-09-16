@@ -408,6 +408,15 @@ pub const Field = struct {
         }
     }
 
+    pub fn canBePacked(self: Field) bool {
+        return switch (self.kind()) {
+            .var_len => false,
+            .shift => true,
+            .basic => true,
+            .optional => true,
+        };
+    }
+
     pub fn runtime(self: Field) Runtime {
         return .{
             .name = self.name,
@@ -463,6 +472,7 @@ pub const Field = struct {
 pub const Table = struct {
     name: ?[]const u8 = null,
     stages: Stages = .auto,
+    packing: Packing = .auto,
     extensions: []const Extension = &.{},
     fields: []const Field,
 
@@ -470,6 +480,20 @@ pub const Table = struct {
         auto,
         two,
         three,
+    };
+
+    pub const Packing = enum {
+        auto, // as in decide automatically, not as in Type.ContainerLayout.auto
+        @"packed",
+        unpacked,
+
+        pub fn write(self: Packing, writer: anytype) !void {
+            switch (self) {
+                .auto => unreachable,
+                .unpacked => try writer.writeAll(".unpacked"),
+                .@"packed" => try writer.writeAll(".@\"packed\""),
+            }
+        }
     };
 
     pub fn hasField(self: *const Table, name: []const u8) bool {
@@ -488,6 +512,94 @@ pub const Table = struct {
                 break f;
             }
         } else @compileError("Field '" ++ name ++ "' not found in Table");
+    }
+
+    // TODO: benchmark this more
+    const two_stage_size_threshold = 4;
+
+    pub fn resolve(comptime self: *const Table) Table {
+        if (self.stages != .auto and self.packing != .auto) {
+            return self;
+        }
+
+        const can_be_packed = switch (self.packing) {
+            .auto, .@"packed" => blk: {
+                for (self.fields) |f| {
+                    if (!f.canBePacked()) {
+                        break :blk false;
+                    }
+                }
+
+                break :blk true;
+            },
+            .unpacked => false,
+        };
+
+        const DataUnpacked = types.Data(.{
+            .packing = .unpacked,
+            .fields = self.fields,
+        });
+        const DataPacked = if (can_be_packed)
+            types.Data(.{
+                .packing = .@"packed",
+                .fields = self.fields,
+            })
+        else
+            DataUnpacked;
+
+        const unpacked_size = @sizeOf(DataUnpacked);
+        const packed_size = @sizeOf(DataPacked);
+        const min_size = @min(unpacked_size, packed_size);
+
+        const stages: Stages = switch (self.stages) {
+            .auto => blk: {
+                if (min_size <= two_stage_size_threshold) {
+                    break :blk .two;
+                } else {
+                    break :blk .three;
+                }
+            },
+            .two => .two,
+            .three => .three,
+        };
+
+        const packing: Packing = switch (self.packing) {
+            .auto => blk: {
+                if (!can_be_packed) {
+                    break :blk .unpacked;
+                }
+
+                if (unpacked_size == min_size or unpacked_size <= two_stage_size_threshold) {
+                    break :blk .unpacked;
+                }
+
+                if (stages == .two) {
+                    if (packed_size <= two_stage_size_threshold) {
+                        break :blk .@"packed";
+                    } else if (3 * packed_size <= 2 * unpacked_size) {
+                        break :blk .@"packed";
+                    } else {
+                        break :blk .unpacked;
+                    }
+                } else {
+                    if (packed_size <= unpacked_size / 2) {
+                        break :blk .@"packed";
+                    } else {
+                        break :blk .unpacked;
+                    }
+                }
+            },
+            .@"packed" => .@"packed",
+            .unpacked => .unpacked,
+        };
+
+        return .{
+            .stages = stages,
+            .packing = packing,
+            .name = self.name,
+            .extensions = self.extensions,
+            .fields = self.fields,
+        };
     }
 };
 
