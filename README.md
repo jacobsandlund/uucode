@@ -12,7 +12,7 @@ const uucode = @import("uucode");
 var cp: u21 = undefined;
 
 //////////////////////
-// getting properties
+// getting properties (see `src/config.zig` for a full list)
 
 cp = 0x2200; // ∀
 uucode.get(.general_category, cp) // .symbol_math
@@ -118,6 +118,7 @@ if (b.lazyDependency("uucode", .{
 ``` zig
 ///////////////////////////////////////////////////////////
 // In `build.zig`:
+
 b.dependency("uucode", .{
     .target = target,
     .optimize = optimize,
@@ -125,7 +126,8 @@ b.dependency("uucode", .{
 })
 
 ///////////////////////////////////////////////////////////
-// `src/build/uucode_config.zig`:
+// In `src/build/uucode_config.zig`:
+
 const config = @import("config.zig");
 
 // Use `config.x.zig` for extensions already built into `uucode`:
@@ -164,15 +166,36 @@ pub const EmojiOddOrEven = enum(u2) {
     odd_emoji,
 };
 
+// Customize settings to your needs (or use the defaults):
 pub const tables = [_]config.Table{
     .{
+        // A two stage table can be a tiny bit faster if the data is small. the
+        // default `.auto` will try to pick a reasonable value, but the best
+        // thing to do is to benchmark with realistic data.
+        .stages = .three, // or .two
+
+        // The default `.auto` value will try to decide whether the final data
+        // stage struct should be a `packed struct` or a regular Zig `struct`.
+        .packing = .unpacked, // or .@"packed"
+
         .extensions = &.{
             emoji_odd_or_even,
             wcwidth,
         },
+
         .fields = &.{
+            // Don't forget to include the extension fields here:
             emoji_odd_or_even.field("emoji_odd_or_even"),
             wcwidth.field("wcwidth"),
+
+            // See `src/config.zig` for everything that can be overriden.
+            // In this example, we're embedding 15 bytes into the `stage3` data,
+            // and only names longer that need to use the `backing` slice.
+            d.field("name").override(.{
+                .embedded_len = 15,
+                .max_offset = 986096, // run once to get the correct number
+            }),
+
             d.field("general_category"),
             d.field("block"),
             // ...
@@ -203,4 +226,4 @@ The architecture works in a few layers:
 
 ## AGENTS.md
 
-While I've included an `AGENTS.md`, any use of AI has been carefully reviewed--no slop here! I've primarily used agents for an initial pass at parsing the UCD text files.
+The `AGENTS.md` has primarily been useful for an initial pass at parsing the UCD text files, but all agent code has been carefully reviewed, and most code has been written manually.
