@@ -12,7 +12,7 @@ const uucode = @import("uucode");
 var cp: u21 = undefined;
 
 //////////////////////
-// getting properties
+// getting properties (see `src/config.zig` for a full list)
 
 cp = 0x2200; // ∀
 uucode.get(.general_category, cp) // .symbol_math
@@ -172,11 +172,11 @@ pub const tables = [_]config.Table{
         // A two stage table can be a tiny bit faster if the data is small. the
         // default `.auto` will try to pick a reasonable value, but the best
         // thing to do is to benchmark with realistic data.
-        .stages = .two,
+        .stages = .three, // or .two
 
         // The default `.auto` value will try to decide whether the final data
         // stage struct should be a `packed struct` or a regular Zig `struct`.
-        .packing = .unpacked,
+        .packing = .unpacked, // or .@"packed"
 
         .extensions = &.{
             emoji_odd_or_even,
@@ -184,8 +184,18 @@ pub const tables = [_]config.Table{
         },
 
         .fields = &.{
+            // Don't forget to include the extension fields here:
             emoji_odd_or_even.field("emoji_odd_or_even"),
             wcwidth.field("wcwidth"),
+
+            // See `src/config.zig` for everything that can be overriden.
+            // In this example, we're embedding 15 bytes into the `stage3` data,
+            // and only names longer that need to use the `backing` slice.
+            d.field("name").override(.{
+                .embedded_len = 15,
+                .max_offset = 986096, // run once to get the correct number
+            }),
+
             d.field("general_category"),
             d.field("block"),
             // ...
