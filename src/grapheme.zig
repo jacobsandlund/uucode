@@ -1,7 +1,160 @@
 const std = @import("std");
 
 const types = @import("types.zig");
-const get = @import("get.zig").get;
+const getpkg = @import("get.zig");
+const get = getpkg.get;
+const getX = getpkg.getX;
+
+pub const IteratorResult = struct {
+    cp: u21,
+    is_break: bool,
+};
+
+pub fn CustomIterator(
+    comptime CodePointIterator: type,
+    comptime GB: type,
+    comptime State: type,
+    comptime grapheme_break_field: getpkg.Field,
+    comptime customIsBreak: fn (gb1: GB, gb2: GB, state: *State) bool,
+) type {
+    return struct {
+        state: State,
+        i: usize,
+        next_cp_it: CodePointIterator,
+        next_cp: ?u21,
+        next_gb: GB,
+
+        const Self = @This();
+
+        pub fn init(cp_it: CodePointIterator) Self {
+            var next_cp_it = cp_it;
+            const i = next_cp_it.i;
+            const next_cp = next_cp_it.next();
+
+            return .{
+                .state = .default,
+                .i = i,
+                .next_cp_it = next_cp_it,
+                .next_cp = next_cp,
+                .next_gb = if (next_cp) |cp|
+                    getX(grapheme_break_field, cp)
+                else
+                    .other,
+            };
+        }
+
+        pub fn next(self: *Self) ?IteratorResult {
+            if (self.next_cp == null) return null;
+
+            const cp1 = self.next_cp.?;
+            const gb1 = self.next_gb;
+            self.i = self.next_cp_it.i;
+            self.next_cp = self.next_cp_it.next();
+
+            if (self.next_cp) |cp2| {
+                self.next_gb = getX(grapheme_break_field, cp2);
+                const is_break = customIsBreak(gb1, self.next_gb, &self.state);
+                return IteratorResult{
+                    .cp = cp1,
+                    .is_break = is_break,
+                };
+            } else {
+                return IteratorResult{
+                    .cp = cp1,
+                    .is_break = true,
+                };
+            }
+        }
+
+        pub fn peek(self: Self) ?IteratorResult {
+            var it = self;
+            return it.next();
+        }
+
+        pub fn nextBreak(self: *Self) ?usize {
+            return while (self.next()) |result| {
+                if (result.is_break) break self.i;
+            } else null;
+        }
+    };
+}
+
+pub fn Iterator(comptime CodePointIterator: type) type {
+    return CustomIterator(
+        CodePointIterator,
+        types.GraphemeBreak,
+        BreakState,
+        .grapheme_break,
+        precomputedGraphemeBreak,
+    );
+}
+
+test "Iterator next/peek" {
+    const utf8 = @import("utf8.zig");
+    const str = "👩‍🍼😀";
+    const utf8_it = utf8.Iterator.init(str);
+    var it = Iterator(utf8.Iterator).init(utf8_it);
+    try std.testing.expect(it.i == 0);
+
+    var result = it.peek();
+    try std.testing.expect(it.i == 0);
+    try std.testing.expect(result != null);
+    try std.testing.expect(result.?.cp == 0x1F469); // 👩
+    try std.testing.expect(result.?.is_break == false);
+
+    result = it.next();
+    try std.testing.expect(it.i == 4);
+    try std.testing.expect(result != null);
+    try std.testing.expect(result.?.cp == 0x1F469); // 👩
+    try std.testing.expect(result.?.is_break == false);
+
+    result = it.next();
+    try std.testing.expect(result != null);
+    try std.testing.expect(result.?.cp == 0x200D); // Zero width joiner
+    try std.testing.expect(result.?.is_break == false);
+
+    result = it.next();
+    try std.testing.expect(result != null);
+    try std.testing.expect(result.?.cp == 0x1F37C); // 🍼
+    try std.testing.expect(result.?.is_break == true);
+
+    result = it.peek();
+    try std.testing.expect(result != null);
+    try std.testing.expect(result.?.cp == 0x1F600); // 😀
+    try std.testing.expect(result.?.is_break == true);
+
+    result = it.next();
+    try std.testing.expect(it.i == str.len);
+    try std.testing.expect(result != null);
+    try std.testing.expect(result.?.cp == 0x1F600); // 😀
+    try std.testing.expect(result.?.is_break == true);
+
+    try std.testing.expect(it.peek() == null);
+    try std.testing.expect(it.next() == null);
+    try std.testing.expect(it.next() == null);
+}
+
+test "Iterator nextBreak" {
+    const utf8 = @import("utf8.zig");
+    const str = "👩‍🍼😀";
+    const utf8_it = utf8.Iterator.init(str);
+    var it = Iterator(utf8.Iterator).init(utf8_it);
+
+    try std.testing.expect(it.nextBreak() == 11);
+    try std.testing.expect(it.i == 11);
+
+    const result = it.peek();
+    try std.testing.expect(result != null);
+    try std.testing.expect(result.?.cp == 0x1F600); // 😀
+    try std.testing.expect(result.?.is_break == true);
+
+    const start_i = it.i;
+    try std.testing.expect(it.nextBreak() == str.len);
+    try std.testing.expect(it.i == str.len);
+    try std.testing.expect(std.mem.eql(u8, str[start_i..it.i], "😀"));
+    try std.testing.expect(it.nextBreak() == null);
+    try std.testing.expect(it.nextBreak() == null);
+}
 
 pub const BreakState = enum(u3) {
     default,
@@ -125,7 +278,7 @@ pub fn computeGraphemeBreak(
         // start of sequence:
 
         // In normal operation, we'll be in this state, but
-        // precomputeGraphemeBreak iterates all states.
+        // buildGraphemeBreakTable iterates all states.
         //std.debug.assert(state.* == .default);
 
         if (isIndicConjunctBreakExtend(gb2)) {
@@ -175,7 +328,7 @@ pub fn computeGraphemeBreak(
         // start of sequence:
 
         // In normal operation, we'll be in this state, but
-        // precomputeGraphemeBreak iterates all states.
+        // buildGraphemeBreakTable iterates all states.
         // std.debug.assert(state.* == .default);
 
         if (isExtend(gb2) or gb2 == .zwj) {
@@ -320,7 +473,7 @@ pub fn GraphemeBreakTable(comptime GB: type, comptime State: type) type {
     };
 }
 
-pub fn precomputeGraphemeBreak(
+pub fn buildGraphemeBreakTable(
     comptime GB: type,
     comptime State: type,
     compute: fn (gb1: GB, gb2: GB, state: *State) bool,
@@ -350,23 +503,31 @@ pub fn precomputeGraphemeBreak(
     return table;
 }
 
-pub fn isBreak(
-    cp1: u21,
-    cp2: u21,
+pub fn precomputedGraphemeBreak(
+    gb1: types.GraphemeBreak,
+    gb2: types.GraphemeBreak,
     state: *BreakState,
 ) bool {
-    const table = comptime precomputeGraphemeBreak(
+    const table = comptime buildGraphemeBreakTable(
         types.GraphemeBreak,
         BreakState,
         computeGraphemeBreak,
     );
     // 5 BreakState fields x 2 x 18 GraphemeBreak fields = 1620
     std.debug.assert(@sizeOf(@TypeOf(table)) == 1620);
-    const gb1 = get(.grapheme_break, cp1);
-    const gb2 = get(.grapheme_break, cp2);
     const result = table.get(gb1, gb2, state.*);
     state.* = result.state;
     return result.result;
+}
+
+pub fn isBreak(
+    cp1: u21,
+    cp2: u21,
+    state: *BreakState,
+) bool {
+    const gb1 = get(.grapheme_break, cp1);
+    const gb2 = get(.grapheme_break, cp2);
+    return precomputedGraphemeBreak(gb1, gb2, state);
 }
 
 test "GraphemeBreakTest.txt - isBreak" {
