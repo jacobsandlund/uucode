@@ -15,7 +15,7 @@ const uucode = @import("uucode");
 var cp: u21 = undefined;
 
 //////////////////////
-// getting properties (see `src/config.zig` for a full list)
+// `get` properties (see `src/config.zig` for a full list)
 
 cp = 0x2200; // ∀
 uucode.get(.general_category, cp) // .symbol_math
@@ -30,7 +30,9 @@ uucode.get(.uppercase_mapping, cp).slice(&buffer1, cp) // "SS", but might not be
 var buffer2: uucode.TypeOf(.uppercase_mapping).CopyBuffer = undefined;
 uucode.get(.uppercase_mapping, cp).copy(&buffer2, cp) // "SS", copied into buffer2
 
-// Use `getAll` to get a group of properties for a code point together.
+//////////////////////
+// `getAll` to get a group of properties for a code point together.
+
 // The first argument is the name/index of the table ("0" for `fields`).
 cp = 0x03C2; // ς
 const data = uucode.getAll("0", cp);
