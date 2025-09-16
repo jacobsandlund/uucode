@@ -88,10 +88,10 @@ pub const tables = [_]config.Table{
     .{
         .name = "needed_for_ref_all_decls",
         .extensions = &.{
-            config_x.grapheme_break_x_emoji,
+            config_x.grapheme_break_pedantic_emoji,
         },
         .fields = &.{
-            config_x.grapheme_break_x_emoji.field("grapheme_break_x_emoji"),
+            config_x.grapheme_break_pedantic_emoji.field("grapheme_break_pedantic_emoji"),
         },
     },
 };

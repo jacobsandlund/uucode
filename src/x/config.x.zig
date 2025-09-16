@@ -1,4 +1,4 @@
-const grapheme_break_x = @import("config_x/grapheme_break_x.zig");
+const grapheme_break = @import("config_x/grapheme_break.zig");
 pub const wcwidth = @import("config_x/wcwidth.zig").wcwidth;
 
-pub const grapheme_break_x_emoji = grapheme_break_x.grapheme_break_x_emoji;
+pub const grapheme_break_pedantic_emoji = grapheme_break.grapheme_break_pedantic_emoji;
