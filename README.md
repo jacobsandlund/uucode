@@ -118,6 +118,7 @@ if (b.lazyDependency("uucode", .{
 ``` zig
 ///////////////////////////////////////////////////////////
 // In `build.zig`:
+
 b.dependency("uucode", .{
     .target = target,
     .optimize = optimize,
@@ -125,7 +126,8 @@ b.dependency("uucode", .{
 })
 
 ///////////////////////////////////////////////////////////
-// `src/build/uucode_config.zig`:
+// In `src/build/uucode_config.zig`:
+
 const config = @import("config.zig");
 
 // Use `config.x.zig` for extensions already built into `uucode`:
@@ -164,12 +166,23 @@ pub const EmojiOddOrEven = enum(u2) {
     odd_emoji,
 };
 
+// Customize settings to your needs (or use the defaults):
 pub const tables = [_]config.Table{
     .{
+        // A two stage table can be a tiny bit faster if the data is small. the
+        // default `.auto` will try to pick a reasonable value, but the best
+        // thing to do is to benchmark with realistic data.
+        .stages = .two,
+
+        // The default `.auto` value will try to decide whether the final data
+        // stage struct should be a `packed struct` or a regular Zig `struct`.
+        .packing = .unpacked,
+
         .extensions = &.{
             emoji_odd_or_even,
             wcwidth,
         },
+
         .fields = &.{
             emoji_odd_or_even.field("emoji_odd_or_even"),
             wcwidth.field("wcwidth"),
@@ -203,4 +216,4 @@ The architecture works in a few layers:
 
 ## AGENTS.md
 
-While I've included an `AGENTS.md`, any use of AI has been carefully reviewed--no slop here! I've primarily used agents for an initial pass at parsing the UCD text files.
+The `AGENTS.md` has primarily been useful for an initial pass at parsing the UCD text files, but all agent code has been carefully reviewed, and most code has been written manually.
