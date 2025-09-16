@@ -506,32 +506,41 @@ pub const Block = enum(u9) {
 
 // The following types are internal to `uucode`:
 
-pub fn Field(c: config.Field) type {
-    return switch (c.kind()) {
-        .var_len => VarLen(c),
-        .shift => Shift(c),
-        .basic, .optional => c.type,
-    };
+pub fn Field(comptime c: config.Field, comptime packing: config.Table.Packing) type {
+    switch (packing) {
+        .unpacked => return switch (c.kind()) {
+            .var_len => VarLen(c),
+            .shift => Shift(c),
+            .basic, .optional => c.type,
+        },
+        .@"packed" => return switch (c.kind()) {
+            .var_len => @compileError("Packed var_len fields are not supported"),
+            .shift => @compileError("Packed shift fields are not supported"),
+            .optional => PackedOptional(c),
+            .basic => c.type,
+        },
+        .auto => @compileError("Packing should be resolved by the time Field is called"),
+    }
 }
 
 pub fn Data(comptime c: config.Table) type {
     var data_fields: [c.fields.len]std.builtin.Type.StructField = undefined;
 
     for (c.fields, 0..) |cf, i| {
-        const F = Field(cf);
+        const F = Field(cf, c.packing);
 
         data_fields[i] = .{
             .name = cf.name,
             .type = F,
             .default_value_ptr = null,
             .is_comptime = false,
-            .alignment = @alignOf(F),
+            .alignment = if (c.packing == .@"packed") 0 else @alignOf(F),
         };
     }
 
     return @Type(.{
         .@"struct" = .{
-            .layout = .auto,
+            .layout = if (c.packing == .@"packed") .@"packed" else .auto,
             .fields = &data_fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
@@ -539,24 +548,51 @@ pub fn Data(comptime c: config.Table) type {
     });
 }
 
-pub fn writeData(comptime D: type, writer: *std.Io.Writer, data: D) !void {
-    try writer.writeAll(
-        \\.{
-        \\
-    );
+pub fn writeDataItems(comptime D: type, writer: *std.Io.Writer, data_items: []const D) !void {
+    if (@typeInfo(D).@"struct".layout == .@"packed") {
+        const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(D));
 
-    inline for (@typeInfo(D).@"struct".fields) |field| {
-        try writer.print("    .{s} = ", .{field.name});
+        try writer.print("@bitCast([_]{s}{{\n", .{@typeName(IntEquivalent)});
 
-        try writeDataField(field.type, writer, @field(data, field.name));
+        for (data_items) |item| {
+            try writer.print("{x},", .{@as(IntEquivalent, @bitCast(item))});
+        }
 
-        try writer.writeAll(",\n");
+        try writer.writeAll(
+            \\});
+            \\
+        );
+    } else {
+        try writer.writeAll(
+            \\.{
+            \\
+        );
+
+        for (data_items) |item| {
+            try writer.writeAll(
+                \\.{
+                \\
+            );
+
+            inline for (@typeInfo(D).@"struct".fields) |field| {
+                try writer.print("    .{s} = ", .{field.name});
+
+                try writeDataField(field.type, writer, @field(item, field.name));
+
+                try writer.writeAll(",\n");
+            }
+
+            try writer.writeAll(
+                \\},
+                \\
+            );
+        }
+
+        try writer.writeAll(
+            \\};
+            \\
+        );
     }
-
-    try writer.writeAll(
-        \\},
-        \\
-    );
 }
 
 pub fn writeDataField(comptime F: type, writer: *std.Io.Writer, field: F) !void {

@@ -65,6 +65,8 @@ pub const tables = [_]config.Table{
                 .max_offset = 986096,
             }),
             d.field("grapheme_break"),
+            d.field("special_casing_condition"),
+            d.field("special_lowercase_mapping"),
         },
     },
     .{
@@ -81,8 +83,6 @@ pub const tables = [_]config.Table{
             d.field("is_alphabetic"),
             d.field("is_lowercase"),
             d.field("is_uppercase"),
-            d.field("special_casing_condition"),
-            d.field("special_lowercase_mapping"),
         },
     },
     .{
