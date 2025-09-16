@@ -96,10 +96,15 @@ test "Iterator for ascii" {
 test "Iterator for emoji" {
     var it = Iterator.init("😀😅😻👺");
     try std.testing.expectEqual(0x1F600, it.next());
+    try std.testing.expectEqual(4, it.i);
     try std.testing.expectEqual(0x1F605, it.next());
+    try std.testing.expectEqual(8, it.i);
     try std.testing.expectEqual(0x1F63B, it.next());
+    try std.testing.expectEqual(12, it.i);
     try std.testing.expectEqual(0x1F47A, it.next());
+    try std.testing.expectEqual(16, it.i);
     try std.testing.expectEqual(null, it.next());
+    try std.testing.expectEqual(16, it.i);
 }
 
 test "Iterator overlong utf8" {

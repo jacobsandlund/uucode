@@ -49,6 +49,7 @@ std.debug.assert(@TypeOf(data) == uucode.TypeOfAll("0"))
 // and do more testing and benchmarks
 var it = uucode.utf8.Iterator.init("😀😅😻👺");
 it.next(); // 0x1F600
+it.i; // 4 (bytes into the utf8 string)
 it.peek(); // 0x1F605
 it.next(); // 0x1F605
 it.next(); // 0x1F63B
@@ -90,6 +91,10 @@ cp2 = 0x1F37C; // 🍼
 
 // The combined grapheme cluster is 👩‍🍼 (woman feeding baby)
 uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
+
+cp1 = cp2;
+cp2 = 0x1F600; // 😀
+uucode.grapheme.isBreak(cp1, cp2, &break_state); // true
 ```
 
 ## Configuration
