@@ -33,8 +33,9 @@ uucode.get(.uppercase_mapping, cp).copy(&buffer2, cp) // "SS", copied into buffe
 //////////////////////
 // `getAll` to get a group of properties for a code point together.
 
-// The first argument is the name/index of the table ("0" for `fields`).
 cp = 0x03C2; // ς
+
+// The first argument is the name/index of the table ("0" for `fields`).
 const data = uucode.getAll("0", cp);
 
 data.simple_uppercase_mapping // U+03A3 == Σ
@@ -42,7 +43,7 @@ data.general_category // .letter_lowercase
 std.debug.assert(@TypeOf(data) == uucode.TypeOfAll("0"))
 
 //////////////////////
-// grapheme_break
+// grapheme.isBreak
 
 var break_state: uucode.grapheme.BreakState = .default;
 
@@ -128,6 +129,9 @@ b.dependency("uucode", .{
     .target = target,
     .optimize = optimize,
     .build_config_path = b.path("src/build/uucode_config.zig"),
+
+    // Alternatively, use a string literal:
+    //.@"build_config.zig" = "..."
 })
 
 ///////////////////////////////////////////////////////////
@@ -171,7 +175,8 @@ pub const EmojiOddOrEven = enum(u2) {
     odd_emoji,
 };
 
-// Customize settings to your needs (or use the defaults):
+// Configure tables with the `tables` declaration.
+// The only required field is `fields`, and the rest have reasonable defaults.
 pub const tables = [_]config.Table{
     .{
         // A two stage table can be a tiny bit faster if the data is small. the
@@ -207,6 +212,9 @@ pub const tables = [_]config.Table{
         },
     },
 };
+
+// Turn on debug logging:
+pub const log_level = .debug;
 
 ///////////////////////////////////////////////////////////
 // In your code:
