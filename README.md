@@ -2,7 +2,8 @@
 
 TODO: greatly expand documentation in this README and in a static docs site.
 
-See branch `zig-0.14` if you haven't migrated to `0.15` yet (this branch won't last forever).
+> [!NOTE]
+> See branch `zig-0.14` if you haven't migrated to `0.15` yet
 
 ## Super basic usage
 
