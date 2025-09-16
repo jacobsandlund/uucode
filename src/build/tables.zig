@@ -324,39 +324,34 @@ fn BlockMap(comptime B: type) type {
 }
 
 fn TableAllData(comptime c: config.Table) type {
+    var x_fields_len: u16 = 0;
     var fields_len_bound: u16 = c.fields.len;
     for (c.extensions) |x| {
-        fields_len_bound += x.inputs.len;
+        x_fields_len += x.fields.len;
         fields_len_bound += x.fields.len;
+        fields_len_bound += x.inputs.len;
     }
-    var fields: [fields_len_bound]std.builtin.Type.StructField = undefined;
-    var x_fields: [fields_len_bound]config.Field = undefined;
-    var i: usize = 0;
+    var x_fields: [x_fields_len]config.Field = undefined;
+    var x_i: usize = 0;
 
-    // Add extension fields:
+    // Union extension fields:
     for (c.extensions) |x| {
         for (x.fields) |xf| {
-            for (fields[0..i]) |existing| {
+            for (x_fields[0..x_i]) |existing| {
                 if (std.mem.eql(u8, existing.name, xf.name)) {
                     @compileError("Extension field '" ++ xf.name ++ "' already exists in table");
                 }
             }
 
-            const F = types.Field(xf, .unpacked);
-            x_fields[i] = xf;
-            fields[i] = .{
-                .name = xf.name,
-                .type = F,
-                .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = @alignOf(F),
-            };
-            i += 1;
+            x_fields[x_i] = xf;
+            x_i += 1;
         }
     }
 
-    const extension_fields_len = i;
+    var fields: [fields_len_bound]std.builtin.Type.StructField = undefined;
+    var i: usize = 0;
 
+    // Add Data fields:
     for (c.fields, 0..) |cf, c_i| {
         for (c.fields[0..c_i]) |existing| {
             if (std.mem.eql(u8, existing.name, cf.name)) {
@@ -364,10 +359,10 @@ fn TableAllData(comptime c: config.Table) type {
             }
         }
 
-        // If a field isn't in `default` it's an extension field, which
-        // should've been added above.
+        // If a field isn't in `default` it's an extension field, which should
+        // be in x_fields.
         if (!config.default.hasField(cf.name)) {
-            const x_field: ?config.Field = for (x_fields[0..extension_fields_len]) |xf| {
+            const x_field: ?config.Field = for (x_fields) |xf| {
                 if (std.mem.eql(u8, xf.name, cf.name)) break xf;
             } else null;
 
@@ -378,13 +373,31 @@ fn TableAllData(comptime c: config.Table) type {
             } else {
                 @compileError("Table field '" ++ cf.name ++ "' not found in any of the table's extensions");
             }
-
-            continue;
         }
 
-        const F = types.Field(cf, .unpacked);
+        const F = types.Field(cf, c.packing);
         fields[i] = .{
             .name = cf.name,
+            .type = F,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(F),
+        };
+        i += 1;
+    }
+
+    // Add extension fields not part of Data:
+    const data_fields = fields[0..i];
+    loop_x_fields: for (x_fields[0..x_i]) |xf| {
+        for (data_fields) |f| {
+            if (std.mem.eql(u8, xf.name, f.name)) {
+                continue :loop_x_fields;
+            }
+        }
+
+        const F = types.Field(xf, .unpacked);
+        fields[i] = .{
+            .name = xf.name,
             .type = F,
             .default_value_ptr = null,
             .is_comptime = false,

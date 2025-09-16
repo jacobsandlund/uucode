@@ -411,7 +411,7 @@ pub const Field = struct {
     pub fn canBePacked(self: Field) bool {
         return switch (self.kind()) {
             .var_len => false,
-            .shift => false,
+            .shift => true,
             .basic => true,
             .optional => true,
         };
@@ -515,7 +515,7 @@ pub const Table = struct {
     }
 
     // TODO: benchmark this more
-    const two_stage_size_threshold = @sizeOf(usize);
+    const two_stage_size_threshold = 4;
 
     pub fn resolve(comptime self: *const Table) Table {
         if (self.stages != .auto and self.packing != .auto) {
@@ -523,7 +523,7 @@ pub const Table = struct {
         }
 
         const can_be_packed = switch (self.packing) {
-            .auto => blk: {
+            .auto, .@"packed" => blk: {
                 for (self.fields) |f| {
                     if (!f.canBePacked()) {
                         break :blk false;
@@ -532,7 +532,6 @@ pub const Table = struct {
 
                 break :blk true;
             },
-            .@"packed" => true,
             .unpacked => false,
         };
 
@@ -575,7 +574,9 @@ pub const Table = struct {
                 }
 
                 if (stages == .two) {
-                    if (3 * packed_size <= 2 * unpacked_size) {
+                    if (packed_size <= two_stage_size_threshold) {
+                        break :blk .@"packed";
+                    } else if (3 * packed_size <= 2 * unpacked_size) {
                         break :blk .@"packed";
                     } else {
                         break :blk .unpacked;

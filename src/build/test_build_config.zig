@@ -57,7 +57,6 @@ pub const tables = [_]config.Table{
             emoji_odd_or_even,
         },
         .fields = &.{
-            d.field("simple_uppercase_mapping"),
             foo.field("foo"),
             emoji_odd_or_even.field("emoji_odd_or_even"),
             d.field("name").override(.{
@@ -80,6 +79,7 @@ pub const tables = [_]config.Table{
         .name = "checks",
         .extensions = &.{},
         .fields = &.{
+            d.field("simple_uppercase_mapping"),
             d.field("is_alphabetic"),
             d.field("is_lowercase"),
             d.field("is_uppercase"),

@@ -510,12 +510,12 @@ pub fn Field(comptime c: config.Field, comptime packing: config.Table.Packing) t
     switch (packing) {
         .unpacked => return switch (c.kind()) {
             .var_len => VarLen(c),
-            .shift => Shift(c),
+            .shift => Shift(c, packing),
             .basic, .optional => c.type,
         },
         .@"packed" => return switch (c.kind()) {
             .var_len => @compileError("Packed var_len fields are not supported"),
-            .shift => @compileError("Packed shift fields are not supported"),
+            .shift => Shift(c, packing),
             .optional => PackedOptional(c),
             .basic => c.type,
         },
@@ -555,7 +555,7 @@ pub fn writeDataItems(comptime D: type, writer: *std.Io.Writer, data_items: []co
         try writer.print("@bitCast([_]{s}{{\n", .{@typeName(IntEquivalent)});
 
         for (data_items) |item| {
-            try writer.print("{x},", .{@as(IntEquivalent, @bitCast(item))});
+            try writer.print("{d},", .{@as(IntEquivalent, @bitCast(item))});
         }
 
         try writer.writeAll(
@@ -704,7 +704,7 @@ pub fn VarLen(
         pub const T = @typeInfo(c.type).pointer.child;
         pub const Offset = std.math.IntFittingRange(0, max_offset);
         const EmbeddedArray = [embedded_len]T;
-        const ShiftSingleItem = if (c.cp_packing == .shift_single_item) Shift(c) else void;
+        const ShiftSingleItem = if (c.cp_packing == .shift_single_item) Shift(c, .unpacked) else void;
 
         const Len = std.math.IntFittingRange(0, max_len);
 
@@ -1178,7 +1178,7 @@ pub fn PackedOptional(comptime c: config.Field) type {
     };
 }
 
-pub fn Shift(comptime c: config.Field) type {
+pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) type {
     const is_optional_ = c.kind() == .shift and @typeInfo(c.type) == .optional;
 
     if (c.kind() == .shift and !((is_optional_ and @typeInfo(c.type).optional.child == u21) or
@@ -1191,22 +1191,18 @@ pub fn Shift(comptime c: config.Field) type {
         @compileError("VarLen field '" ++ c.name ++ "' must be type []const u21");
     }
 
-    return struct {
+    const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional_));
+    // Only valid if `is_optional`
+    const null_data = std.math.maxInt(Int);
+
+    return if (packing == .unpacked) struct {
         data: Int,
 
         const Self = @This();
-
         pub const T = u21;
         pub const is_optional = is_optional_;
-        const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional));
-
         pub const Tracking = ShiftTracking;
-
-        // Only valid if `is_optional`
-        const null_data = std.math.maxInt(Int);
         pub const @"null" = Self{ .data = null_data };
-
-        pub const no_shift = Self{ .data = 0 };
 
         pub fn initUntracked(cp: u21, d: u21) Self {
             return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
@@ -1248,6 +1244,39 @@ pub fn Shift(comptime c: config.Field) type {
                 \\}}
                 \\
             , .{self.data});
+        }
+    } else packed struct {
+        data: Int,
+
+        const Self = @This();
+        pub const T = u21;
+        pub const is_optional = is_optional_;
+        pub const Tracking = ShiftTracking;
+        pub const @"null" = Self{ .data = null_data };
+
+        pub fn init(tracking: *Tracking, cp: u21, d: u21) Self {
+            tracking.track(cp, d);
+            return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
+        }
+
+        pub fn initOptional(tracking: *Tracking, cp: u21, o: ?u21) Self {
+            if (o) |d| {
+                return .init(tracking, cp, d);
+            } else {
+                return .null;
+            }
+        }
+
+        pub fn value(self: Self, cp: u21) u21 {
+            return @intCast(@as(isize, cp) + @as(isize, self.data));
+        }
+
+        pub fn optional(self: Self, cp: u21) ?u21 {
+            if (self.data == null_data) {
+                return null;
+            } else {
+                return self.value(cp);
+            }
         }
     };
 }

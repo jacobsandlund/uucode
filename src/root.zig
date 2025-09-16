@@ -59,6 +59,8 @@ test "getAll" {
     try testing.expect(d1.case_folding_simple.optional(65).? == 97);
 
     const d_checks = getAll("checks", 65);
+    // auto should become packed for these checks
+    try testing.expectEqual(.@"packed", @typeInfo(TypeOfAll("checks")).@"struct".layout);
     try testing.expect(d_checks.is_alphabetic);
     try testing.expect(d_checks.is_uppercase);
     try testing.expect(!d_checks.is_lowercase);
