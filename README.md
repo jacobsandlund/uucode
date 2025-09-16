@@ -7,7 +7,7 @@ TODO: expand documentation in this README and in a static docs site.
 > [!NOTE]
 > See branch `zig-0.14` if you haven't migrated to `0.15` yet
 
-## Super basic usage
+## Basic usage
 
 ``` zig
 const uucode = @import("uucode");
@@ -68,7 +68,7 @@ iter.next(); // 0x1F63B
 iter.next(); // 0x1F47A
 ```
 
-### Configuration
+## Configuration
 
 Only include the Unicode fields you actually use:
 
@@ -89,7 +89,7 @@ if (b.lazyDependency("uucode", .{
 }
 ```
 
-#### Multiple tables
+### Multiple tables
 
 Fields can be split into multiple tables using `field_0` through `fields_9`, to optimize how fields are stored and accessed:
 
@@ -116,7 +116,7 @@ if (b.lazyDependency("uucode", .{
 }
 ```
 
-#### Advanced configuration
+### Advanced configuration
 
 ``` zig
 ///////////////////////////////////////////////////////////
