@@ -1,4 +1,4 @@
-pub const GraphemeBreakXEmoji = enum(u5) {
+pub const GraphemeBreakPedanticEmoji = enum(u5) {
     other,
     control,
     prepend,

@@ -126,7 +126,7 @@ pub fn computeGraphemeBreak(
 
         // In normal operation, we'll be in this state, but
         // precomputeGraphemeBreak iterates all states.
-        // std.debug.assert(state.* == .default);
+        //std.debug.assert(state.* == .default);
 
         if (isIndicConjunctBreakExtend(gb2)) {
             state.* = .indic_conjunct_break_consonant;
@@ -325,7 +325,7 @@ pub fn precomputeGraphemeBreak(
     comptime State: type,
     compute: fn (gb1: GB, gb2: GB, state: *State) bool,
 ) GraphemeBreakTable(GB, State) {
-    @setEvalBranchQuota(2_000_000);
+    @setEvalBranchQuota(20_000);
     var table: GraphemeBreakTable(GB, State) = undefined;
 
     const gb_fields = @typeInfo(GB).@"enum".fields;

@@ -9,8 +9,6 @@ pub const x = @import("x/root.zig");
 const testing = std.testing;
 
 pub const get = getpkg.get;
-pub const getWidth = getpkg.getWidth;
-pub const getSpecial = getpkg.getSpecial;
 pub const getX = getpkg.getX;
 pub const TypeOf = getpkg.TypeOf;
 pub const TypeOfX = getpkg.TypeOfX;
@@ -18,14 +16,7 @@ pub const getAll = getpkg.getAll;
 pub const TypeOfAll = getpkg.TypeOfAll;
 
 test {
-    std.testing.refAllDeclsRecursive(config);
-    std.testing.refAllDeclsRecursive(types);
-    std.testing.refAllDeclsRecursive(ascii);
-    std.testing.refAllDeclsRecursive(grapheme);
-    std.testing.refAllDeclsRecursive(utf8);
-    std.testing.refAllDeclsRecursive(getpkg);
-
-    // Don't ref `x` as it slows down compilation too much during tests
+    std.testing.refAllDeclsRecursive(@This());
 }
 
 test "name" {
