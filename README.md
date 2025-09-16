@@ -1,6 +1,8 @@
 # uucode (Micro/µ Unicode)
 
-TODO: greatly expand documentation in this README and in a static docs site.
+A fast and flexible unicode library, fully configurable at build time.
+
+TODO: expand documentation in this README and in a static docs site.
 
 > [!NOTE]
 > See branch `zig-0.14` if you haven't migrated to `0.15` yet
