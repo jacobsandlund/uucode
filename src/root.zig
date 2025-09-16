@@ -8,12 +8,13 @@ pub const utf8 = @import("utf8.zig");
 pub const x = @import("x/root.zig");
 const testing = std.testing;
 
-pub const get = getpkg.get;
-pub const getX = getpkg.getX;
+pub const Field = getpkg.Field;
 pub const TypeOf = getpkg.TypeOf;
-pub const TypeOfX = getpkg.TypeOfX;
-pub const getAll = getpkg.getAll;
 pub const TypeOfAll = getpkg.TypeOfAll;
+pub const TypeOfX = getpkg.TypeOfX;
+pub const get = getpkg.get;
+pub const getAll = getpkg.getAll;
+pub const getX = getpkg.getX;
 
 test {
     std.testing.refAllDeclsRecursive(@This());

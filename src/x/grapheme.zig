@@ -2,6 +2,16 @@ const std = @import("std");
 const uucode = @import("../root.zig");
 const types_x = @import("types.x.zig");
 
+pub fn PedanticEmojiIterator(comptime CodePointIterator: type) type {
+    return uucode.grapheme.CustomIterator(
+        CodePointIterator,
+        types_x.GraphemeBreakPedanticEmoji,
+        uucode.grapheme.BreakState,
+        .grapheme_break_pedantic_emoji,
+        precomputedGraphemeBreakPedanticEmoji,
+    );
+}
+
 fn isIndicConjunctBreakExtend(gb: types_x.GraphemeBreakPedanticEmoji) bool {
     return gb == .indic_conjunct_break_extend or gb == .zwj or gb == .emoji_modifier;
 }
@@ -141,7 +151,7 @@ fn computeOriginalGraphemeBreakButForPedanticEmoji(
         // start of sequence:
 
         // In normal operation, we'll be in this state, but
-        // precomputeGraphemeBreak iterates all states.
+        // buildGraphemeBreakTable iterates all states.
         // std.debug.assert(state.* == .default);
 
         if (isIndicConjunctBreakExtend(gb2)) {
@@ -191,7 +201,7 @@ fn computeOriginalGraphemeBreakButForPedanticEmoji(
         // start of sequence:
 
         // In normal operation, we'll be in this state, but
-        // precomputeGraphemeBreak iterates all states.
+        // buildGraphemeBreakTable iterates all states.
         // std.debug.assert(state.* == .default);
 
         if (isExtend(gb2) or gb2 == .zwj) {
@@ -233,7 +243,7 @@ fn computeOriginalGraphemeBreakButForPedanticEmoji(
     return true;
 }
 
-pub fn computeGraphemeBreakXEmoji(
+pub fn computeGraphemeBreakPedanticEmoji(
     gb1: types_x.GraphemeBreakPedanticEmoji,
     gb2: types_x.GraphemeBreakPedanticEmoji,
     state: *uucode.grapheme.BreakState,
@@ -243,7 +253,7 @@ pub fn computeGraphemeBreakXEmoji(
     if (gb2 == .emoji_modifier) {
         if (gb1 == .emoji_modifier_base) {
             // In normal operation, we'll be in this state, but
-            // precomputeGraphemeBreak iterates all states.
+            // buildGraphemeBreakTable iterates all states.
             //std.debug.assert(state.* == .extended_pictographic);
             return false;
         } else {
@@ -257,6 +267,21 @@ pub fn computeGraphemeBreakXEmoji(
     } else {
         return result;
     }
+}
+
+pub fn precomputedGraphemeBreakPedanticEmoji(
+    gb1: types_x.GraphemeBreakPedanticEmoji,
+    gb2: types_x.GraphemeBreakPedanticEmoji,
+    state: *uucode.grapheme.BreakState,
+) bool {
+    const table = comptime uucode.grapheme.buildGraphemeBreakTable(
+        types_x.GraphemeBreakPedanticEmoji,
+        uucode.grapheme.BreakState,
+        computeGraphemeBreakPedanticEmoji,
+    );
+    const result = table.get(gb1, gb2, state.*);
+    state.* = result.state;
+    return result.result;
 }
 
 // While this is included in `uucode` as a builtin extension, the core
@@ -279,14 +304,7 @@ pub fn isBreakPendanticEmoji(
     cp2: u21,
     state: *uucode.grapheme.BreakState,
 ) bool {
-    const table = comptime uucode.grapheme.precomputeGraphemeBreak(
-        types_x.GraphemeBreakPedanticEmoji,
-        uucode.grapheme.BreakState,
-        computeGraphemeBreakXEmoji,
-    );
     const gb1 = uucode.get(.grapheme_break_pedantic_emoji, cp1);
     const gb2 = uucode.get(.grapheme_break_pedantic_emoji, cp2);
-    const result = table.get(gb1, gb2, state.*);
-    state.* = result.state;
-    return result.result;
+    return precomputedGraphemeBreakPedanticEmoji(gb1, gb2, state);
 }

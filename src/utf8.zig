@@ -90,6 +90,7 @@ test "Iterator for ascii" {
     try std.testing.expectEqual('c', it.next());
     try std.testing.expectEqual(null, it.peek());
     try std.testing.expectEqual(null, it.next());
+    try std.testing.expectEqual(null, it.next());
 }
 
 test "Iterator for emoji" {
@@ -98,6 +99,7 @@ test "Iterator for emoji" {
     try std.testing.expectEqual(0x1F605, it.next());
     try std.testing.expectEqual(0x1F63B, it.next());
     try std.testing.expectEqual(0x1F47A, it.next());
+    try std.testing.expectEqual(null, it.next());
 }
 
 test "Iterator overlong utf8" {
@@ -105,5 +107,6 @@ test "Iterator overlong utf8" {
     try std.testing.expectEqual(0xFFFD, it.next());
     try std.testing.expectEqual(0xFFFD, it.next());
     try std.testing.expectEqual(0xFFFD, it.next());
+    try std.testing.expectEqual(null, it.next());
     try std.testing.expectEqual(null, it.next());
 }

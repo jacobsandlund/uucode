@@ -43,6 +43,39 @@ data.general_category // .letter_lowercase
 std.debug.assert(@TypeOf(data) == uucode.TypeOfAll("0"))
 
 //////////////////////
+// utf8.Iterator
+
+// TODO: offer more alternatives (like reading into a code point buffer), SIMD,
+// and do more testing and benchmarks
+var it = uucode.utf8.Iterator.init("😀😅😻👺");
+it.next(); // 0x1F600
+it.peek(); // 0x1F605
+it.next(); // 0x1F605
+it.next(); // 0x1F63B
+it.next(); // 0x1F47A
+
+//////////////////////
+// grapheme.Iterator
+
+const utf8_it = uucode.utf8.Iterator.init("👩‍🍼😀");
+var it = uucode.grapheme.Iterator(uccode.utf8.Iterator).init(utf8_it);
+
+// `next` still advances one code point at a time
+it.next(); // { .cp = 0x1F469; .is_break = false } // 👩
+it.i; // 4 (bytes into the utf8 string)
+
+it.peek(); // { .cp = 0x200D; .is_break = false } // Zero width joiner
+it.next(); // { .cp = 0x200D; .is_break = false } // Zero width joiner
+it.next(); // { .cp = 0x1F37C; .is_break = true } // 🍼
+
+const start_i = it.i;
+
+// `nextBreak` advances until the start of the next grapheme cluster
+it.nextBreak(); // "👩‍🍼😀".len
+it.i; // "👩‍🍼😀".len
+str[start_i..it.i]; // "😀"
+
+//////////////////////
 // grapheme.isBreak
 
 var break_state: uucode.grapheme.BreakState = .default;
@@ -57,18 +90,6 @@ cp2 = 0x1F37C; // 🍼
 
 // The combined grapheme cluster is 👩‍🍼 (woman feeding baby)
 uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
-
-//////////////////////
-// utf8.Iterator
-
-// TODO: offer more alternatives (like reading into a code point buffer), SIMD,
-// and do more testing and benchmarks
-var iter = uucode.utf8.Iterator.init("😀😅😻👺");
-iter.next(); // 0x1F600
-iter.peek(); // 0x1F605
-iter.next(); // 0x1F605
-iter.next(); // 0x1F63B
-iter.next(); // 0x1F47A
 ```
 
 ## Configuration

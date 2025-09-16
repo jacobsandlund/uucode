@@ -81,7 +81,7 @@ pub fn TypeOfAll(comptime table_name: []const u8) type {
     return TableData(getTableInfo(table_name).type);
 }
 
-const FieldEnum = blk: {
+pub const Field = blk: {
     var fields_len: usize = 0;
     for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
         //// subtract 1 for _padding
@@ -118,7 +118,7 @@ fn DataField(comptime field: []const u8) type {
     return @FieldType(TableData(tableInfoFor(field).type), field);
 }
 
-fn Field(comptime field: []const u8) type {
+fn FieldValue(comptime field: []const u8) type {
     const D = DataField(field);
     if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "optional") or @hasDecl(D, "value"))) {
         if (@hasDecl(D, "optional") and (!@hasDecl(D, "is_optional") or D.is_optional)) {
@@ -133,7 +133,7 @@ fn Field(comptime field: []const u8) type {
     }
 }
 
-fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
+fn getWithName(comptime name: []const u8, cp: u21) FieldValue(name) {
     const D = DataField(name);
 
     if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "optional") or @hasDecl(D, "value"))) {
@@ -157,12 +157,12 @@ fn getWithName(comptime name: []const u8, cp: u21) Field(name) {
 // extensions we wouldn't know all the field names. If the LSP ever gets smart
 // enough to figure out all the field names, we can replace `get` with `getX`
 // and `TypeOf` with `TypeOfX` and lose the hardcoded `KnownFieldsForLsp`.
-pub fn getX(comptime field: FieldEnum, cp: u21) TypeOfX(field) {
+pub fn getX(comptime field: Field, cp: u21) TypeOfX(field) {
     return getWithName(@tagName(field), cp);
 }
 
-pub fn TypeOfX(comptime field: FieldEnum) type {
-    return Field(@tagName(field));
+pub fn TypeOfX(comptime field: Field) type {
+    return FieldValue(@tagName(field));
 }
 
 pub const KnownFieldsForLsp = enum {
@@ -251,7 +251,7 @@ pub fn get(comptime field: KnownFieldsForLsp, cp: u21) TypeOf(field) {
 }
 
 pub fn TypeOf(comptime field: KnownFieldsForLsp) type {
-    return Field(@tagName(field));
+    return FieldValue(@tagName(field));
 }
 
 // TODO: figure out how to get the build to test this file (tests are in root.zig)
