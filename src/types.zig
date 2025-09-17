@@ -1,6 +1,8 @@
 const std = @import("std");
 const config = @import("config.zig");
 
+const Allocator = std.mem.Allocator;
+
 pub const GeneralCategory = enum(u5) {
     letter_uppercase, // Lu
     letter_lowercase, // Ll
@@ -710,11 +712,11 @@ pub fn VarLen(
         pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
 
         inline fn _fromSlice(
-            allocator: std.mem.Allocator,
+            allocator: Allocator,
             backing: []T,
             tracking: *Tracking,
             s: []const T,
-        ) !Self {
+        ) Allocator.Error!Self {
             if ((comptime embedded_len == 0) or s.len > embedded_len) {
                 if (s.len == 0) {
                     return .empty;
@@ -770,11 +772,11 @@ pub fn VarLen(
         }
 
         pub fn fromSlice(
-            allocator: std.mem.Allocator,
+            allocator: Allocator,
             backing: []T,
             tracking: *Tracking,
             s: []const T,
-        ) !Self {
+        ) Allocator.Error!Self {
             if (c.cp_packing != .direct) {
                 @compileError("fromSlice is only supported for direct packing: use fromSliceFor instead");
             }
@@ -783,12 +785,12 @@ pub fn VarLen(
         }
 
         pub fn fromSliceFor(
-            allocator: std.mem.Allocator,
+            allocator: Allocator,
             backing: []T,
             tracking: *Tracking,
             s: []const T,
             cp: u21,
-        ) !Self {
+        ) Allocator.Error!Self {
             if (s.len == 1) {
                 tracking.shift.track(cp, s[0]);
             }
@@ -935,7 +937,7 @@ pub fn VarLenTracking(comptime T: type, comptime max_len: usize) type {
 
         const Self = @This();
 
-        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+        pub fn deinit(self: *Self, allocator: Allocator) void {
             self.offset_map.deinit(allocator);
         }
 
@@ -1015,7 +1017,7 @@ pub const ShiftTracking = struct {
     shift_low: isize = 0,
     shift_high: isize = 0,
 
-    pub fn deinit(self: *ShiftTracking, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *ShiftTracking, allocator: Allocator) void {
         _ = self;
         _ = allocator;
     }

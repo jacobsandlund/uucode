@@ -85,3 +85,14 @@ test "special_lowercase_mapping" {
     try testing.expectEqual(1, mapping.len);
     try testing.expectEqual(0x03C2, mapping[0]); // Should map to Greek Small Letter Final Sigma
 }
+
+test "info extension" {
+    // ǰ -> J
+    try testing.expectEqual(0x004A, getX(.uppercase_mapping_first_char, 0x01F0));
+
+    try testing.expect(getX(.has_simple_lowercase, 0x1FD9)); // Ῑ
+    try testing.expect(!getX(.has_simple_lowercase, 0x1FE0)); // ῠ
+
+    // MALAYALAM FRACTION ONE ONE-HUNDRED-AND-SIXTIETH
+    try testing.expect(std.mem.eql(u8, "061/1", getX(.numeric_value_numeric_reversed, 0x0D58)));
+}

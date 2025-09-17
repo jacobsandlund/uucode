@@ -59,6 +59,7 @@
 //!
 //! Latest version: http://www.cl.cam.ac.uk/~mgk25/ucs/wcwidth.c
 
+const std = @import("std");
 const config = @import("config.zig");
 
 /// From: https://www.cl.cam.ac.uk/~mgk25/ucs/wcwidth.c
@@ -94,7 +95,14 @@ const config = @import("config.zig");
 /// See also Ziglyph's `codePointWidth` function:
 /// https://codeberg.org/dude_the_builder/ziglyph/src/branch/main/src/display_width.zig
 ///
-fn compute(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
+fn compute(
+    allocator: std.mem.Allocator,
+    cp: u21,
+    data: anytype,
+    backing: anytype,
+    tracking: anytype,
+) std.mem.Allocator.Error!void {
+    _ = allocator;
     _ = backing;
     _ = tracking;
     const gc = data.general_category;

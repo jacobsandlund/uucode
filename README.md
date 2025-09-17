@@ -182,8 +182,18 @@ const emoji_odd_or_even = config.Extension{
     },
 };
 
-fn computeEmojiOddOrEven(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
-    // backing and tracking are only used for slice types
+fn computeEmojiOddOrEven(
+    allocator: std.mem.Allocator,
+    cp: u21,
+    data: anytype,
+    backing: anytype,
+    tracking: anytype,
+) void {
+    // allocator is an ArenaAllocator, so don't worry about freeing
+    _ = allocator;
+
+    // backing and tracking are only used for slice types (see
+    // src/build/test_build_config.zig for examples).
     _ = backing;
     _ = tracking;
 
