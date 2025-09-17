@@ -19,16 +19,19 @@ var cp: u21 = undefined;
 
 cp = 0x2200; // ∀
 uucode.get(.general_category, cp) // .symbol_math
+uucode.TypeOf(.general_category) // uucode.types.GeneralCategory
 
 cp = 0x03C2; // ς
 uucode.get(.simple_uppercase_mapping, cp) // U+03A3 == Σ
 
-cp = 0x00DF; // ß
-var buffer1: uucode.TypeOf(.uppercase_mapping).SliceBuffer = undefined;
-uucode.get(.uppercase_mapping, cp).slice(&buffer1, cp) // "SS", but might not be in buffer1
+cp = 0x21C1; // ⇁
+uucode.get(.name, cp).slice() // RIGHTWARDS HARPOON WITH BARB DOWNWARDS
 
-var buffer2: uucode.TypeOf(.uppercase_mapping).CopyBuffer = undefined;
-uucode.get(.uppercase_mapping, cp).copy(&buffer2, cp) // "SS", copied into buffer2
+cp = 0x00DF; // ß
+var buffer: [1]u21 = undefined; // Need space for just a single item
+uucode.get(.uppercase_mapping, cp).slice(&buffer, cp) // "SS"
+
+uucode.get(.uppercase_mapping, cp).copy(&dest, cp) // "SS", copied into dest
 
 //////////////////////
 // `getAll` to get a group of properties for a code point together.

@@ -709,12 +709,6 @@ pub fn VarLen(
 
         pub const Tracking = VarLenTracking(T, max_len);
 
-        pub const SliceBuffer = [
-            @max(
-                embedded_len,
-                @intFromBool(c.cp_packing == .shift_single_item),
-            )
-        ]T;
         pub const CopyBuffer = [max_len]T;
         pub const BackingBuffer = []const T;
         pub const MutableBackingBuffer = []T;
@@ -815,21 +809,18 @@ pub fn VarLen(
             }
         }
 
-        fn directSlice(
+        fn _slice(
             self: *const Self,
             backing: []const T,
-            buffer: []T,
         ) []const T {
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
             if (comptime embedded_len == max_len) {
-                @memcpy(buffer[0..self.len], self.data.embedded[0..self.len]);
-                return buffer[0..self.len];
+                return self.data.embedded[0..self.len];
             } else if (comptime embedded_len == 0) {
                 return backing[self.data.offset .. @as(usize, self.data.offset) + @as(usize, self.len)];
             } else if (self.len <= embedded_len) {
-                @memcpy(buffer[0..self.len], self.data.embedded[0..self.len]);
-                return buffer[0..self.len];
+                return self.data.embedded[0..self.len];
             } else {
                 return backing[self.data.offset .. @as(usize, self.data.offset) + @as(usize, self.len)];
             }
@@ -838,31 +829,30 @@ pub fn VarLen(
         pub fn sliceWithBacking(
             self: *const Self,
             backing: []const T,
-            buffer: []T,
         ) []const T {
             if (c.cp_packing != .direct) {
                 @compileError("sliceWithBacking is only supported for direct packing: use sliceForWithBacking instead");
             }
 
-            return self.directSlice(backing, buffer);
+            return self._slice(backing);
         }
 
         pub fn sliceForWithBacking(
             self: *const Self,
             backing: []const T,
-            buffer: []T,
+            single_item_buffer: *[1]T,
             cp: u21,
         ) []const T {
             switch (c.cp_packing) {
                 .shift_single_item => {
                     if (self.len == 1) {
-                        buffer[0] = self.data.shift.value(cp);
-                        return buffer[0..1];
+                        single_item_buffer[0] = self.data.shift.value(cp);
+                        return single_item_buffer[0..1];
                     } else {
-                        return self.directSlice(backing, buffer);
+                        return self._slice(backing);
                     }
                 },
-                .direct => return self.directSlice(backing, buffer),
+                .direct => return self._slice(backing),
                 .shift => unreachable,
             }
         }
@@ -871,72 +861,44 @@ pub fn VarLen(
         // in, this makes for a nicer API without having to wrap VarLen.
         const hardcoded_backing = @import("get.zig").backingFor(c.name);
 
-        fn _slice(self: *const Self, buffer: []T) []const T {
-            return self.sliceWithBacking(hardcoded_backing, buffer);
+        fn _sliceGetBacking(self: *const Self) []const T {
+            return self._slice(hardcoded_backing);
         }
 
-        fn _sliceFor(
+        fn _sliceForGetBacking(
             self: *const Self,
-            buffer: []T,
+            single_item_buffer: *[1]T,
             cp: u21,
         ) []const T {
-            return self.sliceForWithBacking(hardcoded_backing, buffer, cp);
+            return self.sliceForWithBacking(hardcoded_backing, single_item_buffer, cp);
         }
 
         pub const slice = if (c.cp_packing == .direct)
-            _slice
+            _sliceGetBacking
         else
-            _sliceFor;
-
-        fn lazyMemcpy(dest: []T, source: []const T) []const T {
-            // Repeat the two return cases, first with two `comptime` checks,
-            // then with a runtime if/else
-            if (comptime embedded_len == max_len) {
-                return source;
-            } else if (comptime embedded_len == 0 and c.cp_packing == .direct) {
-                const d = dest[0..source.len];
-                @memcpy(d, source);
-                return d;
-            } else if (source.len <= embedded_len or (c.cp_packing == .shift_single_item and source.len == 1)) {
-                return source;
-            } else {
-                const d = dest[0..source.len];
-                @memcpy(d, source);
-                return d;
-            }
-        }
+            _sliceForGetBacking;
 
         fn _copy(self: *const Self, dest: []T) []const T {
-            return lazyMemcpy(dest, self._slice(dest));
+            const d = dest[0..self.len];
+            @memcpy(d, self._sliceGetBacking(d));
+            return d;
         }
 
         fn _copyFor(self: *const Self, dest: []T, cp: u21) []const T {
-            return lazyMemcpy(dest, self._sliceFor(dest, cp));
+            if (self.len == 1) {
+                return self._sliceForGetBacking(dest[0..1], cp);
+            } else {
+                var buffer: [1]T = undefined;
+                const d = dest[0..self.len];
+                @memcpy(d, self._sliceForGetBacking(&buffer, cp));
+                return d;
+            }
         }
 
         pub const copy = if (c.cp_packing == .direct)
             _copy
         else
             _copyFor;
-
-        fn _array(self: *const Self) [max_len]T {
-            var a: [max_len]T = undefined;
-            const s = lazyMemcpy(&a, self._slice(&a));
-            @memset(a[s.len..], 0);
-            return a;
-        }
-
-        fn _arrayFor(self: *const Self, cp: u21) [max_len]T {
-            var a: [max_len]T = undefined;
-            const s = lazyMemcpy(&a, self._sliceFor(&a, cp));
-            @memset(a[s.len..], 0);
-            return a;
-        }
-
-        pub const array = if (c.cp_packing == .direct)
-            _array
-        else
-            _arrayFor;
 
         pub fn autoHash(self: Self, hasher: anytype) void {
             // Repeat the two return cases, first with two `comptime` checks,
