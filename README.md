@@ -60,8 +60,7 @@ it.next(); // 0x1F47A
 //////////////////////
 // grapheme.Iterator
 
-const utf8_it = uucode.utf8.Iterator.init("👩‍🍼😀");
-var it = uucode.grapheme.Iterator(uccode.utf8.Iterator).init(utf8_it);
+var it = uucode.grapheme.Iterator(uccode.utf8.Iterator).init(.init("👩‍🍼😀"));
 
 // `next` still advances one code point at a time
 it.next(); // { .cp = 0x1F469; .is_break = false } // 👩

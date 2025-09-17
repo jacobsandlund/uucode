@@ -23,8 +23,7 @@ pub fn unverifiedWcwidth(const_it: anytype) i3 {
 
 test "unverifiedWcwidth" {
     const str = "क्‍ष";
-    const utf8_it = uucode.utf8.Iterator.init(str);
-    const it = uucode.grapheme.Iterator(uucode.utf8.Iterator).init(utf8_it);
+    const it = uucode.grapheme.Iterator(uucode.utf8.Iterator).init(.init(str));
     try std.testing.expect(unverifiedWcwidth(it) == 2);
 }
 
