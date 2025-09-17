@@ -188,7 +188,7 @@ fn computeEmojiOddOrEven(
     data: anytype,
     backing: anytype,
     tracking: anytype,
-) void {
+) std.mem.Allocator.Error!void {
     // allocator is an ArenaAllocator, so don't worry about freeing
     _ = allocator;
 
