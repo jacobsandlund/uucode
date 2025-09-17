@@ -534,6 +534,8 @@ pub fn writeTableData(
         break :blk b;
     };
     defer {
+        @setEvalBranchQuota(50_000);
+
         inline for (@typeInfo(Backing).@"struct".fields) |field| {
             allocator.free(@field(backing, field.name));
         }
@@ -547,6 +549,8 @@ pub fn writeTableData(
         break :blk t;
     };
     defer {
+        @setEvalBranchQuota(20_000);
+
         inline for (@typeInfo(Tracking).@"struct".fields) |field| {
             @field(tracking, field.name).deinit(allocator);
         }
@@ -1145,7 +1149,7 @@ pub fn writeTableData(
                 const min_config = t.minBitsConfig(r);
                 if (!config.default.field(f.name).runtime().eql(min_config)) {
                     var buffer: [4096]u8 = undefined;
-                    var stderr_writer = &std.fs.File.stderr().writer(&buffer);
+                    var stderr_writer = std.fs.File.stderr().writer(&buffer);
                     var w = &stderr_writer.interface;
                     try w.writeAll(
                         \\

@@ -602,6 +602,9 @@ pub fn writeDataField(comptime F: type, writer: *std.Io.Writer, field: F) !void 
         .@"enum" => {
             try writer.print(".{s}", .{@tagName(field)});
         },
+        .optional => {
+            try writer.print("{?}", .{field});
+        },
         else => {
             try writer.print("{}", .{field});
         },
