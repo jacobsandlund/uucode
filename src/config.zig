@@ -411,12 +411,7 @@ pub const Field = struct {
     }
 
     pub fn canBePacked(self: Field) bool {
-        return switch (self.kind()) {
-            .var_len => false,
-            .shift => true,
-            .basic => true,
-            .optional => true,
-        };
+        return self.kind() != .var_len;
     }
 
     pub fn runtime(self: Field) Runtime {

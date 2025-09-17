@@ -692,32 +692,22 @@ pub fn VarLen(
     return struct {
         data: union {
             offset: Offset,
-            embedded: EmbeddedArray,
+            embedded: [embedded_len]T,
             shift: ShiftSingleItem,
         },
         len: Len,
 
         const Self = @This();
-        pub const T = @typeInfo(c.type).pointer.child;
-        pub const Offset = std.math.IntFittingRange(0, max_offset);
-        const EmbeddedArray = [embedded_len]T;
+        const T = @typeInfo(c.type).pointer.child;
+        const Offset = std.math.IntFittingRange(0, max_offset);
         const ShiftSingleItem = if (c.cp_packing == .shift_single_item) Shift(c, .unpacked) else void;
-
         const Len = std.math.IntFittingRange(0, max_len);
 
-        pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
-
         pub const Tracking = VarLenTracking(T, max_len);
-
-        pub const SliceBuffer = [
-            @max(
-                embedded_len,
-                @intFromBool(c.cp_packing == .shift_single_item),
-            )
-        ]T;
         pub const CopyBuffer = [max_len]T;
         pub const BackingBuffer = []const T;
         pub const MutableBackingBuffer = []T;
+        pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
 
         inline fn _fromSlice(
             allocator: std.mem.Allocator,
@@ -815,128 +805,62 @@ pub fn VarLen(
             }
         }
 
-        fn directSlice(
+        fn _slice(
             self: *const Self,
             backing: []const T,
-            buffer: []T,
         ) []const T {
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
             if (comptime embedded_len == max_len) {
-                @memcpy(buffer[0..self.len], self.data.embedded[0..self.len]);
-                return buffer[0..self.len];
+                return self.data.embedded[0..self.len];
             } else if (comptime embedded_len == 0) {
                 return backing[self.data.offset .. @as(usize, self.data.offset) + @as(usize, self.len)];
             } else if (self.len <= embedded_len) {
-                @memcpy(buffer[0..self.len], self.data.embedded[0..self.len]);
-                return buffer[0..self.len];
+                return self.data.embedded[0..self.len];
             } else {
                 return backing[self.data.offset .. @as(usize, self.data.offset) + @as(usize, self.len)];
             }
         }
 
-        pub fn sliceWithBacking(
+        pub fn sliceWith(
             self: *const Self,
             backing: []const T,
-            buffer: []T,
-        ) []const T {
-            if (c.cp_packing != .direct) {
-                @compileError("sliceWithBacking is only supported for direct packing: use sliceForWithBacking instead");
-            }
-
-            return self.directSlice(backing, buffer);
-        }
-
-        pub fn sliceForWithBacking(
-            self: *const Self,
-            backing: []const T,
-            buffer: []T,
+            single_item_buffer: *[1]T,
             cp: u21,
         ) []const T {
-            switch (c.cp_packing) {
-                .shift_single_item => {
-                    if (self.len == 1) {
-                        buffer[0] = self.data.shift.value(cp);
-                        return buffer[0..1];
-                    } else {
-                        return self.directSlice(backing, buffer);
-                    }
-                },
-                .direct => return self.directSlice(backing, buffer),
-                .shift => unreachable,
+            if (c.cp_packing == .shift_single_item and self.len == 1) {
+                single_item_buffer[0] = self.data.shift.unshift(cp);
+                return single_item_buffer[0..1];
+            } else {
+                return self._slice(backing);
             }
-        }
-
-        // Note: while it would be better for modularity to pass `backing`
-        // in, this makes for a nicer API without having to wrap VarLen.
-        const hardcoded_backing = @import("get.zig").backingFor(c.name);
-
-        fn _slice(self: *const Self, buffer: []T) []const T {
-            return self.sliceWithBacking(hardcoded_backing, buffer);
-        }
-
-        fn _sliceFor(
-            self: *const Self,
-            buffer: []T,
-            cp: u21,
-        ) []const T {
-            return self.sliceForWithBacking(hardcoded_backing, buffer, cp);
         }
 
         pub const slice = if (c.cp_packing == .direct)
             _slice
         else
-            _sliceFor;
+            void{};
 
-        fn lazyMemcpy(dest: []T, source: []const T) []const T {
-            // Repeat the two return cases, first with two `comptime` checks,
-            // then with a runtime if/else
-            if (comptime embedded_len == max_len) {
-                return source;
-            } else if (comptime embedded_len == 0 and c.cp_packing == .direct) {
-                const d = dest[0..source.len];
-                @memcpy(d, source);
-                return d;
-            } else if (source.len <= embedded_len or (c.cp_packing == .shift_single_item and source.len == 1)) {
-                return source;
-            } else {
-                const d = dest[0..source.len];
-                @memcpy(d, source);
-                return d;
-            }
+        // Note: while it would be better for modularity to pass `backing`
+        // in, this makes for a nicer API without having to wrap VarLen.
+        const hardcoded_backing = @import("get.zig").backingFor(c.name);
+
+        fn _value(self: *const Self) []const T {
+            return self._slice(hardcoded_backing);
         }
 
-        fn _copy(self: *const Self, dest: []T) []const T {
-            return lazyMemcpy(dest, self._slice(dest));
+        pub fn with(
+            self: *const Self,
+            single_item_buffer: *[1]T,
+            cp: u21,
+        ) []const T {
+            return self.sliceWith(hardcoded_backing, single_item_buffer, cp);
         }
 
-        fn _copyFor(self: *const Self, dest: []T, cp: u21) []const T {
-            return lazyMemcpy(dest, self._sliceFor(dest, cp));
-        }
-
-        pub const copy = if (c.cp_packing == .direct)
-            _copy
+        pub const value = if (c.cp_packing == .direct)
+            _value
         else
-            _copyFor;
-
-        fn _array(self: *const Self) [max_len]T {
-            var a: [max_len]T = undefined;
-            const s = lazyMemcpy(&a, self._slice(&a));
-            @memset(a[s.len..], 0);
-            return a;
-        }
-
-        fn _arrayFor(self: *const Self, cp: u21) [max_len]T {
-            var a: [max_len]T = undefined;
-            const s = lazyMemcpy(&a, self._sliceFor(&a, cp));
-            @memset(a[s.len..], 0);
-            return a;
-        }
-
-        pub const array = if (c.cp_packing == .direct)
-            _array
-        else
-            _arrayFor;
+            void{};
 
         pub fn autoHash(self: Self, hasher: anytype) void {
             // Repeat the two return cases, first with two `comptime` checks,
@@ -1140,9 +1064,7 @@ pub fn PackedOptional(comptime c: config.Field) type {
         data: T,
 
         const Self = @This();
-
-        pub const T = @typeInfo(c.type).optional.child;
-
+        const T = @typeInfo(c.type).optional.child;
         const null_data = std.math.maxInt(T);
 
         pub const @"null" = Self{ .data = null_data };
@@ -1156,7 +1078,7 @@ pub fn PackedOptional(comptime c: config.Field) type {
             }
         }
 
-        pub fn optional(self: Self) ?T {
+        pub fn unpack(self: Self) ?T {
             if (self.data == null_data) {
                 return null;
             } else {
@@ -1176,9 +1098,9 @@ pub fn PackedOptional(comptime c: config.Field) type {
 }
 
 pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) type {
-    const is_optional_ = c.kind() == .shift and @typeInfo(c.type) == .optional;
+    const is_optional = @typeInfo(c.type) == .optional;
 
-    if (c.kind() == .shift and !((is_optional_ and @typeInfo(c.type).optional.child == u21) or
+    if (c.kind() == .shift and !((is_optional and @typeInfo(c.type).optional.child == u21) or
         c.type == u21))
     {
         @compileError("Shift field '" ++ c.name ++ "' must be type u21 or ?u21");
@@ -1188,7 +1110,7 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         @compileError("VarLen field '" ++ c.name ++ "' must be type []const u21");
     }
 
-    const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional_));
+    const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional));
     // Only valid if `is_optional`
     const null_data = std.math.maxInt(Int);
 
@@ -1196,8 +1118,6 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         data: Int,
 
         const Self = @This();
-        pub const T = u21;
-        pub const is_optional = is_optional_;
         pub const Tracking = ShiftTracking;
         pub const @"null" = Self{ .data = null_data };
 
@@ -1218,17 +1138,22 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
             }
         }
 
-        pub fn value(self: Self, cp: u21) u21 {
+        fn _unshift(self: Self, cp: u21) u21 {
             return @intCast(@as(isize, cp) + @as(isize, self.data));
         }
 
-        pub fn optional(self: Self, cp: u21) ?u21 {
+        fn _unshiftOptional(self: Self, cp: u21) ?u21 {
             if (self.data == null_data) {
                 return null;
             } else {
-                return self.value(cp);
+                return self._unshift(cp);
             }
         }
+
+        pub const unshift = if (is_optional)
+            _unshiftOptional
+        else
+            _unshift;
 
         pub fn eql(a: Self, b: Self) bool {
             return a.data == b.data;
@@ -1246,8 +1171,6 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         data: Int,
 
         const Self = @This();
-        pub const T = u21;
-        pub const is_optional = is_optional_;
         pub const Tracking = ShiftTracking;
         pub const @"null" = Self{ .data = null_data };
 
@@ -1264,16 +1187,21 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
             }
         }
 
-        pub fn value(self: Self, cp: u21) u21 {
+        fn _unshift(self: Self, cp: u21) u21 {
             return @intCast(@as(isize, cp) + @as(isize, self.data));
         }
 
-        pub fn optional(self: Self, cp: u21) ?u21 {
+        fn _unshiftOptional(self: Self, cp: u21) ?u21 {
             if (self.data == null_data) {
                 return null;
             } else {
-                return self.value(cp);
+                return self._unshift(cp);
             }
         }
+
+        pub const unshift = if (is_optional)
+            _unshiftOptional
+        else
+            _unshift;
     };
 }
