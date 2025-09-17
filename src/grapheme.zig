@@ -92,8 +92,7 @@ pub fn Iterator(comptime CodePointIterator: type) type {
 test "Iterator next/peek" {
     const utf8 = @import("utf8.zig");
     const str = "👩‍🍼😀";
-    const utf8_it = utf8.Iterator.init(str);
-    var it = Iterator(utf8.Iterator).init(utf8_it);
+    var it = Iterator(utf8.Iterator).init(.init(str));
     try std.testing.expect(it.i == 0);
 
     var result = it.peek();
@@ -137,8 +136,7 @@ test "Iterator next/peek" {
 test "Iterator nextBreak" {
     const utf8 = @import("utf8.zig");
     const str = "👩‍🍼😀";
-    const utf8_it = utf8.Iterator.init(str);
-    var it = Iterator(utf8.Iterator).init(utf8_it);
+    var it = Iterator(utf8.Iterator).init(.init(str));
 
     try std.testing.expect(it.nextBreak() == 11);
     try std.testing.expect(it.i == 11);
