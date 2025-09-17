@@ -27,8 +27,9 @@ uucode.get(.simple_uppercase_mapping, cp) // U+03A3 == Σ
 cp = 0x21C1; // ⇁
 uucode.get(.name, cp) // "RIGHTWARDS HARPOON WITH BARB DOWNWARDS"
 
+// Many of the []const u21 fields need a single item buffer passed to `with`:
+var buffer: [1]u21 = undefined;
 cp = 0x00DF; // ß
-var buffer: [1]u21 = undefined; // Need space for just a single item
 uucode.get(.uppercase_mapping, cp).with(&buffer, cp) // "SS"
 
 //////////////////////
