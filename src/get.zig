@@ -120,11 +120,13 @@ fn DataField(comptime field: []const u8) type {
 
 fn FieldValue(comptime field: []const u8) type {
     const D = DataField(field);
-    if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "optional") or @hasDecl(D, "value"))) {
-        if (@hasDecl(D, "optional") and (!@hasDecl(D, "is_optional") or D.is_optional)) {
-            return ?D.T;
-        } else if (@hasDecl(D, "value")) {
-            return D.T;
+    if (@typeInfo(D) == .@"struct") {
+        if (@hasDecl(D, "unpack")) {
+            return @typeInfo(@TypeOf(D.unpack)).@"fn".return_type.?;
+        } else if (@hasDecl(D, "unshift")) {
+            return @typeInfo(@TypeOf(D.unshift)).@"fn".return_type.?;
+        } else if (@hasDecl(D, "value") and @typeInfo(@TypeOf(D.value)) != .void) {
+            return @typeInfo(@TypeOf(D.value)).@"fn".return_type.?;
         } else {
             return D;
         }
@@ -135,19 +137,18 @@ fn FieldValue(comptime field: []const u8) type {
 
 fn getWithName(comptime name: []const u8, cp: u21) FieldValue(name) {
     const D = DataField(name);
+    const table = comptime tableFor(name);
 
-    if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "optional") or @hasDecl(D, "value"))) {
-        const table = comptime tableFor(name);
+    if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "unpack") or @hasDecl(D, "unshift") or (@hasDecl(D, "value") and @typeInfo(@TypeOf(D.value)) != .void))) {
         const d = @field(data(table, cp), name);
-        if (@hasDecl(D, "is_optional") and D.is_optional) {
-            return d.optional(cp);
-        } else if (@hasDecl(D, "optional") and !@hasDecl(D, "is_optional")) {
-            return d.optional();
+        if (@hasDecl(D, "unpack")) {
+            return d.unpack();
+        } else if (@hasDecl(D, "unshift")) {
+            return d.unshift(cp);
         } else {
-            return d.value(cp);
+            return d.value();
         }
     } else {
-        const table = comptime tableFor(name);
         return @field(data(table, cp), name);
     }
 }

@@ -692,26 +692,22 @@ pub fn VarLen(
     return struct {
         data: union {
             offset: Offset,
-            embedded: EmbeddedArray,
+            embedded: [embedded_len]T,
             shift: ShiftSingleItem,
         },
         len: Len,
 
         const Self = @This();
-        pub const T = @typeInfo(c.type).pointer.child;
-        pub const Offset = std.math.IntFittingRange(0, max_offset);
-        const EmbeddedArray = [embedded_len]T;
+        const T = @typeInfo(c.type).pointer.child;
+        const Offset = std.math.IntFittingRange(0, max_offset);
         const ShiftSingleItem = if (c.cp_packing == .shift_single_item) Shift(c, .unpacked) else void;
-
         const Len = std.math.IntFittingRange(0, max_len);
 
-        pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
-
         pub const Tracking = VarLenTracking(T, max_len);
-
         pub const CopyBuffer = [max_len]T;
         pub const BackingBuffer = []const T;
         pub const MutableBackingBuffer = []T;
+        pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
 
         inline fn _fromSlice(
             allocator: std.mem.Allocator,
@@ -826,79 +822,45 @@ pub fn VarLen(
             }
         }
 
-        pub fn sliceWithBacking(
-            self: *const Self,
-            backing: []const T,
-        ) []const T {
-            if (c.cp_packing != .direct) {
-                @compileError("sliceWithBacking is only supported for direct packing: use sliceForWithBacking instead");
-            }
-
-            return self._slice(backing);
-        }
-
-        pub fn sliceForWithBacking(
+        pub fn sliceWith(
             self: *const Self,
             backing: []const T,
             single_item_buffer: *[1]T,
             cp: u21,
         ) []const T {
-            switch (c.cp_packing) {
-                .shift_single_item => {
-                    if (self.len == 1) {
-                        single_item_buffer[0] = self.data.shift.value(cp);
-                        return single_item_buffer[0..1];
-                    } else {
-                        return self._slice(backing);
-                    }
-                },
-                .direct => return self._slice(backing),
-                .shift => unreachable,
+            if (c.cp_packing == .shift_single_item and self.len == 1) {
+                single_item_buffer[0] = self.data.shift.unshift(cp);
+                return single_item_buffer[0..1];
+            } else {
+                return self._slice(backing);
             }
         }
+
+        pub const slice = if (c.cp_packing == .direct)
+            _slice
+        else
+            void{};
 
         // Note: while it would be better for modularity to pass `backing`
         // in, this makes for a nicer API without having to wrap VarLen.
         const hardcoded_backing = @import("get.zig").backingFor(c.name);
 
-        fn _sliceGetBacking(self: *const Self) []const T {
+        fn _value(self: *const Self) []const T {
             return self._slice(hardcoded_backing);
         }
 
-        fn _sliceForGetBacking(
+        pub fn with(
             self: *const Self,
             single_item_buffer: *[1]T,
             cp: u21,
         ) []const T {
-            return self.sliceForWithBacking(hardcoded_backing, single_item_buffer, cp);
+            return self.sliceWith(hardcoded_backing, single_item_buffer, cp);
         }
 
-        pub const slice = if (c.cp_packing == .direct)
-            _sliceGetBacking
+        pub const value = if (c.cp_packing == .direct)
+            _value
         else
-            _sliceForGetBacking;
-
-        fn _copy(self: *const Self, dest: []T) []const T {
-            const d = dest[0..self.len];
-            @memcpy(d, self._sliceGetBacking(d));
-            return d;
-        }
-
-        fn _copyFor(self: *const Self, dest: []T, cp: u21) []const T {
-            if (self.len == 1) {
-                return self._sliceForGetBacking(dest[0..1], cp);
-            } else {
-                var buffer: [1]T = undefined;
-                const d = dest[0..self.len];
-                @memcpy(d, self._sliceForGetBacking(&buffer, cp));
-                return d;
-            }
-        }
-
-        pub const copy = if (c.cp_packing == .direct)
-            _copy
-        else
-            _copyFor;
+            void{};
 
         pub fn autoHash(self: Self, hasher: anytype) void {
             // Repeat the two return cases, first with two `comptime` checks,
@@ -1102,9 +1064,7 @@ pub fn PackedOptional(comptime c: config.Field) type {
         data: T,
 
         const Self = @This();
-
-        pub const T = @typeInfo(c.type).optional.child;
-
+        const T = @typeInfo(c.type).optional.child;
         const null_data = std.math.maxInt(T);
 
         pub const @"null" = Self{ .data = null_data };
@@ -1118,7 +1078,7 @@ pub fn PackedOptional(comptime c: config.Field) type {
             }
         }
 
-        pub fn optional(self: Self) ?T {
+        pub fn unpack(self: Self) ?T {
             if (self.data == null_data) {
                 return null;
             } else {
@@ -1138,9 +1098,9 @@ pub fn PackedOptional(comptime c: config.Field) type {
 }
 
 pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) type {
-    const is_optional_ = c.kind() == .shift and @typeInfo(c.type) == .optional;
+    const is_optional = @typeInfo(c.type) == .optional;
 
-    if (c.kind() == .shift and !((is_optional_ and @typeInfo(c.type).optional.child == u21) or
+    if (c.kind() == .shift and !((is_optional and @typeInfo(c.type).optional.child == u21) or
         c.type == u21))
     {
         @compileError("Shift field '" ++ c.name ++ "' must be type u21 or ?u21");
@@ -1150,7 +1110,7 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         @compileError("VarLen field '" ++ c.name ++ "' must be type []const u21");
     }
 
-    const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional_));
+    const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional));
     // Only valid if `is_optional`
     const null_data = std.math.maxInt(Int);
 
@@ -1158,8 +1118,6 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         data: Int,
 
         const Self = @This();
-        pub const T = u21;
-        pub const is_optional = is_optional_;
         pub const Tracking = ShiftTracking;
         pub const @"null" = Self{ .data = null_data };
 
@@ -1180,17 +1138,22 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
             }
         }
 
-        pub fn value(self: Self, cp: u21) u21 {
+        fn _unshift(self: Self, cp: u21) u21 {
             return @intCast(@as(isize, cp) + @as(isize, self.data));
         }
 
-        pub fn optional(self: Self, cp: u21) ?u21 {
+        fn _unshiftOptional(self: Self, cp: u21) ?u21 {
             if (self.data == null_data) {
                 return null;
             } else {
-                return self.value(cp);
+                return self._unshift(cp);
             }
         }
+
+        pub const unshift = if (is_optional)
+            _unshiftOptional
+        else
+            _unshift;
 
         pub fn eql(a: Self, b: Self) bool {
             return a.data == b.data;
@@ -1208,8 +1171,6 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         data: Int,
 
         const Self = @This();
-        pub const T = u21;
-        pub const is_optional = is_optional_;
         pub const Tracking = ShiftTracking;
         pub const @"null" = Self{ .data = null_data };
 
@@ -1226,16 +1187,21 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
             }
         }
 
-        pub fn value(self: Self, cp: u21) u21 {
+        fn _unshift(self: Self, cp: u21) u21 {
             return @intCast(@as(isize, cp) + @as(isize, self.data));
         }
 
-        pub fn optional(self: Self, cp: u21) ?u21 {
+        fn _unshiftOptional(self: Self, cp: u21) ?u21 {
             if (self.data == null_data) {
                 return null;
             } else {
-                return self.value(cp);
+                return self._unshift(cp);
             }
         }
+
+        pub const unshift = if (is_optional)
+            _unshiftOptional
+        else
+            _unshift;
     };
 }

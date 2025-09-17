@@ -25,25 +25,23 @@ cp = 0x03C2; // ς
 uucode.get(.simple_uppercase_mapping, cp) // U+03A3 == Σ
 
 cp = 0x21C1; // ⇁
-uucode.get(.name, cp).slice() // RIGHTWARDS HARPOON WITH BARB DOWNWARDS
+uucode.get(.name, cp) // "RIGHTWARDS HARPOON WITH BARB DOWNWARDS"
 
 cp = 0x00DF; // ß
 var buffer: [1]u21 = undefined; // Need space for just a single item
-uucode.get(.uppercase_mapping, cp).slice(&buffer, cp) // "SS"
-
-uucode.get(.uppercase_mapping, cp).copy(&dest, cp) // "SS", copied into dest
+uucode.get(.uppercase_mapping, cp).with(&buffer, cp) // "SS"
 
 //////////////////////
 // `getAll` to get a group of properties for a code point together.
 
 cp = 0x03C2; // ς
 
-// The first argument is the name/index of the table ("0" for `fields`).
+// The first argument is the name/index of the table.
 const data = uucode.getAll("0", cp);
 
 data.simple_uppercase_mapping // U+03A3 == Σ
 data.general_category // .letter_lowercase
-std.debug.assert(@TypeOf(data) == uucode.TypeOfAll("0"))
+@TypeOf(data) == uucode.TypeOfAll("0")
 
 //////////////////////
 // utf8.Iterator
