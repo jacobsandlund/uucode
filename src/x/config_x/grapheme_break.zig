@@ -2,7 +2,14 @@ const std = @import("std");
 const config = @import("config.zig");
 const types_x = @import("types.x.zig");
 
-fn computeGraphemeBreakPedanticEmoji(cp: u21, data: anytype, backing: anytype, tracking: anytype) void {
+fn computeGraphemeBreakPedanticEmoji(
+    allocator: std.mem.Allocator,
+    cp: u21,
+    data: anytype,
+    backing: anytype,
+    tracking: anytype,
+) std.mem.Allocator.Error!void {
+    _ = allocator;
     _ = cp;
     _ = backing;
     _ = tracking;

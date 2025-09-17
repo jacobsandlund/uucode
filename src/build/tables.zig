@@ -455,7 +455,20 @@ fn singleInit(
                 d,
             );
         }
-    } else if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "optional")) {
+    } else if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "init")) {
+        @field(data, field) = .init(d);
+    } else {
+        @field(data, field) = d;
+    }
+}
+
+fn maybePackedInit(
+    comptime field: []const u8,
+    data: anytype,
+    d: anytype,
+) void {
+    const Field = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
+    if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "init")) {
         @field(data, field) = .init(d);
     } else {
         @field(data, field) = d;
@@ -495,7 +508,21 @@ pub fn writeTableData(
     var backing = blk: {
         var b: Backing = undefined;
         inline for (@typeInfo(Backing).@"struct".fields) |field| {
-            const c = table_config.field(field.name);
+            comptime var c: config.Field = undefined;
+            if (comptime table_config.hasField(field.name)) {
+                c = table_config.field(field.name);
+            } else if (comptime config.default.hasField(field.name)) {
+                c = config.default.field(field.name);
+            } else {
+                c = x_blk: for (table_config.extensions) |x| {
+                    for (x.fields) |f| {
+                        if (std.mem.eql(u8, f.name, field.name)) {
+                            break :x_blk f;
+                        }
+                    }
+                } else unreachable;
+            }
+
             const T = @typeInfo(field.type).pointer.child;
             @field(b, field.name) = try allocator.alloc(T, c.max_offset);
         }
@@ -503,6 +530,8 @@ pub fn writeTableData(
         break :blk b;
     };
     defer {
+        @setEvalBranchQuota(50_000);
+
         inline for (@typeInfo(Backing).@"struct".fields) |field| {
             allocator.free(@field(backing, field.name));
         }
@@ -516,6 +545,8 @@ pub fn writeTableData(
         break :blk t;
     };
     defer {
+        @setEvalBranchQuota(20_000);
+
         inline for (@typeInfo(Tracking).@"struct".fields) |field| {
             @field(tracking, field.name).deinit(allocator);
         }
@@ -594,10 +625,18 @@ pub fn writeTableData(
             a.numeric_type = unicode_data.numeric_type;
         }
         if (@hasField(AllData, "numeric_value_decimal")) {
-            a.numeric_value_decimal = .init(unicode_data.numeric_value_decimal);
+            maybePackedInit(
+                "numeric_value_decimal",
+                &a,
+                unicode_data.numeric_value_decimal,
+            );
         }
         if (@hasField(AllData, "numeric_value_digit")) {
-            a.numeric_value_digit = .init(unicode_data.numeric_value_digit);
+            maybePackedInit(
+                "numeric_value_digit",
+                &a,
+                unicode_data.numeric_value_digit,
+            );
         }
         if (@hasField(AllData, "numeric_value_numeric")) {
             a.numeric_value_numeric = try .fromSlice(
@@ -1031,7 +1070,7 @@ pub fn writeTableData(
         }
 
         inline for (table_config.extensions) |extension| {
-            extension.compute(cp, &a, &backing, &tracking);
+            try extension.compute(allocator, cp, &a, &backing, &tracking);
         }
 
         var d: Data = undefined;

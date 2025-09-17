@@ -493,8 +493,10 @@ pub const Table = struct {
         }
     };
 
-    pub fn hasField(self: *const Table, name: []const u8) bool {
-        return for (self.fields) |f| {
+    pub fn hasField(comptime self: *const Table, name: []const u8) bool {
+        @setEvalBranchQuota(10_000);
+
+        return inline for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
                 break true;
             }
@@ -502,8 +504,6 @@ pub const Table = struct {
     }
 
     pub fn field(comptime self: *const Table, name: []const u8) Field {
-        @setEvalBranchQuota(20_000);
-
         return for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
                 break f;
@@ -605,11 +605,12 @@ pub const Extension = struct {
     fields: []const Field,
 
     compute: *const fn (
+        allocator: std.mem.Allocator,
         cp: u21,
         data: anytype,
         backing: anytype,
         tracking: anytype,
-    ) void,
+    ) std.mem.Allocator.Error!void,
 
     pub fn field(comptime self: *const Extension, name: []const u8) Field {
         return for (self.fields) |f| {
