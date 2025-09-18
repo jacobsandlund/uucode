@@ -88,7 +88,11 @@ pub fn build(b: *std.Build) void {
         "Path to uucode_build_config.zig file",
     );
 
-    const tables_path_opt = b.option(std.Build.LazyPath, "tables.zig", "Built tables source file");
+    const tables_path_opt = b.option(
+        std.Build.LazyPath,
+        "tables_path",
+        "Path to built tables source file",
+    );
 
     const build_config_path = build_config_path_opt orelse blk: {
         const build_config_zig = build_config_zig_opt orelse buildBuildConfig(
