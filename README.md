@@ -2,11 +2,6 @@
 
 A fast and flexible unicode library, fully configurable at build time.
 
-TODO: expand documentation in this README and in a static docs site.
-
-> [!NOTE]
-> See branch `zig-0.14` if you haven't migrated to `0.15` yet
-
 ## Basic usage
 
 ``` zig
@@ -15,7 +10,7 @@ const uucode = @import("uucode");
 var cp: u21 = undefined;
 
 //////////////////////
-// `get` properties (see `src/config.zig` for a full list)
+// `get` properties
 
 cp = 0x2200; // ∀
 uucode.get(.general_category, cp) // .symbol_math
@@ -47,8 +42,6 @@ data.general_category // .letter_lowercase
 //////////////////////
 // utf8.Iterator
 
-// TODO: offer more alternatives (like reading into a code point buffer), SIMD,
-// and do more testing and benchmarks
 var it = uucode.utf8.Iterator.init("😀😅😻👺");
 it.next(); // 0x1F600
 it.i; // 4 (bytes into the utf8 string)
@@ -97,6 +90,8 @@ cp1 = cp2;
 cp2 = 0x1F600; // 😀
 uucode.grapheme.isBreak(cp1, cp2, &break_state); // true
 ```
+
+See [src/config.zig](./src/config.zig) for the names of all fields.
 
 ## Configuration
 
@@ -216,14 +211,19 @@ pub const EmojiOddOrEven = enum(u2) {
 // The only required field is `fields`, and the rest have reasonable defaults.
 pub const tables = [_]config.Table{
     .{
-        // A two stage table can be a tiny bit faster if the data is small. the
-        // default `.auto` will try to pick a reasonable value, but the best
-        // thing to do is to benchmark with realistic data.
-        .stages = .three, // or .two
+        // Optional name, to be able to `getAll("foo")` rather than e.g.
+        // `getAll("0")`
+        .name = "foo",
 
-        // The default `.auto` value will try to decide whether the final data
-        // stage struct should be a `packed struct` or a regular Zig `struct`.
-        .packing = .unpacked, // or .@"packed"
+        // A two stage table can be a slightly faster if the data is small. The
+        // default `.auto` will pick a reasonable value, but to get the
+        // absolute best performance run benchmarks with `.two` or `.three`
+        // on realistic data.
+        .stages = .three,
+
+        // The default `.auto` value decide whether the final data stage struct
+        // should be a `packed struct` (.@"packed") or a regular Zig `struct`.
+        .packing = .unpacked,
 
         .extensions = &.{
             emoji_odd_or_even,
@@ -231,7 +231,7 @@ pub const tables = [_]config.Table{
         },
 
         .fields = &.{
-            // Don't forget to include the extension fields here:
+            // Don't forget to include the extension fields here.
             emoji_odd_or_even.field("emoji_odd_or_even"),
             wcwidth.field("wcwidth"),
 
