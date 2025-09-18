@@ -120,8 +120,8 @@ fn compute(
         data.wcwidth = 2;
     } else if (cp == 0x2E3B) { // Three-em dash
         data.wcwidth = 3;
-    } else if (gc == .other_format) {
-        // Note that Ziglyph treats (some) Arabic format characters as width 1.
+    } else if (gc == .other_format and (!(cp >= 0x0600 and cp <= 0x0605) and cp != 0x061C and cp != 0x06DD and cp != 0x08E2)) {
+        // Format except Arabic (from Ziglyph).
         data.wcwidth = 0;
     } else if (block == .hangul_jamo and cp >= 0x1160) {
         // Note though that 0x1160 and up in hangul_jamo are
