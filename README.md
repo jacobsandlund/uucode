@@ -159,6 +159,7 @@ b.dependency("uucode", .{
 ///////////////////////////////////////////////////////////
 // In `src/build/uucode_config.zig`:
 
+const std = @import("std");
 const config = @import("config.zig");
 
 // Use `config.x.zig` for extensions already built into `uucode`:
