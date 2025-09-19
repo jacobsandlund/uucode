@@ -3,7 +3,7 @@ const std = @import("std");
 const types = @import("types.zig");
 const getpkg = @import("get.zig");
 const get = getpkg.get;
-const getX = getpkg.getX;
+const Field = getpkg.Field;
 
 pub const IteratorResult = struct {
     cp: u21,
@@ -14,7 +14,7 @@ pub fn CustomIterator(
     comptime CodePointIterator: type,
     comptime GB: type,
     comptime State: type,
-    comptime grapheme_break_field: getpkg.Field,
+    comptime grapheme_break_field: Field,
     comptime customIsBreak: fn (gb1: GB, gb2: GB, state: *State) bool,
 ) type {
     return struct {
@@ -37,7 +37,7 @@ pub fn CustomIterator(
                 .next_cp_it = next_cp_it,
                 .next_cp = next_cp,
                 .next_gb = if (next_cp) |cp|
-                    getX(grapheme_break_field, cp)
+                    get(grapheme_break_field, cp)
                 else
                     .other,
             };
@@ -52,7 +52,7 @@ pub fn CustomIterator(
             self.next_cp = self.next_cp_it.next();
 
             if (self.next_cp) |cp2| {
-                self.next_gb = getX(grapheme_break_field, cp2);
+                self.next_gb = get(grapheme_break_field, cp2);
                 const is_break = customIsBreak(gb1, self.next_gb, &self.state);
                 return IteratorResult{
                     .cp = cp1,

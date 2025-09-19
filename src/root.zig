@@ -11,10 +11,8 @@ const testing = std.testing;
 pub const Field = getpkg.Field;
 pub const TypeOf = getpkg.TypeOf;
 pub const TypeOfAll = getpkg.TypeOfAll;
-pub const TypeOfX = getpkg.TypeOfX;
 pub const get = getpkg.get;
 pub const getAll = getpkg.getAll;
-pub const getX = getpkg.getX;
 
 test {
     std.testing.refAllDeclsRecursive(@This());
@@ -59,12 +57,12 @@ test "getAll" {
 }
 
 test "get extension foo" {
-    try testing.expectEqual(0, getX(.foo, 65));
-    try testing.expectEqual(3, getX(.foo, 0));
+    try testing.expectEqual(0, get(.foo, 65));
+    try testing.expectEqual(3, get(.foo, 0));
 }
 
 test "get extension emoji_odd_or_even" {
-    try testing.expectEqual(.odd_emoji, getX(.emoji_odd_or_even, 0x1F34B)); // 🍋
+    try testing.expectEqual(.odd_emoji, get(.emoji_odd_or_even, 0x1F34B)); // 🍋
 }
 
 test "special_casing_condition" {
@@ -88,11 +86,11 @@ test "special_lowercase_mapping" {
 
 test "info extension" {
     // ǰ -> J
-    try testing.expectEqual(0x004A, getX(.uppercase_mapping_first_char, 0x01F0));
+    try testing.expectEqual(0x004A, get(.uppercase_mapping_first_char, 0x01F0));
 
-    try testing.expect(getX(.has_simple_lowercase, 0x1FD9)); // Ῑ
-    try testing.expect(!getX(.has_simple_lowercase, 0x1FE0)); // ῠ
+    try testing.expect(get(.has_simple_lowercase, 0x1FD9)); // Ῑ
+    try testing.expect(!get(.has_simple_lowercase, 0x1FE0)); // ῠ
 
     // MALAYALAM FRACTION ONE ONE-HUNDRED-AND-SIXTIETH
-    try testing.expect(std.mem.eql(u8, "061/1", getX(.numeric_value_numeric_reversed, 0x0D58)));
+    try testing.expect(std.mem.eql(u8, "061/1", get(.numeric_value_numeric_reversed, 0x0D58)));
 }

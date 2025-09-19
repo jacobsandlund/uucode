@@ -32,9 +32,9 @@ pub fn main() !void {
     // Get output path (only argument now)
     const output_path = args_iter.next() orelse std.debug.panic("No output file arg!", .{});
 
-    std.log.debug("Fba end_index: {d}\n", .{fba.end_index});
+    std.log.debug("Fba end_index: {d}", .{fba.end_index});
 
-    std.log.debug("Writing to file: {s}\n", .{output_path});
+    std.log.debug("Writing to file: {s}", .{output_path});
 
     var out_file = try std.fs.cwd().createFile(output_path, .{});
     defer out_file.close();
@@ -74,11 +74,11 @@ pub fn main() !void {
             writer,
         );
 
-        std.log.debug("Arena end capacity: {d}\n", .{arena.queryCapacity()});
+        std.log.debug("Arena end capacity: {d}", .{arena.queryCapacity()});
         _ = arena.reset(.retain_capacity);
 
         const end = try std.time.Instant.now();
-        std.log.debug("`writeTableData` for table_config {d} time: {d}ms\n", .{ i, end.since(start) / std.time.ns_per_ms });
+        std.log.debug("`writeTableData` for table_config {d} time: {d}ms", .{ i, end.since(start) / std.time.ns_per_ms });
     }
 
     try writer.writeAll(
@@ -105,7 +105,7 @@ pub fn main() !void {
     try writer.flush();
 
     const total_end = try std.time.Instant.now();
-    std.log.debug("Total time: {d}ms\n", .{total_end.since(total_start) / std.time.ns_per_ms});
+    std.log.debug("Total time: {d}ms", .{total_end.since(total_start) / std.time.ns_per_ms});
 
     if (config.is_updating_ucd) {
         @panic("Updating Ucd -- tables not configured to actully run. flip `is_updating_ucd` to false and run again");
@@ -581,8 +581,10 @@ pub fn writeTableData(
     var block_len: usize = 0;
 
     const build_data_start = try std.time.Instant.now();
+    var get_data_time: u64 = 0;
 
     for (0..config.max_code_point + 1) |cp_usize| {
+        const get_data_start = try std.time.Instant.now();
         const cp: u21 = @intCast(cp_usize);
         const unicode_data = ucd.unicode_data[cp];
         const case_folding = ucd.case_folding.get(cp);
@@ -592,6 +594,9 @@ pub fn writeTableData(
         const original_grapheme_break = ucd.original_grapheme_break.get(cp) orelse types.OriginalGraphemeBreak.other;
         const emoji_data = ucd.emoji_data.get(cp) orelse Ucd.EmojiData{};
         const block_value = ucd.blocks.get(cp) orelse types.Block.no_block;
+
+        const get_data_end = try std.time.Instant.now();
+        get_data_time += get_data_end.since(get_data_start);
 
         var a: AllData = undefined;
 
@@ -1119,8 +1124,10 @@ pub fn writeTableData(
 
     std.debug.assert(block_len == 0);
 
+    std.log.debug("Getting data time: {d}ms", .{get_data_time / std.time.ns_per_ms});
+
     const build_data_end = try std.time.Instant.now();
-    std.log.debug("Building data time: {d}ms\n", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
+    std.log.debug("Building data time: {d}ms", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
 
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
 

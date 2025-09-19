@@ -259,12 +259,10 @@ pub const log_level = .debug;
 
 const uucode = @import("uucode");
 
-// `get` only includes known properties to aid with LSP completion, but
-// `getX` works for any custom extension.
-uucode.getX(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
-
-// Built-in extensions can still use `get`
 uucode.get(.wcwidth, 0x26F5) // ⛵ == 2
+
+uucode.get(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
+
 ```
 
 ## Code architecture
