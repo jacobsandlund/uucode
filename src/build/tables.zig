@@ -11,7 +11,7 @@ pub const std_options: std.Options = .{
         .info,
 };
 
-const buffer_size = 150_000_000; // Actual is ~148 MiB
+const buffer_size = 260_000_000; // Actual is ~254 MiB
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
@@ -22,8 +22,10 @@ pub fn main() !void {
     var fba = std.heap.FixedBufferAllocator.init(buffer_for_fba);
     const allocator = fba.allocator();
 
-    var ucd = try Ucd.init(allocator);
-    defer ucd.deinit(allocator);
+    var ucd = try allocator.create(Ucd);
+    defer allocator.destroy(ucd);
+
+    try ucd.parse(allocator);
 
     var args_iter = try std.process.argsWithAllocator(allocator);
     defer args_iter.deinit();
@@ -70,7 +72,7 @@ pub fn main() !void {
             resolved_table,
             i,
             arena_alloc,
-            &ucd,
+            ucd,
             writer,
         );
 
@@ -114,124 +116,34 @@ pub fn main() !void {
 
 const updating_ucd_fields = brk: {
     const d = config.default;
-    const max_cp: u21 = 0x10FFFF;
+    const max_cp: u21 = config.max_code_point;
 
     @setEvalBranchQuota(5_000);
     var fields: [d.fields.len]config.Field = undefined;
 
-    const var_len_or_shift_fields = [_]config.Field{
-        d.field("name").override(.{
-            .max_len = 200,
-            .max_offset = 1_500_000,
-        }),
-        d.field("decomposition_mapping").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-            .max_len = 40,
-            .max_offset = 8_000,
-        }),
-        d.field("numeric_value_numeric").override(.{
-            .max_len = 30,
-            .max_offset = 800,
-        }),
-        d.field("unicode_1_name").override(.{
-            .max_len = 120,
-            .max_offset = 80_000,
-        }),
-        d.field("simple_uppercase_mapping").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-        }),
-        d.field("simple_lowercase_mapping").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-        }),
-        d.field("simple_titlecase_mapping").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-        }),
-        d.field("case_folding_simple").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-        }),
-        d.field("case_folding_full").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-            .max_len = 9,
-            .max_offset = 200,
-        }),
-        d.field("case_folding_turkish_only").override(.{
-            .max_offset = 20,
-        }),
-        d.field("case_folding_common_only").override(.{
-            .max_offset = 2_000,
-        }),
-        d.field("case_folding_simple_only").override(.{
-            .max_offset = 300,
-        }),
-        d.field("case_folding_full_only").override(.{
-            .max_len = 9,
-            .max_offset = 500,
-        }),
-        d.field("special_lowercase_mapping").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-            .max_len = 9,
-            .max_offset = 50,
-        }),
-        d.field("special_titlecase_mapping").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-            .max_len = 9,
-            .max_offset = 200,
-        }),
-        d.field("special_uppercase_mapping").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-            .max_len = 9,
-            .max_offset = 300,
-        }),
-        d.field("special_casing_condition").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-            .max_len = 9,
-            .max_offset = 50,
-        }),
-        d.field("lowercase_mapping").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-            .max_len = 9,
-            .max_offset = 100,
-        }),
-        d.field("titlecase_mapping").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-            .max_len = 9,
-            .max_offset = 200,
-        }),
-        d.field("uppercase_mapping").override(.{
-            .shift_low = -@as(isize, max_cp),
-            .shift_high = max_cp,
-            .max_len = 9,
-            .max_offset = 300,
-        }),
-    };
-
-    for (var_len_or_shift_fields, 0..) |f, i| {
-        fields[i] = f.override(.{
-            .embedded_len = 0,
-        });
-    }
-
-    var i = var_len_or_shift_fields.len;
-
-    for (d.fields) |f| {
+    for (d.fields, 0..) |f, i| {
         switch (f.kind()) {
             .basic, .optional => {
                 fields[i] = f;
-                i += 1;
             },
-            else => {},
+            .shift => {
+                fields[i] = f.override(.{
+                    .shift_low = -@as(isize, max_cp),
+                    .shift_high = max_cp,
+                });
+            },
+            .var_len => {
+                fields[i] = f.override(.{
+                    .shift_low = -@as(isize, max_cp),
+                    .shift_high = max_cp,
+                    .max_len = if (f.max_len > 0)
+                        f.max_len * 3 + 100
+                    else
+                        0,
+                    .max_offset = f.max_offset * 3 + 1000,
+                    .embedded_len = 0,
+                });
+            },
         }
     }
 
@@ -586,14 +498,14 @@ pub fn writeTableData(
     for (0..config.max_code_point + 1) |cp_usize| {
         const get_data_start = try std.time.Instant.now();
         const cp: u21 = @intCast(cp_usize);
-        const unicode_data = ucd.unicode_data[cp];
-        const case_folding = ucd.case_folding.get(cp);
-        const special_casing = ucd.special_casing.get(cp);
-        const derived_core_properties = ucd.derived_core_properties.get(cp) orelse Ucd.DerivedCoreProperties{};
-        const east_asian_width = ucd.east_asian_width.get(cp) orelse types.EastAsianWidth.neutral;
-        const original_grapheme_break = ucd.original_grapheme_break.get(cp) orelse types.OriginalGraphemeBreak.other;
-        const emoji_data = ucd.emoji_data.get(cp) orelse Ucd.EmojiData{};
-        const block_value = ucd.blocks.get(cp) orelse types.Block.no_block;
+        const unicode_data = &ucd.unicode_data[cp];
+        const case_folding = ucd.case_folding[cp];
+        const special_casing = ucd.special_casing[cp];
+        const derived_core_properties = ucd.derived_core_properties[cp];
+        const east_asian_width = ucd.east_asian_width[cp];
+        const original_grapheme_break = ucd.original_grapheme_break[cp];
+        const emoji_data = ucd.emoji_data[cp];
+        const block_value = ucd.blocks[cp];
 
         const get_data_end = try std.time.Instant.now();
         get_data_time += get_data_end.since(get_data_start);
@@ -696,182 +608,137 @@ pub fn writeTableData(
 
         // CaseFolding fields
         if (@hasField(AllData, "case_folding_simple")) {
-            if (case_folding) |cf| {
-                const d =
-                    cf.case_folding_simple_only orelse
-                    cf.case_folding_common_only orelse
+            const d =
+                case_folding.case_folding_simple_only orelse
+                case_folding.case_folding_common_only orelse
 
-                    // This would seem not to be necessary based on the heading
-                    // of CaseFolding.txt, but U+0130 has only an F and T
-                    // mapping and no S. The T mapping is the same as the
-                    // simple_lowercase_mapping so we use that here.
-                    cf.case_folding_turkish_only orelse
-                    cp;
-                singleInit("case_folding_simple", &a, &tracking, cp, d);
-            } else {
-                singleInit("case_folding_simple", &a, &tracking, cp, cp);
-            }
+                // This would seem not to be necessary based on the heading
+                // of CaseFolding.txt, but U+0130 has only an F and T
+                // mapping and no S. The T mapping is the same as the
+                // simple_lowercase_mapping so we use that here.
+                case_folding.case_folding_turkish_only orelse
+                cp;
+            singleInit("case_folding_simple", &a, &tracking, cp, d);
         }
         if (@hasField(AllData, "case_folding_full")) {
-            if (case_folding) |cf| {
-                if (cf.case_folding_full_only.len > 0) {
-                    a.case_folding_full = try .fromSliceFor(
-                        allocator,
-                        backing.case_folding_full,
-                        &tracking.case_folding_full,
-                        cf.case_folding_full_only,
-                        cp,
-                    );
-                } else {
-                    a.case_folding_full = try .fromSliceFor(
-                        allocator,
-                        backing.case_folding_full,
-                        &tracking.case_folding_full,
-                        &.{cf.case_folding_common_only orelse cp},
-                        cp,
-                    );
-                }
+            if (case_folding.case_folding_full_only.len > 0) {
+                a.case_folding_full = try .fromSliceFor(
+                    allocator,
+                    backing.case_folding_full,
+                    &tracking.case_folding_full,
+                    case_folding.case_folding_full_only,
+                    cp,
+                );
             } else {
                 a.case_folding_full = try .fromSliceFor(
                     allocator,
                     backing.case_folding_full,
                     &tracking.case_folding_full,
-                    &.{cp},
+                    &.{case_folding.case_folding_common_only orelse cp},
                     cp,
                 );
             }
         }
         if (@hasField(AllData, "case_folding_turkish_only")) {
-            if (case_folding) |cf| {
-                if (cf.case_folding_turkish_only) |t| {
-                    a.case_folding_turkish_only = try .fromSliceFor(
-                        allocator,
-                        backing.case_folding_turkish_only,
-                        &tracking.case_folding_turkish_only,
-                        &.{t},
-                        cp,
-                    );
-                } else {
-                    a.case_folding_turkish_only = .empty;
-                }
+            if (case_folding.case_folding_turkish_only) |t| {
+                a.case_folding_turkish_only = try .fromSliceFor(
+                    allocator,
+                    backing.case_folding_turkish_only,
+                    &tracking.case_folding_turkish_only,
+                    &.{t},
+                    cp,
+                );
             } else {
                 a.case_folding_turkish_only = .empty;
             }
         }
         if (@hasField(AllData, "case_folding_common_only")) {
-            if (case_folding) |cf| {
-                if (cf.case_folding_common_only) |c| {
-                    a.case_folding_common_only = try .fromSliceFor(
-                        allocator,
-                        backing.case_folding_common_only,
-                        &tracking.case_folding_common_only,
-                        &.{c},
-                        cp,
-                    );
-                } else {
-                    a.case_folding_common_only = .empty;
-                }
+            if (case_folding.case_folding_common_only) |c| {
+                a.case_folding_common_only = try .fromSliceFor(
+                    allocator,
+                    backing.case_folding_common_only,
+                    &tracking.case_folding_common_only,
+                    &.{c},
+                    cp,
+                );
             } else {
                 a.case_folding_common_only = .empty;
             }
         }
         if (@hasField(AllData, "case_folding_simple_only")) {
-            if (case_folding) |cf| {
-                if (cf.case_folding_simple_only) |s| {
-                    a.case_folding_simple_only = try .fromSliceFor(
-                        allocator,
-                        backing.case_folding_simple_only,
-                        &tracking.case_folding_simple_only,
-                        &.{s},
-                        cp,
-                    );
-                } else {
-                    a.case_folding_simple_only = .empty;
-                }
+            if (case_folding.case_folding_simple_only) |s| {
+                a.case_folding_simple_only = try .fromSliceFor(
+                    allocator,
+                    backing.case_folding_simple_only,
+                    &tracking.case_folding_simple_only,
+                    &.{s},
+                    cp,
+                );
             } else {
                 a.case_folding_simple_only = .empty;
             }
         }
         if (@hasField(AllData, "case_folding_full_only")) {
-            if (case_folding) |cf| {
-                a.case_folding_full_only = try .fromSliceFor(
-                    allocator,
-                    backing.case_folding_full_only,
-                    &tracking.case_folding_full_only,
-                    cf.case_folding_full_only,
-                    cp,
-                );
-            } else {
-                a.case_folding_full_only = .empty;
-            }
+            a.case_folding_full_only = try .fromSliceFor(
+                allocator,
+                backing.case_folding_full_only,
+                &tracking.case_folding_full_only,
+                case_folding.case_folding_full_only,
+                cp,
+            );
         }
 
         // SpecialCasing fields
+        if (@hasField(AllData, "has_special_casing")) {
+            a.has_special_casing = special_casing.has_special_casing;
+        }
         if (@hasField(AllData, "special_lowercase_mapping")) {
-            if (special_casing) |sc| {
-                a.special_lowercase_mapping = try .fromSliceFor(
-                    allocator,
-                    backing.special_lowercase_mapping,
-                    &tracking.special_lowercase_mapping,
-                    sc.special_lowercase_mapping,
-                    cp,
-                );
-            } else {
-                a.special_lowercase_mapping = .empty;
-            }
+            a.special_lowercase_mapping = try .fromSliceFor(
+                allocator,
+                backing.special_lowercase_mapping,
+                &tracking.special_lowercase_mapping,
+                special_casing.special_lowercase_mapping,
+                cp,
+            );
         }
         if (@hasField(AllData, "special_titlecase_mapping")) {
-            if (special_casing) |sc| {
-                a.special_titlecase_mapping = try .fromSliceFor(
-                    allocator,
-                    backing.special_titlecase_mapping,
-                    &tracking.special_titlecase_mapping,
-                    sc.special_titlecase_mapping,
-                    cp,
-                );
-            } else {
-                a.special_titlecase_mapping = .empty;
-            }
+            a.special_titlecase_mapping = try .fromSliceFor(
+                allocator,
+                backing.special_titlecase_mapping,
+                &tracking.special_titlecase_mapping,
+                special_casing.special_titlecase_mapping,
+                cp,
+            );
         }
         if (@hasField(AllData, "special_uppercase_mapping")) {
-            if (special_casing) |sc| {
-                a.special_uppercase_mapping = try .fromSliceFor(
-                    allocator,
-                    backing.special_uppercase_mapping,
-                    &tracking.special_uppercase_mapping,
-                    sc.special_uppercase_mapping,
-                    cp,
-                );
-            } else {
-                a.special_uppercase_mapping = .empty;
-            }
+            a.special_uppercase_mapping = try .fromSliceFor(
+                allocator,
+                backing.special_uppercase_mapping,
+                &tracking.special_uppercase_mapping,
+                special_casing.special_uppercase_mapping,
+                cp,
+            );
         }
         if (@hasField(AllData, "special_casing_condition")) {
-            if (special_casing) |sc| {
-                a.special_casing_condition = try .fromSlice(
-                    allocator,
-                    backing.special_casing_condition,
-                    &tracking.special_casing_condition,
-                    sc.special_casing_condition,
-                );
-            } else {
-                a.special_casing_condition = .empty;
-            }
+            a.special_casing_condition = try .fromSlice(
+                allocator,
+                backing.special_casing_condition,
+                &tracking.special_casing_condition,
+                special_casing.special_casing_condition,
+            );
         }
 
         // Case mappings
         if (@hasField(AllData, "lowercase_mapping")) {
-            const use_special = if (special_casing) |sc|
-                sc.special_casing_condition.len == 0
-            else
-                false;
+            const use_special = special_casing.has_special_casing and
+                special_casing.special_casing_condition.len == 0;
 
             if (use_special) {
                 a.lowercase_mapping = try .fromSliceFor(
                     allocator,
                     backing.lowercase_mapping,
                     &tracking.lowercase_mapping,
-                    special_casing.?.special_lowercase_mapping,
+                    special_casing.special_lowercase_mapping,
                     cp,
                 );
             } else {
@@ -886,17 +753,15 @@ pub fn writeTableData(
         }
 
         if (@hasField(AllData, "titlecase_mapping")) {
-            const use_special = if (special_casing) |sc|
-                sc.special_casing_condition.len == 0
-            else
-                false;
+            const use_special = special_casing.has_special_casing and
+                special_casing.special_casing_condition.len == 0;
 
             if (use_special) {
                 a.titlecase_mapping = try .fromSliceFor(
                     allocator,
                     backing.titlecase_mapping,
                     &tracking.titlecase_mapping,
-                    special_casing.?.special_titlecase_mapping,
+                    special_casing.special_titlecase_mapping,
                     cp,
                 );
             } else {
@@ -911,17 +776,15 @@ pub fn writeTableData(
         }
 
         if (@hasField(AllData, "uppercase_mapping")) {
-            const use_special = if (special_casing) |sc|
-                sc.special_casing_condition.len == 0
-            else
-                false;
+            const use_special = special_casing.has_special_casing and
+                special_casing.special_casing_condition.len == 0;
 
             if (use_special) {
                 a.uppercase_mapping = try .fromSliceFor(
                     allocator,
                     backing.uppercase_mapping,
                     &tracking.uppercase_mapping,
-                    special_casing.?.special_uppercase_mapping,
+                    special_casing.special_uppercase_mapping,
                     cp,
                 );
             } else {

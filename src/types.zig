@@ -162,6 +162,7 @@ pub const SpecialCasingCondition = enum(u4) {
 };
 
 pub const Block = enum(u9) {
+    no_block,
     adlam,
     aegean_numbers,
     ahom,
@@ -389,7 +390,6 @@ pub const Block = enum(u9) {
     new_tai_lue,
     newa,
     nko,
-    no_block,
     number_forms,
     nushu,
     nyiakeng_puachue_hmong,
@@ -720,6 +720,8 @@ pub fn VarLen(
             tracking: *Tracking,
             s: []const T,
         ) Allocator.Error!Self {
+            tracking.max_len = @max(tracking.max_len, s.len);
+
             if ((comptime embedded_len == 0) or s.len > embedded_len) {
                 if (s.len == 0) {
                     return .empty;
@@ -799,6 +801,8 @@ pub fn VarLen(
             }
 
             if (c.cp_packing == .shift_single_item and s.len == 1) {
+                tracking.max_len = @max(tracking.max_len, 1);
+
                 return .{
                     .len = 1,
                     .data = .{
@@ -934,6 +938,7 @@ pub fn VarLen(
 pub fn VarLenTracking(comptime T: type, comptime max_len: usize) type {
     return struct {
         max_offset: usize = 0,
+        max_len: usize = 0,
         offset_map: SliceMap(T, usize) = .empty,
         len_counts: [max_len]usize = [_]usize{0} ** max_len,
         shift: ShiftTracking = .{},
@@ -948,17 +953,10 @@ pub fn VarLenTracking(comptime T: type, comptime max_len: usize) type {
             self: *const Self,
             c: config.Field.Runtime,
         ) config.Field.Runtime {
-            var i = max_len;
-            const actual_max_len: usize = while (i != 0) : (i -= 1) {
-                if (self.len_counts[i - 1] != 0) {
-                    break i;
-                }
-            } else (if (c.cp_packing == .shift_single_item) 1 else 0);
-
             return c.override(.{
                 .shift_low = self.shift.shift_low,
                 .shift_high = self.shift.shift_high,
-                .max_len = actual_max_len,
+                .max_len = self.max_len,
                 .max_offset = self.max_offset,
             });
         }
@@ -972,7 +970,10 @@ pub fn VarLenTracking(comptime T: type, comptime max_len: usize) type {
             }
 
             const actual = self.actualConfig(c);
-            if (actual.max_len == 0 or actual.max_len == 1 and self.len_counts[0] == 0) {
+
+            // In case of everything fitting in shift_single_item, return early
+            // to avoid log2_int error.
+            if (actual.max_len == 1 and self.len_counts[0] == 0) {
                 return actual;
             }
 

@@ -1,44 +1,57 @@
-//! This File is Layer 1 of the architecture (see /AGENT.md), processing
-//! the Unicode Character Database (UCD) files (see https://www.unicode.org/reports/tr44/).
+//! This File is Layer 1 of the architecture (see README.md), processing the
+//! Unicode Character Database (UCD) files
+//! (see https://www.unicode.org/reports/tr44/).
 
 const std = @import("std");
 const builtin = @import("builtin");
 const types = @import("types.zig");
 const config = @import("config.zig");
 
+const n = config.max_code_point + 1;
+
+unicode_data: [n]UnicodeData,
+case_folding: [n]CaseFolding,
+special_casing: [n]SpecialCasing,
+derived_core_properties: [n]DerivedCoreProperties,
+east_asian_width: [n]types.EastAsianWidth,
+original_grapheme_break: [n]types.OriginalGraphemeBreak,
+emoji_data: [n]EmojiData,
+blocks: [n]types.Block,
+
 const UnicodeData = struct {
-    name: []const u8,
-    general_category: types.GeneralCategory,
-    canonical_combining_class: u8,
-    bidi_class: types.BidiClass,
-    decomposition_type: types.DecompositionType,
-    decomposition_mapping: []const u21,
-    numeric_type: types.NumericType,
-    numeric_value_decimal: ?u4,
-    numeric_value_digit: ?u4,
-    numeric_value_numeric: []const u8,
-    is_bidi_mirrored: bool,
-    unicode_1_name: []const u8,
-    simple_uppercase_mapping: ?u21,
-    simple_lowercase_mapping: ?u21,
-    simple_titlecase_mapping: ?u21,
+    name: []const u8 = &.{},
+    general_category: types.GeneralCategory = .other_not_assigned,
+    canonical_combining_class: u8 = 0,
+    bidi_class: types.BidiClass = .left_to_right,
+    decomposition_type: types.DecompositionType = .default,
+    decomposition_mapping: []const u21 = &.{},
+    numeric_type: types.NumericType = .none,
+    numeric_value_decimal: ?u4 = null,
+    numeric_value_digit: ?u4 = null,
+    numeric_value_numeric: []const u8 = &.{},
+    is_bidi_mirrored: bool = false,
+    unicode_1_name: []const u8 = &.{},
+    simple_uppercase_mapping: ?u21 = null,
+    simple_lowercase_mapping: ?u21 = null,
+    simple_titlecase_mapping: ?u21 = null,
 };
 
 const CaseFolding = struct {
-    case_folding_turkish_only: ?u21,
-    case_folding_common_only: ?u21,
-    case_folding_simple_only: ?u21,
-    case_folding_full_only: []const u21,
+    case_folding_turkish_only: ?u21 = null,
+    case_folding_common_only: ?u21 = null,
+    case_folding_simple_only: ?u21 = null,
+    case_folding_full_only: []const u21 = &.{},
 };
 
 const SpecialCasing = struct {
-    special_lowercase_mapping: []const u21,
-    special_titlecase_mapping: []const u21,
-    special_uppercase_mapping: []const u21,
-    special_casing_condition: []const types.SpecialCasingCondition,
+    has_special_casing: bool = false,
+    special_lowercase_mapping: []const u21 = &.{},
+    special_titlecase_mapping: []const u21 = &.{},
+    special_uppercase_mapping: []const u21 = &.{},
+    special_casing_condition: []const types.SpecialCasingCondition = &.{},
 };
 
-pub const DerivedCoreProperties = struct {
+const DerivedCoreProperties = packed struct {
     is_math: bool = false,
     is_alphabetic: bool = false,
     is_lowercase: bool = false,
@@ -61,7 +74,7 @@ pub const DerivedCoreProperties = struct {
     indic_conjunct_break: types.IndicConjunctBreak = .none,
 };
 
-pub const EmojiData = struct {
+const EmojiData = packed struct {
     is_emoji: bool = false,
     is_emoji_presentation: bool = false,
     is_emoji_modifier: bool = false,
@@ -70,83 +83,63 @@ pub const EmojiData = struct {
     is_extended_pictographic: bool = false,
 };
 
-unicode_data: []UnicodeData,
-case_folding: std.AutoHashMapUnmanaged(u21, CaseFolding),
-special_casing: std.AutoHashMapUnmanaged(u21, SpecialCasing),
-derived_core_properties: std.AutoHashMapUnmanaged(u21, DerivedCoreProperties),
-east_asian_width: std.AutoHashMapUnmanaged(u21, types.EastAsianWidth),
-original_grapheme_break: std.AutoHashMapUnmanaged(u21, types.OriginalGraphemeBreak),
-emoji_data: std.AutoHashMapUnmanaged(u21, EmojiData),
-blocks: std.AutoHashMapUnmanaged(u21, types.Block),
-
 const Self = @This();
 
-pub fn init(allocator: std.mem.Allocator) !Self {
+pub fn parse(self: *Self, allocator: std.mem.Allocator) !void {
     const start = try std.time.Instant.now();
-
-    var ucd = Self{
-        .unicode_data = undefined,
-        .case_folding = .{},
-        .special_casing = .{},
-        .derived_core_properties = .{},
-        .east_asian_width = .{},
-        .original_grapheme_break = .{},
-        .emoji_data = .{},
-        .blocks = .{},
-    };
-
-    ucd.unicode_data = try allocator.alloc(UnicodeData, config.max_code_point + 1);
-    errdefer allocator.free(ucd.unicode_data);
-
-    try parseUnicodeData(allocator, &ucd);
-    try parseCaseFolding(allocator, &ucd);
-    try parseSpecialCasing(allocator, &ucd);
-    try parseDerivedCoreProperties(allocator, &ucd.derived_core_properties);
-    try parseEastAsianWidth(allocator, &ucd.east_asian_width);
-    try parseGraphemeBreakProperty(allocator, &ucd.original_grapheme_break);
-    try parseEmojiData(allocator, &ucd.emoji_data);
-    try parseBlocks(allocator, &ucd.blocks);
+    try parseUnicodeData(allocator, &self.unicode_data);
+    try parseCaseFolding(allocator, &self.case_folding);
+    try parseSpecialCasing(allocator, &self.special_casing);
+    try parseDerivedCoreProperties(allocator, &self.derived_core_properties);
+    try parseEastAsianWidth(allocator, &self.east_asian_width);
+    try parseGraphemeBreak(allocator, &self.original_grapheme_break);
+    try parseEmojiData(allocator, &self.emoji_data);
+    try parseBlocks(allocator, &self.blocks);
 
     const end = try std.time.Instant.now();
     std.log.debug("Ucd init time: {d}ms\n", .{end.since(start) / std.time.ns_per_ms});
-
-    return ucd;
 }
 
-pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
-    allocator.free(self.unicode_data);
-    self.case_folding.deinit(allocator);
-    self.special_casing.deinit(allocator);
-    self.derived_core_properties.deinit(allocator);
-    self.east_asian_width.deinit(allocator);
-    self.original_grapheme_break.deinit(allocator);
-    self.emoji_data.deinit(allocator);
-    self.blocks.deinit(allocator);
-}
-
-pub fn parseCodePoint(str: []const u8) !u21 {
+// Public for GraphemeBreakTest in src/grapheme.zig
+pub fn parseCp(str: []const u8) !u21 {
     return std.fmt.parseInt(u21, str, 16);
 }
 
-fn parseCodePointRange(str: []const u8) !struct { start: u21, end: u21 } {
+fn parseRange(str: []const u8) !struct { start: u21, end: u21 } {
     if (std.mem.indexOf(u8, str, "..")) |dot_idx| {
-        const start = try parseCodePoint(str[0..dot_idx]);
-        const end = try parseCodePoint(str[dot_idx + 2 ..]);
+        const start = try parseCp(str[0..dot_idx]);
+        const end = try parseCp(str[dot_idx + 2 ..]);
         return .{ .start = start, .end = end };
     } else {
-        const cp = try parseCodePoint(str);
+        const cp = try parseCp(str);
         return .{ .start = cp, .end = cp };
     }
 }
 
-pub fn stripComment(line: []const u8) []const u8 {
+test "parseCp" {
+    try std.testing.expectEqual(@as(u21, 0x0000), try parseCp("0000"));
+    try std.testing.expectEqual(@as(u21, 0x1F600), try parseCp("1F600"));
+}
+
+test "parseRange" {
+    const range = try parseRange("0030..0039");
+    try std.testing.expectEqual(@as(u21, 0x0030), range.start);
+    try std.testing.expectEqual(@as(u21, 0x0039), range.end);
+
+    const single = try parseRange("1F600");
+    try std.testing.expectEqual(@as(u21, 0x1F600), single.start);
+    try std.testing.expectEqual(@as(u21, 0x1F600), single.end);
+}
+
+// Public for GraphemeBreakTest in src/grapheme.zig
+pub fn trim(line: []const u8) []const u8 {
     if (std.mem.indexOf(u8, line, "#")) |idx| {
         return std.mem.trim(u8, line[0..idx], " \t");
     }
     return std.mem.trim(u8, line, " \t");
 }
 
-fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
+fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !void {
     const file_path = "ucd/UnicodeData.txt";
 
     // TODO: look for defaults in the Derived Extracted properties files:
@@ -166,43 +159,26 @@ fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
 
     var lines = std.mem.splitScalar(u8, content, '\n');
     var next_cp: u21 = 0;
-    const gap_data = UnicodeData{
-        .name = &.{},
-        .general_category = types.GeneralCategory.other_not_assigned,
-        .canonical_combining_class = 0,
-        .bidi_class = types.BidiClass.left_to_right,
-        .decomposition_type = types.DecompositionType.default,
-        .decomposition_mapping = &.{},
-        .numeric_type = types.NumericType.none,
-        .numeric_value_decimal = null,
-        .numeric_value_digit = null,
-        .numeric_value_numeric = &.{},
-        .is_bidi_mirrored = false,
-        .unicode_1_name = &.{},
-        .simple_uppercase_mapping = null,
-        .simple_lowercase_mapping = null,
-        .simple_titlecase_mapping = null,
-    };
     var range_data: ?UnicodeData = null;
 
     while (lines.next()) |line| {
-        const trimmed = stripComment(line);
+        const trimmed = trim(line);
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
         const cp_str = parts.next().?;
-        const cp = try parseCodePoint(cp_str);
+        const cp = try parseCp(cp_str);
 
         // Fill ranges or gaps
         while (next_cp < cp) : (next_cp += 1) {
-            ucd.unicode_data[next_cp] = range_data orelse gap_data;
+            unicode_data[next_cp] = range_data orelse .{};
         }
 
         if (range_data != null) {
             // We're in a range, so the next entry marks the last, with the same
             // information.
             std.debug.assert(std.mem.endsWith(u8, parts.next().?, "Last>"));
-            ucd.unicode_data[next_cp] = range_data.?;
+            unicode_data[next_cp] = range_data.?;
             range_data = null;
             next_cp = cp + 1;
             continue;
@@ -234,9 +210,9 @@ fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
             unreachable;
         };
 
-        const simple_uppercase_mapping = if (simple_uppercase_mapping_str.len == 0) null else try parseCodePoint(simple_uppercase_mapping_str);
-        const simple_lowercase_mapping = if (simple_lowercase_mapping_str.len == 0) null else try parseCodePoint(simple_lowercase_mapping_str);
-        const simple_titlecase_mapping = if (simple_titlecase_mapping_str.len == 0) null else try parseCodePoint(simple_titlecase_mapping_str);
+        const simple_uppercase_mapping = if (simple_uppercase_mapping_str.len == 0) null else try parseCp(simple_uppercase_mapping_str);
+        const simple_lowercase_mapping = if (simple_lowercase_mapping_str.len == 0) null else try parseCp(simple_lowercase_mapping_str);
+        const simple_titlecase_mapping = if (simple_titlecase_mapping_str.len == 0) null else try parseCp(simple_titlecase_mapping_str);
 
         // Parse decomposition type and mapping from single field
         // Default: character decomposes to itself (field 5 empty)
@@ -269,7 +245,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
 
                 while (mapping_parts.next()) |part| {
                     if (part.len == 0) continue;
-                    decomposition_mapping[decomposition_mapping_len] = try parseCodePoint(part);
+                    decomposition_mapping[decomposition_mapping_len] = try parseCp(part);
                     decomposition_mapping_len += 1;
                 }
             }
@@ -296,7 +272,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
             numeric_type = types.NumericType.numeric;
         }
 
-        const unicode_data = UnicodeData{
+        const data = UnicodeData{
             .name = try allocator.dupe(u8, name),
             .general_category = general_category,
             .canonical_combining_class = canonical_combining_class,
@@ -319,16 +295,16 @@ fn parseUnicodeData(allocator: std.mem.Allocator, ucd: *Self) !void {
 
         // Handle range entries with "First>" and "Last>"
         if (std.mem.endsWith(u8, name_str, "First>")) {
-            range_data = unicode_data;
+            range_data = data;
         }
 
-        ucd.unicode_data[cp] = unicode_data;
+        unicode_data[cp] = data;
         next_cp = cp + 1;
     }
 
     // Fill any remaining gaps at the end with default values
     for (next_cp..config.max_code_point + 1) |cp| {
-        ucd.unicode_data[cp] = gap_data;
+        unicode_data[cp] = .{};
     }
 }
 
@@ -393,8 +369,10 @@ const bidi_class_map = std.StaticStringMap(types.BidiClass).initComptime(.{
 
 fn parseCaseFolding(
     allocator: std.mem.Allocator,
-    ucd: *Self,
+    case_folding: []CaseFolding,
 ) !void {
+    @memset(case_folding, .{});
+
     const file_path = "ucd/CaseFolding.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -405,12 +383,12 @@ fn parseCaseFolding(
 
     var lines = std.mem.splitScalar(u8, content, '\n');
     while (lines.next()) |line| {
-        const trimmed = stripComment(line);
+        const trimmed = trim(line);
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
         const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const cp = try parseCodePoint(cp_str);
+        const cp = try parseCp(cp_str);
 
         const status_str = std.mem.trim(u8, parts.next().?, " \t");
         const status = if (status_str.len > 0) status_str[0] else 0;
@@ -423,37 +401,27 @@ fn parseCaseFolding(
 
         while (mapping_parts.next()) |part| {
             if (part.len == 0) continue;
-            const mapped_cp = try parseCodePoint(part);
+            const mapped_cp = try parseCp(part);
             mapping[mapping_len] = mapped_cp;
             mapping_len += 1;
-        }
-
-        const result = try ucd.case_folding.getOrPut(allocator, cp);
-        if (!result.found_existing) {
-            result.value_ptr.* = CaseFolding{
-                .case_folding_turkish_only = null,
-                .case_folding_common_only = null,
-                .case_folding_simple_only = null,
-                .case_folding_full_only = &.{},
-            };
         }
 
         switch (status) {
             'S' => {
                 std.debug.assert(mapping_len == 1);
-                result.value_ptr.case_folding_simple_only = mapping[0];
+                case_folding[cp].case_folding_simple_only = mapping[0];
             },
             'C' => {
                 std.debug.assert(mapping_len == 1);
-                result.value_ptr.case_folding_common_only = mapping[0];
+                case_folding[cp].case_folding_common_only = mapping[0];
             },
             'T' => {
                 std.debug.assert(mapping_len == 1);
-                result.value_ptr.case_folding_turkish_only = mapping[0];
+                case_folding[cp].case_folding_turkish_only = mapping[0];
             },
             'F' => {
                 std.debug.assert(mapping_len > 1);
-                result.value_ptr.case_folding_full_only = try allocator.dupe(
+                case_folding[cp].case_folding_full_only = try allocator.dupe(
                     u21,
                     mapping[0..mapping_len],
                 );
@@ -465,8 +433,10 @@ fn parseCaseFolding(
 
 fn parseSpecialCasing(
     allocator: std.mem.Allocator,
-    ucd: *Self,
+    special_casing: []SpecialCasing,
 ) !void {
+    @memset(special_casing, .{});
+
     const file_path = "ucd/SpecialCasing.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -477,12 +447,12 @@ fn parseSpecialCasing(
 
     var lines = std.mem.splitScalar(u8, content, '\n');
     while (lines.next()) |line| {
-        const trimmed = stripComment(line);
+        const trimmed = trim(line);
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
         const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const cp = try parseCodePoint(cp_str);
+        const cp = try parseCp(cp_str);
 
         const lower_str = std.mem.trim(u8, parts.next().?, " \t");
         const title_str = std.mem.trim(u8, parts.next().?, " \t");
@@ -515,7 +485,7 @@ fn parseSpecialCasing(
         var lower_parts = std.mem.splitScalar(u8, lower_str, ' ');
         while (lower_parts.next()) |part| {
             if (part.len == 0) continue;
-            lower_mapping[lower_mapping_len] = try parseCodePoint(part);
+            lower_mapping[lower_mapping_len] = try parseCp(part);
             lower_mapping_len += 1;
         }
 
@@ -524,7 +494,7 @@ fn parseSpecialCasing(
         var title_parts = std.mem.splitScalar(u8, title_str, ' ');
         while (title_parts.next()) |part| {
             if (part.len == 0) continue;
-            title_mapping[title_mapping_len] = try parseCodePoint(part);
+            title_mapping[title_mapping_len] = try parseCp(part);
             title_mapping_len += 1;
         }
 
@@ -533,28 +503,27 @@ fn parseSpecialCasing(
         var upper_parts = std.mem.splitScalar(u8, upper_str, ' ');
         while (upper_parts.next()) |part| {
             if (part.len == 0) continue;
-            upper_mapping[upper_mapping_len] = try parseCodePoint(part);
+            upper_mapping[upper_mapping_len] = try parseCp(part);
             upper_mapping_len += 1;
         }
 
-        try ucd.special_casing.put(allocator, cp, .{
-            .special_lowercase_mapping = try allocator.dupe(
-                u21,
-                lower_mapping[0..lower_mapping_len],
-            ),
-            .special_titlecase_mapping = try allocator.dupe(
-                u21,
-                title_mapping[0..title_mapping_len],
-            ),
-            .special_uppercase_mapping = try allocator.dupe(
-                u21,
-                upper_mapping[0..upper_mapping_len],
-            ),
-            .special_casing_condition = try allocator.dupe(
-                types.SpecialCasingCondition,
-                conditions[0..conditions_len],
-            ),
-        });
+        special_casing[cp].has_special_casing = true;
+        special_casing[cp].special_lowercase_mapping = try allocator.dupe(
+            u21,
+            lower_mapping[0..lower_mapping_len],
+        );
+        special_casing[cp].special_titlecase_mapping = try allocator.dupe(
+            u21,
+            title_mapping[0..title_mapping_len],
+        );
+        special_casing[cp].special_uppercase_mapping = try allocator.dupe(
+            u21,
+            upper_mapping[0..upper_mapping_len],
+        );
+        special_casing[cp].special_casing_condition = try allocator.dupe(
+            types.SpecialCasingCondition,
+            conditions[0..conditions_len],
+        );
     }
 }
 
@@ -571,8 +540,10 @@ const special_casing_condition_map = std.StaticStringMap(types.SpecialCasingCond
 
 fn parseDerivedCoreProperties(
     allocator: std.mem.Allocator,
-    map: *std.AutoHashMapUnmanaged(u21, DerivedCoreProperties),
+    derived_core_properties: []DerivedCoreProperties,
 ) !void {
+    @memset(derived_core_properties, .{});
+
     const file_path = "ucd/DerivedCoreProperties.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -583,7 +554,7 @@ fn parseDerivedCoreProperties(
 
     var lines = std.mem.splitScalar(u8, content, '\n');
     while (lines.next()) |line| {
-        const trimmed = stripComment(line);
+        const trimmed = trim(line);
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
@@ -591,7 +562,7 @@ fn parseDerivedCoreProperties(
         const property_str = std.mem.trim(u8, parts.next().?, " \t");
         const value_str = if (parts.next()) |v| std.mem.trim(u8, v, " \t") else "";
 
-        const range = try parseCodePointRange(cp_str);
+        const range = try parseRange(cp_str);
         const property = derived_core_property_map.get(property_str) orelse {
             std.log.err("Unknown DerivedCoreProperties property: {s}", .{property_str});
             unreachable;
@@ -601,19 +572,15 @@ fn parseDerivedCoreProperties(
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
-            const result = try map.getOrPut(allocator, cp);
-            if (!result.found_existing) {
-                result.value_ptr.* = DerivedCoreProperties{};
-            }
             switch (property) {
                 .indic_conjunct_break => {
-                    result.value_ptr.indic_conjunct_break = indic_conjunct_break orelse {
+                    derived_core_properties[cp].indic_conjunct_break = indic_conjunct_break orelse {
                         std.log.err("Unknown InCB value: {s}", .{value_str});
                         unreachable;
                     };
                 },
                 inline else => |p| {
-                    @field(result.value_ptr.*, @tagName(p)) = true;
+                    @field(derived_core_properties[cp], @tagName(p)) = true;
                 },
             }
         }
@@ -651,8 +618,10 @@ const indic_conjunct_break_map = std.StaticStringMap(types.IndicConjunctBreak).i
 
 fn parseEastAsianWidth(
     allocator: std.mem.Allocator,
-    map: *std.AutoHashMapUnmanaged(u21, types.EastAsianWidth),
+    east_asian_width: []types.EastAsianWidth,
 ) !void {
+    @memset(east_asian_width, .neutral);
+
     const file_path = "ucd/extracted/DerivedEastAsianWidth.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -673,7 +642,7 @@ fn parseEastAsianWidth(
             const cp_str = std.mem.trim(u8, parts.next().?, " \t");
             const width_str = std.mem.trim(u8, parts.next().?, " \t");
 
-            const range = try parseCodePointRange(cp_str);
+            const range = try parseRange(cp_str);
 
             // Skip `neutral` as it's the default
             if (std.mem.eql(u8, width_str, "Neutral")) {
@@ -687,20 +656,20 @@ fn parseEastAsianWidth(
 
             var cp: u21 = range.start;
             while (cp <= range.end) : (cp += 1) {
-                try map.put(allocator, cp, .wide);
+                east_asian_width[cp] = .wide;
             }
             continue;
         }
 
         // Handle regular entries
-        const data_line = stripComment(trimmed);
+        const data_line = trim(trimmed);
         if (data_line.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, data_line, ';');
         const cp_str = std.mem.trim(u8, parts.next().?, " \t");
         const width_str = std.mem.trim(u8, parts.next().?, " \t");
 
-        const range = try parseCodePointRange(cp_str);
+        const range = try parseRange(cp_str);
 
         const width = east_asian_width_map.get(width_str) orelse {
             std.log.err("Unknown EastAsianWidth value: {s}", .{width_str});
@@ -709,7 +678,7 @@ fn parseEastAsianWidth(
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
-            try map.put(allocator, cp, width);
+            east_asian_width[cp] = width;
         }
     }
 }
@@ -723,10 +692,12 @@ const east_asian_width_map = std.StaticStringMap(types.EastAsianWidth).initCompt
     .{ "N", .neutral },
 });
 
-fn parseGraphemeBreakProperty(
+fn parseGraphemeBreak(
     allocator: std.mem.Allocator,
-    map: *std.AutoHashMapUnmanaged(u21, types.OriginalGraphemeBreak),
+    grapheme_break: []types.OriginalGraphemeBreak,
 ) !void {
+    @memset(grapheme_break, .other);
+
     const file_path = "ucd/auxiliary/GraphemeBreakProperty.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -737,20 +708,20 @@ fn parseGraphemeBreakProperty(
 
     var lines = std.mem.splitScalar(u8, content, '\n');
     while (lines.next()) |line| {
-        const trimmed = stripComment(line);
+        const trimmed = trim(line);
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
         const cp_str = std.mem.trim(u8, parts.next().?, " \t");
         const prop_str = std.mem.trim(u8, parts.next().?, " \t");
 
-        const range = try parseCodePointRange(cp_str);
+        const range = try parseRange(cp_str);
 
         const prop = grapheme_break_property_map.get(prop_str) orelse types.OriginalGraphemeBreak.other;
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
-            try map.put(allocator, cp, prop);
+            grapheme_break[cp] = prop;
         }
     }
 }
@@ -773,8 +744,10 @@ const grapheme_break_property_map = std.StaticStringMap(types.OriginalGraphemeBr
 
 fn parseEmojiData(
     allocator: std.mem.Allocator,
-    map: *std.AutoHashMapUnmanaged(u21, EmojiData),
+    emoji_data: []EmojiData,
 ) !void {
+    @memset(emoji_data, .{});
+
     const file_path = "ucd/emoji/emoji-data.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -785,22 +758,17 @@ fn parseEmojiData(
 
     var lines = std.mem.splitScalar(u8, content, '\n');
     while (lines.next()) |line| {
-        const trimmed = stripComment(line);
+        const trimmed = trim(line);
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
         const cp_str = std.mem.trim(u8, parts.next().?, " \t");
         const prop_str = std.mem.trim(u8, parts.next().?, " \t");
 
-        const range = try parseCodePointRange(cp_str);
+        const range = try parseRange(cp_str);
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
-            const result = try map.getOrPut(allocator, cp);
-            if (!result.found_existing) {
-                result.value_ptr.* = EmojiData{};
-            }
-
             const property = emoji_data_property_map.get(prop_str) orelse {
                 std.log.err("Unknown EmojiData property: {s}", .{prop_str});
                 unreachable;
@@ -808,7 +776,7 @@ fn parseEmojiData(
 
             switch (property) {
                 inline else => |p| {
-                    @field(result.value_ptr.*, @tagName(p)) = true;
+                    @field(emoji_data[cp], @tagName(p)) = true;
                 },
             }
         }
@@ -824,29 +792,12 @@ const emoji_data_property_map = std.StaticStringMap(std.meta.FieldEnum(EmojiData
     .{ "Extended_Pictographic", .is_extended_pictographic },
 });
 
-test {
-    std.testing.refAllDeclsRecursive(Self);
-}
-
-test "parse code point" {
-    try std.testing.expectEqual(@as(u21, 0x0000), try parseCodePoint("0000"));
-    try std.testing.expectEqual(@as(u21, 0x1F600), try parseCodePoint("1F600"));
-}
-
-test "parse code point range" {
-    const range = try parseCodePointRange("0030..0039");
-    try std.testing.expectEqual(@as(u21, 0x0030), range.start);
-    try std.testing.expectEqual(@as(u21, 0x0039), range.end);
-
-    const single = try parseCodePointRange("1F600");
-    try std.testing.expectEqual(@as(u21, 0x1F600), single.start);
-    try std.testing.expectEqual(@as(u21, 0x1F600), single.end);
-}
-
 fn parseBlocks(
     allocator: std.mem.Allocator,
-    map: *std.AutoHashMapUnmanaged(u21, types.Block),
+    blocks: []types.Block,
 ) !void {
+    @memset(blocks, .no_block);
+
     const file_path = "ucd/Blocks.txt";
 
     const file = try std.fs.cwd().openFile(file_path, .{});
@@ -857,14 +808,14 @@ fn parseBlocks(
 
     var lines = std.mem.splitScalar(u8, content, '\n');
     while (lines.next()) |line| {
-        const trimmed = stripComment(line);
+        const trimmed = trim(line);
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
         const cp_str = std.mem.trim(u8, parts.next().?, " \t");
         const block_name = std.mem.trim(u8, parts.next().?, " \t");
 
-        const range = try parseCodePointRange(cp_str);
+        const range = try parseRange(cp_str);
 
         const block = block_name_map.get(block_name) orelse {
             std.log.err("Unknown block name: {s}", .{block_name});
@@ -873,7 +824,7 @@ fn parseBlocks(
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
-            try map.put(allocator, cp, block);
+            blocks[cp] = block;
         }
     }
 }
@@ -1218,9 +1169,3 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Zanabazar Square", .zanabazar_square },
     .{ "Znamenny Musical Notation", .znamenny_musical_notation },
 });
-
-test "strip comment" {
-    try std.testing.expectEqualSlices(u8, "0000", stripComment("0000 # comment"));
-    try std.testing.expectEqualSlices(u8, "0000", stripComment("0000"));
-    try std.testing.expectEqualSlices(u8, "", stripComment("# comment"));
-}
