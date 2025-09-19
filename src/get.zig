@@ -84,8 +84,6 @@ pub fn TypeOfAll(comptime table_name: []const u8) type {
 pub const Field = blk: {
     var fields_len: usize = 0;
     for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
-        //// subtract 1 for _padding
-        //fields_len += @typeInfo(TableData(table)).@"struct".fields.len - 1;
         fields_len += @typeInfo(TableData(tableInfo.type)).@"struct".fields.len;
     }
 
@@ -94,8 +92,6 @@ pub const Field = blk: {
 
     for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
         for (@typeInfo(TableData(tableInfo.type)).@"struct".fields) |f| {
-            //if (std.mem.eql(u8, f.name, "_padding")) continue;
-
             fields[i] = .{
                 .name = f.name,
                 .value = i,
