@@ -3,7 +3,7 @@ const std = @import("std");
 const types = @import("types.zig");
 const getpkg = @import("get.zig");
 const get = getpkg.get;
-const getX = getpkg.getX;
+const Field = getpkg.Field;
 
 pub const IteratorResult = struct {
     cp: u21,
@@ -14,7 +14,7 @@ pub fn CustomIterator(
     comptime CodePointIterator: type,
     comptime GB: type,
     comptime State: type,
-    comptime grapheme_break_field: getpkg.Field,
+    comptime grapheme_break_field: Field,
     comptime customIsBreak: fn (gb1: GB, gb2: GB, state: *State) bool,
 ) type {
     return struct {
@@ -37,7 +37,7 @@ pub fn CustomIterator(
                 .next_cp_it = next_cp_it,
                 .next_cp = next_cp,
                 .next_gb = if (next_cp) |cp|
-                    getX(grapheme_break_field, cp)
+                    get(grapheme_break_field, cp)
                 else
                     .other,
             };
@@ -52,7 +52,7 @@ pub fn CustomIterator(
             self.next_cp = self.next_cp_it.next();
 
             if (self.next_cp) |cp2| {
-                self.next_gb = getX(grapheme_break_field, cp2);
+                self.next_gb = get(grapheme_break_field, cp2);
                 const is_break = customIsBreak(gb1, self.next_gb, &self.state);
                 return IteratorResult{
                     .cp = cp1,
@@ -371,8 +371,8 @@ pub fn computeGraphemeBreak(
 fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *BreakState) bool) !void {
     const Ucd = @import("build/Ucd.zig");
 
-    const stripComment = Ucd.stripComment;
-    const parseCodePoint = Ucd.parseCodePoint;
+    const trim = Ucd.trim;
+    const parseCp = Ucd.parseCp;
 
     const allocator = std.testing.allocator;
     const file_path = "ucd/auxiliary/GraphemeBreakTest.txt";
@@ -389,7 +389,7 @@ fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *BreakState) bool
     var line_num: usize = 1;
 
     while (lines.next()) |line| : (line_num += 1) {
-        const trimmed = stripComment(line);
+        const trimmed = trim(line);
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ' ');
@@ -397,9 +397,9 @@ fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *BreakState) bool
         try std.testing.expect(std.mem.eql(u8, start, "÷"));
 
         var state: BreakState = .default;
-        var cp1 = try parseCodePoint(parts.next().?);
+        var cp1 = try parseCp(parts.next().?);
         var expected_str = parts.next().?;
-        var cp2 = try parseCodePoint(parts.next().?);
+        var cp2 = try parseCp(parts.next().?);
         var next_expected_str = parts.next().?;
 
         while (true) {
@@ -417,7 +417,7 @@ fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *BreakState) bool
 
             cp1 = cp2;
             expected_str = next_expected_str;
-            cp2 = try parseCodePoint(parts.next().?);
+            cp2 = try parseCp(parts.next().?);
             next_expected_str = parts.next().?;
         }
 

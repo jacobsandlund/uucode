@@ -135,7 +135,13 @@ fn FieldValue(comptime field: []const u8) type {
     }
 }
 
-fn getWithName(comptime name: []const u8, cp: u21) FieldValue(name) {
+// Note: I tried using a union with members that are the known types, and using
+// @FieldType(KnownFieldsForLspUnion, field) but the LSP was still unable to
+// figure out the type. It seems like the only way to get the LSP to know the
+// type would be having dedicated `get` functions for each field, but I don't
+// want to go that route.
+pub fn get(comptime field: Field, cp: u21) TypeOf(field) {
+    const name = @tagName(field);
     const D = DataField(name);
     const table = comptime tableFor(name);
 
@@ -153,106 +159,6 @@ fn getWithName(comptime name: []const u8, cp: u21) FieldValue(name) {
     }
 }
 
-// Note: `getX` and `TypeOfX` are only needed because `get` and`TypeOf` use a
-// known field enum so that the LSP can complete the field names, and for user
-// extensions we wouldn't know all the field names. If the LSP ever gets smart
-// enough to figure out all the field names, we can replace `get` with `getX`
-// and `TypeOf` with `TypeOfX` and lose the hardcoded `KnownFieldsForLsp`.
-pub fn getX(comptime field: Field, cp: u21) TypeOfX(field) {
-    return getWithName(@tagName(field), cp);
-}
-
-pub fn TypeOfX(comptime field: Field) type {
+pub fn TypeOf(comptime field: Field) type {
     return FieldValue(@tagName(field));
 }
-
-pub const KnownFieldsForLsp = enum {
-    // UnicodeData fields
-    name,
-    general_category,
-    canonical_combining_class,
-    bidi_class,
-    decomposition_type,
-    decomposition_mapping,
-    numeric_type,
-    numeric_value_decimal,
-    numeric_value_digit,
-    numeric_value_numeric,
-    is_bidi_mirrored,
-    unicode_1_name,
-    simple_uppercase_mapping,
-    simple_lowercase_mapping,
-    simple_titlecase_mapping,
-
-    // CaseFolding fields
-    case_folding_simple,
-    case_folding_turkish,
-    case_folding_full,
-
-    // SpecialCasing fields
-    special_lowercase_mapping,
-    special_titlecase_mapping,
-    special_uppercase_mapping,
-    special_casing_condition,
-
-    // DerivedCoreProperties fields
-    is_math,
-    is_alphabetic,
-    is_lowercase,
-    is_uppercase,
-    is_cased,
-    is_case_ignorable,
-    changes_when_lowercased,
-    changes_when_uppercased,
-    changes_when_titlecased,
-    changes_when_casefolded,
-    changes_when_casemapped,
-    is_id_start,
-    is_id_continue,
-    is_xid_start,
-    is_xid_continue,
-    is_default_ignorable_code_point,
-    is_grapheme_extend,
-    is_grapheme_base,
-    is_grapheme_link,
-    indic_conjunct_break,
-
-    // EastAsianWidth field
-    east_asian_width,
-
-    // OriginalGraphemeBreak field
-    original_grapheme_break,
-
-    // EmojiData fields
-    is_emoji,
-    is_emoji_presentation,
-    is_emoji_modifier,
-    is_emoji_modifier_base,
-    is_emoji_component,
-    is_extended_pictographic,
-
-    // GraphemeBreak field (derived)
-    grapheme_break,
-
-    // Block field
-    block,
-
-    // `x` fields
-    grapheme_break_pedantic_emoji,
-    wcwidth,
-};
-
-// Note: I tried using a union with members that are the known types, and using
-// @FieldType(KnownFieldsForLspUnion, field) but the LSP was still unable to
-// figure out the type. It seems like the only way to get the LSP to know the
-// type would be having dedicated `get` functions for each field, but I don't
-// want to go that route.
-pub fn get(comptime field: KnownFieldsForLsp, cp: u21) TypeOf(field) {
-    return getWithName(@tagName(field), cp);
-}
-
-pub fn TypeOf(comptime field: KnownFieldsForLsp) type {
-    return FieldValue(@tagName(field));
-}
-
-// TODO: figure out how to get the build to test this file (tests are in root.zig)

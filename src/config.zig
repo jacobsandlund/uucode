@@ -126,6 +126,7 @@ pub const default = Table{
         },
 
         // SpecialCasing fields
+        .{ .name = "has_special_casing", .type = bool },
         .{
             .name = "special_lowercase_mapping",
             .type = []const u21,
@@ -504,6 +505,8 @@ pub const Table = struct {
     }
 
     pub fn field(comptime self: *const Table, name: []const u8) Field {
+        @setEvalBranchQuota(20_000);
+
         return for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
                 break f;
