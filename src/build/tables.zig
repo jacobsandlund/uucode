@@ -11,7 +11,7 @@ pub const std_options: std.Options = .{
         .info,
 };
 
-const buffer_size = 260_000_000; // Actual is ~254 MiB
+const buffer_size = 270_000_000; // Actual is ~254 MiB
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
@@ -529,7 +529,29 @@ pub fn writeTableData(
             a.canonical_combining_class = unicode_data.canonical_combining_class;
         }
         if (@hasField(AllData, "unicode_data_bidi_class")) {
-            a.unicode_data_bidi_class = unicode_data.bidi_class;
+            a.unicode_data_bidi_class = unicode_data.bidi_class orelse
+                // Default BidiClass for unassigned codepoints.
+                // http://www.unicode.org/Public/UNIDATA/extracted/DerivedBidiClass.txt
+                switch (cp) {
+                    0x0600...0x07BF,
+                    0x08A0...0x08FF,
+                    0xFB50...0xFDCF,
+                    0xFDF0...0xFDFF,
+                    0xFE70...0xFEFF,
+                    0x1EE00...0x1EEFF,
+                    => .right_to_left_arabic,
+
+                    0x0590...0x05FF,
+                    0x07C0...0x089F,
+                    0xFB1D...0xFB4F,
+                    0x10800...0x10FFF,
+                    0x1E800...0x1EDFF,
+                    0x1EF00...0x1EFFF,
+                    => .right_to_left,
+
+                    0x20A0...0x20CF => .european_number_terminator,
+                    else => .left_to_right,
+                };
         }
         if (@hasField(AllData, "decomposition_type")) {
             a.decomposition_type = unicode_data.decomposition_type;
