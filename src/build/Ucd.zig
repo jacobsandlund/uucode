@@ -16,7 +16,7 @@ derived_core_properties: [n]DerivedCoreProperties,
 east_asian_width: [n]types.EastAsianWidth,
 original_grapheme_break: [n]types.OriginalGraphemeBreak,
 emoji_data: [n]EmojiData,
-bidi_bracket_pair_data: [n]BidiBracketPairData,
+bidi_bracket_pair_data: [n]types.BidiBracketPairData,
 blocks: [n]types.Block,
 
 const UnicodeData = struct {
@@ -82,12 +82,6 @@ const EmojiData = packed struct {
     is_emoji_modifier_base: bool = false,
     is_emoji_component: bool = false,
     is_extended_pictographic: bool = false,
-};
-
-const BidiBracketPairData = union(enum) {
-    open: u21,
-    close: u21,
-    none: void,
 };
 
 const Self = @This();
@@ -597,7 +591,7 @@ fn parseDerivedCoreProperties(
 
 fn parseBidiBrackets(
     allocator: std.mem.Allocator,
-    bidi_bracket_pair_data: []BidiBracketPairData,
+    bidi_bracket_pair_data: []types.BidiBracketPairData,
 ) !void {
     @memset(bidi_bracket_pair_data, .none);
 
@@ -622,7 +616,7 @@ fn parseBidiBrackets(
         const paired = try parseCp(paired_cp_str);
 
         const type_str = std.mem.trim(u8, parts.next().?, " \t");
-        const bracket_type: BidiBracketPairData = switch (type_str[0]) {
+        const bracket_type: types.BidiBracketPairData = switch (type_str[0]) {
             'c' => .{ .close = paired },
             'o' => .{ .open = paired },
             else => unreachable,
