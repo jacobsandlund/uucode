@@ -17,7 +17,7 @@ pub const default = Table{
         },
         .{ .name = "general_category", .type = types.GeneralCategory },
         .{ .name = "canonical_combining_class", .type = u8 },
-        .{ .name = "unicode_data_bidi_class", .type = ?types.BidiClass },
+        .{ .name = "unicode_data_bidi_class", .type = types.BidiClass },
         .{ .name = "decomposition_type", .type = types.DecompositionType },
         .{
             .name = "decomposition_mapping",
@@ -237,6 +237,9 @@ pub const default = Table{
 
         // GraphemeBreak field (derived)
         .{ .name = "grapheme_break", .type = types.GraphemeBreak },
+
+        // BidiBrackets data
+        .{ .name = "bidi_brackets", .type = types.BidiBracketPairData },
 
         // Block field
         .{ .name = "block", .type = types.Block },

@@ -16,6 +16,7 @@ derived_core_properties: [n]DerivedCoreProperties,
 east_asian_width: [n]types.EastAsianWidth,
 original_grapheme_break: [n]types.OriginalGraphemeBreak,
 emoji_data: [n]EmojiData,
+bidi_bracket_pair_data: [n]types.BidiBracketPairData,
 blocks: [n]types.Block,
 
 const UnicodeData = struct {
@@ -95,6 +96,7 @@ pub fn parse(self: *Self, allocator: std.mem.Allocator) !void {
     try parseGraphemeBreak(allocator, &self.original_grapheme_break);
     try parseEmojiData(allocator, &self.emoji_data);
     try parseBlocks(allocator, &self.blocks);
+    try parseBidiBrackets(allocator, &self.bidi_bracket_pair_data);
 
     const end = try std.time.Instant.now();
     std.log.debug("Ucd init time: {d}ms\n", .{end.since(start) / std.time.ns_per_ms});
@@ -584,6 +586,43 @@ fn parseDerivedCoreProperties(
                 },
             }
         }
+    }
+}
+
+fn parseBidiBrackets(
+    allocator: std.mem.Allocator,
+    bidi_bracket_pair_data: []types.BidiBracketPairData,
+) !void {
+    @memset(bidi_bracket_pair_data, .none);
+
+    const file_path = "ucd/BidiBrackets.txt";
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = trim(line);
+        if (trimmed.len == 0 or std.mem.startsWith(u8, trimmed, "#")) continue;
+
+        var parts = std.mem.splitScalar(u8, trimmed, ';');
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const paired_cp_str = std.mem.trim(u8, parts.next().?, " \t");
+
+        const op = try parseCp(cp_str);
+        const paired = try parseCp(paired_cp_str);
+
+        const type_str = std.mem.trim(u8, parts.next().?, " \t");
+        const bracket_type: types.BidiBracketPairData = switch (type_str[0]) {
+            'c' => .{ .close = paired },
+            'o' => .{ .open = paired },
+            else => unreachable,
+        };
+
+        bidi_bracket_pair_data[op] = bracket_type;
     }
 }
 
