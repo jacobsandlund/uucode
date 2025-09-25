@@ -1,6 +1,6 @@
 .{
     .name = .uucode,
-    .version = "0.0.0",
+    .version = "0.1.0",
     .fingerprint = 0x8d4ebdea3ec19865,
     .minimum_zig_version = "0.14.1",
     .paths = .{

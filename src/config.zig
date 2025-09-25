@@ -17,7 +17,7 @@ pub const default = Table{
         },
         .{ .name = "general_category", .type = types.GeneralCategory },
         .{ .name = "canonical_combining_class", .type = u8 },
-        .{ .name = "unicode_data_bidi_class", .type = types.BidiClass },
+        .{ .name = "unicode_data_bidi_class", .type = ?types.BidiClass },
         .{ .name = "decomposition_type", .type = types.DecompositionType },
         .{
             .name = "decomposition_mapping",
