@@ -8,7 +8,7 @@ pub const utf8 = @import("utf8.zig");
 pub const x = @import("x/root.zig");
 const testing = std.testing;
 
-pub const Field = getpkg.Field;
+pub const FieldEnum = getpkg.FieldEnum;
 pub const TypeOf = getpkg.TypeOf;
 pub const TypeOfAll = getpkg.TypeOfAll;
 pub const get = getpkg.get;

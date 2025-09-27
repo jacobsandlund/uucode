@@ -3,7 +3,7 @@ const std = @import("std");
 const types = @import("types.zig");
 const getpkg = @import("get.zig");
 const get = getpkg.get;
-const Field = getpkg.Field;
+const FieldEnum = getpkg.FieldEnum;
 
 pub const IteratorResult = struct {
     cp: u21,
@@ -14,7 +14,7 @@ pub fn CustomIterator(
     comptime CodePointIterator: type,
     comptime GB: type,
     comptime State: type,
-    comptime grapheme_break_field: Field,
+    comptime grapheme_break_field: FieldEnum,
     comptime customIsBreak: fn (gb1: GB, gb2: GB, state: *State) bool,
 ) type {
     return struct {
