@@ -3,7 +3,7 @@
 # to list un-ignored files correctly
 
 ArabicShaping.txt
-BidiBrackets.txt
+# BidiBrackets.txt
 BidiCharacterTest.txt
 BidiMirroring.txt
 BidiTest.txt

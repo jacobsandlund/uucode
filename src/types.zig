@@ -503,6 +503,12 @@ pub const Block = enum(u9) {
     znamenny_musical_notation,
 };
 
+pub const BidiBracketPairData = union(enum) {
+    open: u21,
+    close: u21,
+    none: void,
+};
+
 // The following types are internal to `uucode`:
 
 pub fn Field(comptime c: config.Field, comptime packing: config.Table.Packing) type {
