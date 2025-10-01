@@ -288,6 +288,7 @@ fn buildTables(
     const build_tables_exe = b.addExecutable(.{
         .name = "uucode_build_tables",
         .root_module = build_tables_mod,
+        .use_llvm = true,
     });
     build_tables_mod.addImport("config.zig", config_mod);
     build_tables_mod.addImport("build_config", build_config_mod);
