@@ -288,6 +288,8 @@ fn buildTables(
     const build_tables_exe = b.addExecutable(.{
         .name = "uucode_build_tables",
         .root_module = build_tables_mod,
+
+        // Zig's x86 backend is segfaulting, so we choose the LLVM backend always.
         .use_llvm = true,
     });
     build_tables_mod.addImport("config.zig", config_mod);
