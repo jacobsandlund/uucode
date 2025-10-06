@@ -593,7 +593,7 @@ fn parseBidiBrackets(
     allocator: std.mem.Allocator,
     bidi_paired_bracket: []types.BidiPairedBracket,
 ) !void {
-    @memset(bidi_paired_bracket, .none);
+    @memset(bidi_paired_bracket, .{});
 
     const file_path = "ucd/BidiBrackets.txt";
 
@@ -617,8 +617,8 @@ fn parseBidiBrackets(
 
         const type_str = std.mem.trim(u8, parts.next().?, " \t");
         const bracket_type: types.BidiPairedBracket = switch (type_str[0]) {
-            'c' => .{ .close = paired },
-            'o' => .{ .open = paired },
+            'c' => .{ .tag = .close, .paired = paired },
+            'o' => .{ .tag = .open, .paired = paired },
             else => unreachable,
         };
 

@@ -503,10 +503,9 @@ pub const Block = enum(u9) {
     znamenny_musical_notation,
 };
 
-pub const BidiPairedBracket = union(enum) {
-    open: u21,
-    close: u21,
-    none: void,
+pub const BidiPairedBracket = packed struct {
+    paired: u21 = 0,
+    tag: enum(u2) { none, open, close } = .none,
 };
 
 // The following types are internal to `uucode`:
