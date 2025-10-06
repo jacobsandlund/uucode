@@ -81,7 +81,7 @@ pub fn TypeOfAll(comptime table_name: []const u8) type {
     return TableData(getTableInfo(table_name).type);
 }
 
-pub const Field = blk: {
+pub const FieldEnum = blk: {
     var fields_len: usize = 0;
     for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
         fields_len += @typeInfo(TableData(tableInfo.type)).@"struct".fields.len;
@@ -136,7 +136,7 @@ fn FieldValue(comptime field: []const u8) type {
 // figure out the type. It seems like the only way to get the LSP to know the
 // type would be having dedicated `get` functions for each field, but I don't
 // want to go that route.
-pub fn get(comptime field: Field, cp: u21) TypeOf(field) {
+pub fn get(comptime field: FieldEnum, cp: u21) TypeOf(field) {
     const name = @tagName(field);
     const D = DataField(name);
     const table = comptime tableFor(name);
@@ -155,6 +155,6 @@ pub fn get(comptime field: Field, cp: u21) TypeOf(field) {
     }
 }
 
-pub fn TypeOf(comptime field: Field) type {
+pub fn TypeOf(comptime field: FieldEnum) type {
     return FieldValue(@tagName(field));
 }
