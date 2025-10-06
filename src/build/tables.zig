@@ -11,30 +11,27 @@ pub const std_options: std.Options = .{
         .info,
 };
 
-const buffer_size = 260_000_000; // Actual is ~254 MiB
-
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
     const table_configs: []const config.Table = if (config.is_updating_ucd) &.{updating_ucd} else &build_config.tables;
 
-    const buffer_for_fba = try std.heap.page_allocator.alloc(u8, buffer_size);
+    const ucd_buffer_size = if (config.is_updating_ucd) 500_000_000 else 260_000_000;
+    const buffer_for_fba = try std.heap.page_allocator.alloc(u8, ucd_buffer_size);
     defer std.heap.page_allocator.free(buffer_for_fba);
-    var fba = std.heap.FixedBufferAllocator.init(buffer_for_fba);
-    const allocator = fba.allocator();
+    var ucd_fba = std.heap.FixedBufferAllocator.init(buffer_for_fba);
+    const ucd_allocator = ucd_fba.allocator();
 
-    var ucd = try allocator.create(Ucd);
-    defer allocator.destroy(ucd);
+    var ucd = try ucd_allocator.create(Ucd);
 
-    try ucd.parse(allocator);
+    try ucd.parse(ucd_allocator);
 
-    var args_iter = try std.process.argsWithAllocator(allocator);
-    defer args_iter.deinit();
+    var args_iter = try std.process.argsWithAllocator(ucd_allocator);
     _ = args_iter.skip(); // Skip program name
 
     // Get output path (only argument now)
     const output_path = args_iter.next() orelse std.debug.panic("No output file arg!", .{});
 
-    std.log.debug("Fba end_index: {d}", .{fba.end_index});
+    std.log.debug("Ucd fba end_index: {d}", .{ucd_fba.end_index});
 
     std.log.debug("Writing to file: {s}", .{output_path});
 
@@ -445,13 +442,6 @@ pub fn writeTableData(
 
         break :blk b;
     };
-    defer {
-        @setEvalBranchQuota(50_000);
-
-        inline for (@typeInfo(Backing).@"struct".fields) |field| {
-            allocator.free(@field(backing, field.name));
-        }
-    }
 
     var tracking = blk: {
         var t: Tracking = undefined;
@@ -460,13 +450,6 @@ pub fn writeTableData(
         }
         break :blk t;
     };
-    defer {
-        @setEvalBranchQuota(20_000);
-
-        inline for (@typeInfo(Tracking).@"struct".fields) |field| {
-            @field(tracking, field.name).deinit(allocator);
-        }
-    }
 
     const stages = table_config.stages;
     const num_stages: u2 = if (stages == .three) 3 else 2;
@@ -479,15 +462,10 @@ pub fn writeTableData(
     const B = Block(Stage2Elem);
 
     var data_map: DataMap(Data) = .empty;
-    defer data_map.deinit(allocator);
     var stage3: std.ArrayListUnmanaged(Data) = .empty;
-    defer stage3.deinit(allocator);
     var block_map: BlockMap(B) = .empty;
-    defer block_map.deinit(allocator);
     var stage2: std.ArrayListUnmanaged(Stage2Elem) = .empty;
-    defer stage2.deinit(allocator);
     var stage1: std.ArrayListUnmanaged(u16) = .empty;
-    defer stage1.deinit(allocator);
 
     var block: B = undefined;
     var block_len: usize = 0;
