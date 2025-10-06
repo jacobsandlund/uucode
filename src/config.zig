@@ -238,8 +238,8 @@ pub const default = Table{
         // GraphemeBreak field (derived)
         .{ .name = "grapheme_break", .type = types.GraphemeBreak },
 
-        // BidiBrackets data
-        .{ .name = "bidi_brackets", .type = types.BidiBracketPairData },
+        // BidiPairedBracket field
+        .{ .name = "bidi_paired_bracket", .type = types.BidiPairedBracket },
 
         // Block field
         .{ .name = "block", .type = types.Block },

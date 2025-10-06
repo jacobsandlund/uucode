@@ -16,7 +16,7 @@ derived_core_properties: [n]DerivedCoreProperties,
 east_asian_width: [n]types.EastAsianWidth,
 original_grapheme_break: [n]types.OriginalGraphemeBreak,
 emoji_data: [n]EmojiData,
-bidi_bracket_pair_data: [n]types.BidiBracketPairData,
+bidi_paired_bracket: [n]types.BidiPairedBracket,
 blocks: [n]types.Block,
 
 const UnicodeData = struct {
@@ -96,7 +96,7 @@ pub fn parse(self: *Self, allocator: std.mem.Allocator) !void {
     try parseGraphemeBreak(allocator, &self.original_grapheme_break);
     try parseEmojiData(allocator, &self.emoji_data);
     try parseBlocks(allocator, &self.blocks);
-    try parseBidiBrackets(allocator, &self.bidi_bracket_pair_data);
+    try parseBidiBrackets(allocator, &self.bidi_paired_bracket);
 
     const end = try std.time.Instant.now();
     std.log.debug("Ucd init time: {d}ms\n", .{end.since(start) / std.time.ns_per_ms});
@@ -591,9 +591,9 @@ fn parseDerivedCoreProperties(
 
 fn parseBidiBrackets(
     allocator: std.mem.Allocator,
-    bidi_bracket_pair_data: []types.BidiBracketPairData,
+    bidi_paired_bracket: []types.BidiPairedBracket,
 ) !void {
-    @memset(bidi_bracket_pair_data, .none);
+    @memset(bidi_paired_bracket, .none);
 
     const file_path = "ucd/BidiBrackets.txt";
 
@@ -616,13 +616,13 @@ fn parseBidiBrackets(
         const paired = try parseCp(paired_cp_str);
 
         const type_str = std.mem.trim(u8, parts.next().?, " \t");
-        const bracket_type: types.BidiBracketPairData = switch (type_str[0]) {
+        const bracket_type: types.BidiPairedBracket = switch (type_str[0]) {
             'c' => .{ .close = paired },
             'o' => .{ .open = paired },
             else => unreachable,
         };
 
-        bidi_bracket_pair_data[op] = bracket_type;
+        bidi_paired_bracket[op] = bracket_type;
     }
 }
 

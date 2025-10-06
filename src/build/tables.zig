@@ -483,7 +483,7 @@ pub fn writeTableData(
         const east_asian_width = ucd.east_asian_width[cp];
         const original_grapheme_break = ucd.original_grapheme_break[cp];
         const emoji_data = ucd.emoji_data[cp];
-        const bidi_brackets_data = ucd.bidi_bracket_pair_data[cp];
+        const bidi_paired_bracket = ucd.bidi_paired_bracket[cp];
         const block_value = ucd.blocks[cp];
 
         const get_data_end = try std.time.Instant.now();
@@ -896,9 +896,9 @@ pub fn writeTableData(
             a.is_extended_pictographic = emoji_data.is_extended_pictographic;
         }
 
-        // BidiBrackets Data
-        if (@hasField(AllData, "bidi_brackets")) {
-            a.bidi_brackets = bidi_brackets_data;
+        // BidiPairedBracket field
+        if (@hasField(AllData, "bidi_paired_bracket")) {
+            a.bidi_paired_bracket = bidi_paired_bracket;
         }
 
         // GraphemeBreak field (derived)
