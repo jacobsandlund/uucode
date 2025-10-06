@@ -506,8 +506,8 @@ pub fn writeTableData(
         if (@hasField(AllData, "canonical_combining_class")) {
             a.canonical_combining_class = unicode_data.canonical_combining_class;
         }
-        if (@hasField(AllData, "unicode_data_bidi_class")) {
-            a.unicode_data_bidi_class = unicode_data.bidi_class orelse
+        if (@hasField(AllData, "bidi_class")) {
+            a.bidi_class = unicode_data.bidi_class orelse
                 // Default BidiClass for unassigned codepoints.
                 // http://www.unicode.org/Public/UNIDATA/extracted/DerivedBidiClass.txt
                 switch (cp) {
