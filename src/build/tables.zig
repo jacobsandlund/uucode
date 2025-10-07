@@ -168,7 +168,7 @@ fn eqlData(comptime Data: type, a: Data, b: Data) bool {
                 return false;
             }
         } else {
-            if (@field(a, field.name) != @field(b, field.name)) {
+            if (!std.meta.eql(@field(a, field.name), @field(b, field.name))) {
                 return false;
             }
         }
