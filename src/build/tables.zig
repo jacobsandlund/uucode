@@ -346,6 +346,52 @@ fn TableAllData(comptime c: config.Table) type {
     });
 }
 
+fn TableTracking(comptime Struct: type) type {
+    const fields = @typeInfo(Struct).@"struct".fields;
+    var tracking_fields: [fields.len]std.builtin.Type.StructField = undefined;
+    var i: usize = 0;
+
+    for (@typeInfo(Struct).@"struct".fields) |f| {
+        switch (@typeInfo(f.type)) {
+            .@"struct" => {
+                if (@hasDecl(f.type, "Tracking")) {
+                    const T = @field(f.type, "Tracking");
+                    tracking_fields[i] = .{
+                        .name = f.name,
+                        .type = T,
+                        .default_value_ptr = null, // TODO: can we set this?
+                        .is_comptime = false,
+                        .alignment = @alignOf(T),
+                    };
+                    i += 1;
+                }
+            },
+            .optional => |optional| {
+                if (config.isPackableOptional(optional.child)) {
+                    const T = types.OptionalTracking(f.type);
+                    tracking_fields[i] = .{
+                        .name = f.name,
+                        .type = T,
+                        .default_value_ptr = null,
+                        .is_comptime = false,
+                        .alignment = @alignOf(T),
+                    };
+                    i += 1;
+                }
+            },
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = tracking_fields[0..i],
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+
 fn singleInit(
     comptime field: []const u8,
     data: anytype,
@@ -369,8 +415,14 @@ fn singleInit(
             );
         }
     } else if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "init")) {
-        @field(data, field) = .init(d);
+        @field(data, field) = .init(
+            &@field(tracking, field),
+            d,
+        );
     } else {
+        if (@hasField(@TypeOf(tracking), field)) {
+            @field(tracking, field).track(d);
+        }
         @field(data, field) = d;
     }
 }

@@ -65,6 +65,11 @@ test "get extension emoji_odd_or_even" {
     try testing.expectEqual(.odd_emoji, get(.emoji_odd_or_even, 0x1F34B)); // 🍋
 }
 
+test "get packed optional enum works" {
+    try testing.expectEqual(.odd_emoji, get(.opt_emoji_odd_or_even, 0x1F34B)); // 🍋
+    try testing.expectEqual(null, get(.opt_emoji_odd_or_even, 0x01D8)); // ǘ
+}
+
 test "special_casing_condition" {
     const conditions1 = get(.special_casing_condition, 65); // 'A'
     try testing.expectEqual(0, conditions1.len);

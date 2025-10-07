@@ -645,14 +645,8 @@ pub fn Table2(
 }
 
 pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
-    var decl_fields_len: usize = 0;
-    for (@typeInfo(Struct).@"struct".fields) |f| {
-        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, decl)) {
-            decl_fields_len += 1;
-        }
-    }
-
-    var decl_fields: [decl_fields_len]std.builtin.Type.StructField = undefined;
+    const fields = @typeInfo(Struct).@"struct".fields;
+    var decl_fields: [fields.len]std.builtin.Type.StructField = undefined;
     var i: usize = 0;
 
     for (@typeInfo(Struct).@"struct".fields) |f| {
@@ -672,7 +666,7 @@ pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
     return @Type(.{
         .@"struct" = .{
             .layout = .auto,
-            .fields = &decl_fields,
+            .fields = decl_fields[0..i],
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },
@@ -1069,22 +1063,27 @@ pub fn SliceMap(comptime T: type, comptime V: type) type {
     }, std.hash_map.default_max_load_percentage);
 }
 
-// Note: this can only be used for types where the max value isn't a valid
-// value, which is the case for all optional types in `config.default`
 pub fn PackedOptional(comptime c: config.Field) type {
+    if (c.min_value == 0 and c.max_value == 0) {
+        @compileError("PackedOptional with min_value = 0 and max_value = 0. Set to minInt(isize), maxInt(isize) - 1 and run again to get actual values");
+    }
+
     return packed struct {
-        data: T,
+        data: Int,
 
         const Self = @This();
+        pub const Tracking = OptionalTracking(c.type);
         const T = @typeInfo(c.type).optional.child;
-        const null_data = std.math.maxInt(T);
-
+        const Int = std.math.IntFittingRange(c.min_value, c.max_value + 1);
+        const null_data = std.math.maxInt(Int);
         pub const @"null" = Self{ .data = null_data };
 
-        pub fn init(opt: ?T) Self {
+        pub fn init(tracking: *Tracking, opt: ?T) Self {
+            tracking.track(opt);
             if (opt) |value| {
-                std.debug.assert(value != null_data);
-                return .{ .data = value };
+                const d: Int = if (@typeInfo(T) == .int) @intCast(value) else @intCast(@intFromEnum(value));
+                std.debug.assert(d != null_data);
+                return .{ .data = d };
             } else {
                 return .null;
             }
@@ -1093,18 +1092,48 @@ pub fn PackedOptional(comptime c: config.Field) type {
         pub fn unpack(self: Self) ?T {
             if (self.data == null_data) {
                 return null;
+            } else if (@typeInfo(T) == .int) {
+                return @intCast(self.data);
             } else {
-                return self.data;
+                return @enumFromInt(self.data);
+            }
+        }
+    };
+}
+
+pub fn OptionalTracking(comptime Optional: type) type {
+    return struct {
+        min_value: isize = 0,
+        max_value: isize = 0,
+
+        const Self = @This();
+        const T = @typeInfo(Optional).optional.child;
+
+        pub fn deinit(self: *Self, allocator: Allocator) void {
+            _ = self;
+            _ = allocator;
+        }
+
+        pub fn track(self: *Self, opt: ?T) void {
+            if (opt) |value| {
+                const d: isize = if (@typeInfo(T) == .int) @intCast(value) else @intCast(@intFromEnum(value));
+                if (self.max_value < d) {
+                    self.max_value = d;
+                } else if (d < self.min_value) {
+                    self.min_value = d;
+                }
             }
         }
 
-        pub fn write(self: Self, writer: anytype) !void {
-            try writer.print(
-                \\.{{
-                \\    .data = {},
-                \\}}
-                \\
-            , .{self.data});
+        pub fn actualConfig(self: *const Self, c: config.Field.Runtime) config.Field.Runtime {
+            return c.override(.{
+                .min_value = self.min_value,
+                .max_value = self.max_value,
+            });
+        }
+
+        pub fn minBitsConfig(self: *const Self, c: config.Field.Runtime) config.Field.Runtime {
+            return self.actualConfig(c);
         }
     };
 }

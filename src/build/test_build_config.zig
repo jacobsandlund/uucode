@@ -132,6 +132,39 @@ fn computeInfo(
     );
 }
 
+fn computeOptEmojiOddOrEven(
+    allocator: Allocator,
+    cp: u21,
+    data: anytype,
+    b: anytype,
+    tracking: anytype,
+) Allocator.Error!void {
+    _ = allocator;
+    _ = cp;
+    _ = b;
+    data.opt_emoji_odd_or_even = .init(
+        &tracking.opt_emoji_odd_or_even,
+        switch (data.emoji_odd_or_even) {
+            .even_emoji => .even_emoji,
+            .odd_emoji => .odd_emoji,
+            .not_emoji => null,
+        },
+    );
+}
+
+const opt_emoji_odd_or_even = config.Extension{
+    .inputs = &.{"emoji_odd_or_even"},
+    .compute = &computeOptEmojiOddOrEven,
+    .fields = &.{
+        .{
+            .name = "opt_emoji_odd_or_even",
+            .type = ?EmojiOddOrEven,
+            .min_value = 0,
+            .max_value = 2,
+        },
+    },
+};
+
 pub const tables = [_]config.Table{
     .{
         .extensions = &.{
@@ -159,6 +192,16 @@ pub const tables = [_]config.Table{
         .fields = &.{
             d.field("general_category"),
             d.field("case_folding_simple"),
+        },
+    },
+    .{
+        .packing = .@"packed",
+        .extensions = &.{
+            emoji_odd_or_even,
+            opt_emoji_odd_or_even,
+        },
+        .fields = &.{
+            opt_emoji_odd_or_even.field("opt_emoji_odd_or_even"),
         },
     },
     .{

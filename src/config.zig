@@ -262,6 +262,10 @@ pub const Field = struct {
     max_offset: usize = 0,
     embedded_len: usize = 0,
 
+    // For PackedOptional fields
+    min_value: isize = 0,
+    max_value: isize = 0,
+
     pub const CpPacking = enum {
         direct,
         shift, // Shift only
@@ -277,6 +281,8 @@ pub const Field = struct {
         max_len: usize,
         max_offset: usize,
         embedded_len: usize,
+        min_value: isize,
+        max_value: isize,
 
         pub fn eql(a: Runtime, b: Runtime) bool {
             return a.cp_packing == b.cp_packing and
@@ -285,6 +291,8 @@ pub const Field = struct {
                 a.max_len == b.max_len and
                 a.max_offset == b.max_offset and
                 a.embedded_len == b.embedded_len and
+                a.min_value == b.min_value and
+                a.max_value == b.max_value and
                 std.mem.eql(u8, a.type, b.type) and
                 std.mem.eql(u8, a.name, b.name);
         }
@@ -299,6 +307,8 @@ pub const Field = struct {
                 .max_len = self.max_len,
                 .max_offset = self.max_offset,
                 .embedded_len = self.embedded_len,
+                .min_value = self.min_value,
+                .max_value = self.max_value,
             };
 
             inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| {
@@ -331,6 +341,16 @@ pub const Field = struct {
                 is_okay = false;
             }
 
+            if (self.min_value != actual.min_value) {
+                std.log.err("Config for field '{s}' does not match actual. Set .min_value = {d}, // change from {d}", .{ self.name, actual.min_value, self.min_value });
+                is_okay = false;
+            }
+
+            if (self.max_value != actual.max_value) {
+                std.log.err("Config for field '{s}' does not match actual. Set .max_value = {d}, // change from {d}", .{ self.name, actual.max_value, self.max_value });
+                is_okay = false;
+            }
+
             return is_okay;
         }
 
@@ -354,10 +374,11 @@ pub const Field = struct {
                     \\
                 , .{self.type});
             } else {
+                const prefix = if (base_type[0] == '?') "?" else "";
                 try writer.print(
-                    \\    .type = build_config.{s},
+                    \\    .type = {s}build_config.{s},
                     \\
-                , .{rest_type});
+                , .{ prefix, rest_type });
             }
 
             if (self.cp_packing != .direct or
@@ -379,6 +400,13 @@ pub const Field = struct {
                     \\
                 , .{ self.max_len, self.max_offset, self.embedded_len });
             }
+            if (self.min_value != 0 or self.max_value != 0) {
+                try writer.print(
+                    \\    .min_value = {},
+                    \\    .max_value = {},
+                    \\
+                , .{ self.min_value, self.max_value });
+            }
 
             try writer.writeAll(
                 \\},
@@ -397,7 +425,11 @@ pub const Field = struct {
     pub fn kind(self: Field) Kind {
         switch (@typeInfo(self.type)) {
             .pointer => return .var_len,
-            .optional => {
+            .optional => |optional| {
+                if (!isPackableOptional(optional.child)) {
+                    return .basic;
+                }
+
                 switch (self.cp_packing) {
                     .direct => return .optional,
                     .shift => return .shift,
@@ -415,7 +447,16 @@ pub const Field = struct {
     }
 
     pub fn canBePacked(self: Field) bool {
-        return self.kind() != .var_len;
+        if (self.kind() == .var_len) {
+            return false;
+        }
+
+        switch (@typeInfo(self.type)) {
+            .optional => |optional| {
+                return isPackableOptional(optional.child);
+            },
+            else => return true,
+        }
     }
 
     pub fn runtime(self: Field) Runtime {
@@ -428,6 +469,8 @@ pub const Field = struct {
             .max_len = self.max_len,
             .max_offset = self.max_offset,
             .embedded_len = self.embedded_len,
+            .min_value = self.min_value,
+            .max_value = self.max_value,
         };
     }
 
@@ -444,7 +487,9 @@ pub const Field = struct {
                 std.mem.eql(u8, f.name, "type") or
                 std.mem.eql(u8, f.name, "shift_low") or
                 std.mem.eql(u8, f.name, "shift_high") or
-                std.mem.eql(u8, f.name, "max_len")))
+                std.mem.eql(u8, f.name, "max_len")) or
+                std.mem.eql(u8, f.name, "min_value") or
+                std.mem.eql(u8, f.name, "max_value"))
             {
                 @compileError("Cannot override field '" ++ f.name ++ "'");
             } else if (std.mem.eql(u8, f.name, "cp_packing")) {
@@ -469,6 +514,18 @@ pub const Field = struct {
         return result;
     }
 };
+
+pub fn isPackableOptional(comptime T: type) bool {
+    switch (@typeInfo(T)) {
+        .int => |int| {
+            return int.bits <= @bitSizeOf(isize);
+        },
+        .@"enum" => |e| {
+            return @typeInfo(e.tag_type).int.bits <= @bitSizeOf(isize);
+        },
+        else => return false,
+    }
+}
 
 pub const Table = struct {
     name: ?[]const u8 = null,
