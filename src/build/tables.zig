@@ -392,41 +392,6 @@ fn TableTracking(comptime Struct: type) type {
     });
 }
 
-fn singleInit(
-    comptime field: []const u8,
-    data: anytype,
-    tracking: anytype,
-    cp: u21,
-    d: anytype,
-) void {
-    const Field = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
-    if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "initOptional")) {
-        if (@typeInfo(@TypeOf(d)) == .optional) {
-            @field(data, field) = .initOptional(
-                &@field(tracking, field),
-                cp,
-                d,
-            );
-        } else {
-            @field(data, field) = .init(
-                &@field(tracking, field),
-                cp,
-                d,
-            );
-        }
-    } else if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "init")) {
-        @field(data, field) = .init(
-            &@field(tracking, field),
-            d,
-        );
-    } else {
-        if (@hasField(@TypeOf(tracking), field)) {
-            @field(tracking, field).track(d);
-        }
-        @field(data, field) = d;
-    }
-}
-
 fn maybePackedInit(
     comptime field: []const u8,
     data: anytype,
@@ -632,7 +597,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "simple_uppercase_mapping")) {
-            singleInit(
+            config.singleInit(
                 "simple_uppercase_mapping",
                 &a,
                 &tracking,
@@ -641,7 +606,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "simple_lowercase_mapping")) {
-            singleInit(
+            config.singleInit(
                 "simple_lowercase_mapping",
                 &a,
                 &tracking,
@@ -650,7 +615,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "simple_titlecase_mapping")) {
-            singleInit(
+            config.singleInit(
                 "simple_titlecase_mapping",
                 &a,
                 &tracking,
@@ -671,7 +636,7 @@ pub fn writeTableData(
                 // simple_lowercase_mapping so we use that here.
                 case_folding.case_folding_turkish_only orelse
                 cp;
-            singleInit("case_folding_simple", &a, &tracking, cp, d);
+            config.singleInit("case_folding_simple", &a, &tracking, cp, d);
         }
         if (@hasField(AllData, "case_folding_full")) {
             if (case_folding.case_folding_full_only.len > 0) {

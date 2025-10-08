@@ -107,8 +107,10 @@ fn computeInfo(
     tracking: anytype,
 ) Allocator.Error!void {
     var single_item_buffer: [1]u21 = undefined;
-    data.uppercase_mapping_first_char = .init(
-        &tracking.uppercase_mapping_first_char,
+    config.singleInit(
+        "uppercase_mapping_first_char",
+        data,
+        tracking,
         cp,
         data.uppercase_mapping.sliceWith(
             backing.uppercase_mapping,
@@ -140,15 +142,17 @@ fn computeOptEmojiOddOrEven(
     tracking: anytype,
 ) Allocator.Error!void {
     _ = allocator;
-    _ = cp;
     _ = b;
-    data.opt_emoji_odd_or_even = .init(
-        &tracking.opt_emoji_odd_or_even,
-        switch (data.emoji_odd_or_even) {
+    config.singleInit(
+        "opt_emoji_odd_or_even",
+        data,
+        tracking,
+        cp,
+        @as(?EmojiOddOrEven, switch (data.emoji_odd_or_even) {
             .even_emoji => .even_emoji,
             .odd_emoji => .odd_emoji,
             .not_emoji => null,
-        },
+        }),
     );
 }
 

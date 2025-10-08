@@ -794,7 +794,7 @@ pub fn VarLen(
                 return .{
                     .len = 1,
                     .data = .{
-                        .shift = .initUntracked(cp, s[0]),
+                        .shift = .init(cp, s[0]),
                     },
                 };
             } else {
@@ -1014,12 +1014,14 @@ pub const ShiftTracking = struct {
         _ = allocator;
     }
 
-    pub fn track(self: *ShiftTracking, cp: u21, d: u21) void {
-        const shift = @as(isize, d) - @as(isize, cp);
-        if (self.shift_high < shift) {
-            self.shift_high = shift;
-        } else if (shift < self.shift_low) {
-            self.shift_low = shift;
+    pub fn track(self: *ShiftTracking, cp: u21, opt: ?u21) void {
+        if (opt) |d| {
+            const shift = @as(isize, d) - @as(isize, cp);
+            if (self.shift_high < shift) {
+                self.shift_high = shift;
+            } else if (shift < self.shift_low) {
+                self.shift_low = shift;
+            }
         }
     }
 
@@ -1066,8 +1068,7 @@ pub fn PackedOptional(comptime c: config.Field) type {
         const null_data = std.math.maxInt(Int);
         pub const @"null" = Self{ .data = null_data };
 
-        pub fn init(tracking: *Tracking, opt: ?T) Self {
-            tracking.track(opt);
+        pub fn init(opt: ?T) Self {
             if (opt) |value| {
                 const d: Int = if (@typeInfo(T) == .int) @intCast(value) else @intCast(@intFromEnum(value));
                 std.debug.assert(d != null_data);
@@ -1150,18 +1151,13 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         pub const Tracking = ShiftTracking;
         pub const @"null" = Self{ .data = null_data };
 
-        pub fn initUntracked(cp: u21, d: u21) Self {
+        pub fn init(cp: u21, d: u21) Self {
             return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
         }
 
-        pub fn init(tracking: *Tracking, cp: u21, d: u21) Self {
-            tracking.track(cp, d);
-            return .initUntracked(cp, d);
-        }
-
-        pub fn initOptional(tracking: *Tracking, cp: u21, o: ?u21) Self {
+        pub fn initOptional(cp: u21, o: ?u21) Self {
             if (o) |d| {
-                return .init(tracking, cp, d);
+                return .init(cp, d);
             } else {
                 return .null;
             }
@@ -1203,14 +1199,13 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         pub const Tracking = ShiftTracking;
         pub const @"null" = Self{ .data = null_data };
 
-        pub fn init(tracking: *Tracking, cp: u21, d: u21) Self {
-            tracking.track(cp, d);
+        pub fn init(cp: u21, d: u21) Self {
             return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
         }
 
-        pub fn initOptional(tracking: *Tracking, cp: u21, o: ?u21) Self {
+        pub fn initOptional(cp: u21, o: ?u21) Self {
             if (o) |d| {
-                return .init(tracking, cp, d);
+                return .init(cp, d);
             } else {
                 return .null;
             }

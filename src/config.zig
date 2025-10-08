@@ -666,3 +666,41 @@ pub const Extension = struct {
         } else @compileError("Field '" ++ name ++ "' not found in Extension");
     }
 };
+
+/// This is used in build/tables.zig but is exposed to allow extension to use
+/// it as well. Use this to initialize "single data" fields, and use
+/// `fromSlice` or `fromSliceFor` for "var len" fields.
+pub fn singleInit(
+    comptime field: []const u8,
+    data: anytype,
+    tracking: anytype,
+    cp: u21,
+    d: anytype,
+) void {
+    const F = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
+    if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unshift")) {
+        if (@typeInfo(@TypeOf(d)) == .optional) {
+            @field(data, field) = .initOptional(
+                cp,
+                d,
+            );
+        } else {
+            @field(data, field) = .init(
+                cp,
+                d,
+            );
+        }
+    } else if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unpack")) {
+        @field(data, field) = .init(d);
+    } else {
+        @field(data, field) = d;
+    }
+    const Tracking = @typeInfo(@TypeOf(tracking)).pointer.child;
+    if (@hasField(Tracking, field)) {
+        if (@typeInfo(@TypeOf(@FieldType(Tracking, field).track)).@"fn".params.len == 3) {
+            @field(tracking, field).track(cp, d);
+        } else {
+            @field(tracking, field).track(d);
+        }
+    }
+}
