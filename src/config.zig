@@ -672,9 +672,9 @@ pub const Extension = struct {
 /// `fromSlice` or `fromSliceFor` for "var len" fields.
 pub fn singleInit(
     comptime field: []const u8,
+    cp: u21,
     data: anytype,
     tracking: anytype,
-    cp: u21,
     d: anytype,
 ) void {
     const F = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);

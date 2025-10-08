@@ -109,9 +109,9 @@ fn computeInfo(
     var single_item_buffer: [1]u21 = undefined;
     config.singleInit(
         "uppercase_mapping_first_char",
+        cp,
         data,
         tracking,
-        cp,
         data.uppercase_mapping.sliceWith(
             backing.uppercase_mapping,
             &single_item_buffer,
@@ -145,9 +145,9 @@ fn computeOptEmojiOddOrEven(
     _ = b;
     config.singleInit(
         "opt_emoji_odd_or_even",
+        cp,
         data,
         tracking,
-        cp,
         @as(?EmojiOddOrEven, switch (data.emoji_odd_or_even) {
             .even_emoji => .even_emoji,
             .odd_emoji => .odd_emoji,

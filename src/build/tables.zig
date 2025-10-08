@@ -599,27 +599,27 @@ pub fn writeTableData(
         if (@hasField(AllData, "simple_uppercase_mapping")) {
             config.singleInit(
                 "simple_uppercase_mapping",
+                cp,
                 &a,
                 &tracking,
-                cp,
                 unicode_data.simple_uppercase_mapping,
             );
         }
         if (@hasField(AllData, "simple_lowercase_mapping")) {
             config.singleInit(
                 "simple_lowercase_mapping",
+                cp,
                 &a,
                 &tracking,
-                cp,
                 unicode_data.simple_lowercase_mapping,
             );
         }
         if (@hasField(AllData, "simple_titlecase_mapping")) {
             config.singleInit(
                 "simple_titlecase_mapping",
+                cp,
                 &a,
                 &tracking,
-                cp,
                 unicode_data.simple_titlecase_mapping,
             );
         }
@@ -636,7 +636,7 @@ pub fn writeTableData(
                 // simple_lowercase_mapping so we use that here.
                 case_folding.case_folding_turkish_only orelse
                 cp;
-            config.singleInit("case_folding_simple", &a, &tracking, cp, d);
+            config.singleInit("case_folding_simple", cp, &a, &tracking, d);
         }
         if (@hasField(AllData, "case_folding_full")) {
             if (case_folding.case_folding_full_only.len > 0) {
