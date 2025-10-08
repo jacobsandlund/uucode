@@ -426,7 +426,7 @@ pub const Field = struct {
         switch (@typeInfo(self.type)) {
             .pointer => return .var_len,
             .optional => |optional| {
-                if (!isPackableOptional(optional.child)) {
+                if (!isPackable(optional.child)) {
                     return .basic;
                 }
 
@@ -452,7 +452,14 @@ pub const Field = struct {
 
         switch (@typeInfo(self.type)) {
             .optional => |optional| {
-                return isPackableOptional(optional.child);
+                return isPackable(optional.child);
+            },
+            .@"union" => |info| {
+                return for (info.fields) |f| {
+                    if (f.type != void and !isPackable(f.type)) {
+                        break false;
+                    }
+                } else true;
             },
             else => return true,
         }
@@ -500,7 +507,7 @@ pub const Field = struct {
     }
 };
 
-pub fn isPackableOptional(comptime T: type) bool {
+pub fn isPackable(comptime T: type) bool {
     switch (@typeInfo(T)) {
         .int => |int| {
             return int.bits <= @bitSizeOf(isize);

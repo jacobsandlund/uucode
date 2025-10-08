@@ -367,7 +367,7 @@ fn TableTracking(comptime Struct: type) type {
                 }
             },
             .optional => |optional| {
-                if (config.isPackableOptional(optional.child)) {
+                if (config.isPackable(optional.child)) {
                     const T = types.OptionalTracking(f.type);
                     tracking_fields[i] = .{
                         .name = f.name,
