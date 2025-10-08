@@ -915,7 +915,13 @@ pub fn writeTableData(
 
         // BidiPairedBracket field
         if (@hasField(AllData, "bidi_paired_bracket")) {
-            a.bidi_paired_bracket = bidi_paired_bracket;
+            config.singleInit(
+                "bidi_paired_bracket",
+                cp,
+                &a,
+                &tracking,
+                bidi_paired_bracket,
+            );
         }
 
         // GraphemeBreak field (derived)

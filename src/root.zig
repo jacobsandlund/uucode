@@ -70,6 +70,18 @@ test "get packed optional enum works" {
     try testing.expectEqual(null, get(.opt_emoji_odd_or_even, 0x01D8)); // ǘ
 }
 
+test "get union unpacked" {
+    try testing.expectEqual(@as(u21, 0x1234), get(.next_or_prev, 0x1233).next);
+    try testing.expectEqual(@as(u21, 0x1200), get(.next_or_prev, 0x1201).prev);
+    try testing.expectEqual(.none, get(.next_or_prev, 0x1235));
+}
+
+test "get union packed" {
+    try testing.expectEqual(@as(u21, 0x0029), get(.bidi_paired_bracket, 0x0028).open);
+    try testing.expectEqual(@as(u21, 0x2997), get(.bidi_paired_bracket, 0x2998).close);
+    try testing.expectEqual(.none, get(.bidi_paired_bracket, 0x4000));
+}
+
 test "special_casing_condition" {
     const conditions1 = get(.special_casing_condition, 65); // 'A'
     try testing.expectEqual(0, conditions1.len);

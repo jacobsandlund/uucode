@@ -515,6 +515,7 @@ pub fn Field(comptime c: config.Field, comptime packing: config.Table.Packing) t
     return switch (c.kind()) {
         .var_len => if (packing == .unpacked) VarLen(c) else unreachable,
         .shift => Shift(c, packing),
+        .@"union" => Union(c, packing),
         .optional => if (packing == .unpacked) c.type else PackedOptional(c),
         .basic => c.type,
     };
@@ -602,6 +603,17 @@ pub fn writeDataField(comptime F: type, writer: *std.Io.Writer, field: F) !void 
         },
         .optional => {
             try writer.print("{?}", .{field});
+        },
+        .@"union" => {
+            switch (field) {
+                inline else => |v, tag| {
+                    if (@typeInfo(@TypeOf(v)) == .void) {
+                        try writer.print(".{s}", .{@tagName(tag)});
+                    } else {
+                        try writer.print("{}", .{field});
+                    }
+                },
+            }
         },
         else => {
             try writer.print("{}", .{field});
@@ -864,11 +876,11 @@ pub fn VarLen(
             // then with a runtime if/else
             std.hash.autoHash(hasher, self.len);
             if ((comptime c.cp_packing == .shift) and self.len == 1) {
-                return std.hash.autoHash(hasher, self.data.shift);
+                std.hash.autoHash(hasher, self.data.shift);
             } else if ((comptime embedded_len == 0) or self.len > embedded_len) {
-                return std.hash.autoHash(hasher, self.data.offset);
+                std.hash.autoHash(hasher, self.data.offset);
             } else {
-                return std.hash.autoHash(hasher, self.data.embedded);
+                std.hash.autoHash(hasher, self.data.embedded);
             }
         }
 
@@ -1227,5 +1239,86 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
             _unshiftOptional
         else
             _unshift;
+    };
+}
+
+pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) type {
+    if (packing == .unpacked) {
+        return c.type;
+    }
+
+    const info = @typeInfo(c.type).@"union";
+    const Tag = info.tag_type.?;
+    const Int = @typeInfo(Tag).@"enum".tag_type;
+    std.debug.assert(Int == std.meta.Int(.unsigned, @bitSizeOf(Tag)));
+
+    var fields: [info.fields.len]std.builtin.Type.UnionField = undefined;
+    for (info.fields, 0..) |f, i| {
+        fields[i] = .{
+            .name = f.name,
+            .type = f.type,
+            .alignment = 0,
+        };
+    }
+    const PackedUnion = @Type(.{
+        .@"union" = .{
+            .layout = .@"packed",
+            .tag_type = null,
+            .fields = &fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+        },
+    });
+
+    return packed struct {
+        tag: Int,
+        @"union": PackedUnion,
+
+        const Self = @This();
+        pub fn init(value: c.type) Self {
+            return .{
+                .tag = @intFromEnum(@as(Tag, value)),
+                .@"union" = switch (value) {
+                    inline else => |v, tag| @unionInit(PackedUnion, @tagName(tag), v),
+                },
+            };
+        }
+
+        pub fn unpack(self: Self) c.type {
+            const tag: Tag = @enumFromInt(self.tag);
+            return switch (tag) {
+                inline else => |comptime_tag| @unionInit(
+                    c.type,
+                    @tagName(comptime_tag),
+                    @field(self.@"union", @tagName(comptime_tag)),
+                ),
+            };
+        }
+
+        pub fn autoHash(self: Self, hasher: anytype) void {
+            const tag: Tag = @enumFromInt(self.tag);
+            std.hash.autoHash(hasher, tag);
+            switch (tag) {
+                inline else => |comptime_tag| {
+                    std.hash.autoHash(
+                        hasher,
+                        @field(self.@"union", @tagName(comptime_tag)),
+                    );
+                },
+            }
+        }
+
+        pub fn eql(a: Self, b: Self) bool {
+            if (a.tag != b.tag) {
+                return false;
+            }
+            const tag: Tag = @enumFromInt(a.tag);
+            switch (tag) {
+                inline else => |comptime_tag| {
+                    const a_v = @field(a.@"union", @tagName(comptime_tag));
+                    const b_v = @field(b.@"union", @tagName(comptime_tag));
+                    return std.meta.eql(a_v, b_v);
+                },
+            }
+        }
     };
 }

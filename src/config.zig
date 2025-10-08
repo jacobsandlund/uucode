@@ -419,6 +419,7 @@ pub const Field = struct {
         var_len,
         shift,
         optional,
+        @"union",
     };
 
     pub fn kind(self: Field) Kind {
@@ -434,6 +435,7 @@ pub const Field = struct {
                     .shift => return .shift,
                 }
             },
+            .@"union" => return .@"union",
             else => {
                 switch (self.cp_packing) {
                     .direct => return .basic,

@@ -169,12 +169,58 @@ const opt_emoji_odd_or_even = config.Extension{
     },
 };
 
+pub const NextOrPrev = union(enum) {
+    none: void,
+    next: u21,
+    prev: u21,
+};
+
+fn computeNextOrPrev(
+    allocator: Allocator,
+    cp: u21,
+    data: anytype,
+    b: anytype,
+    tracking: anytype,
+) Allocator.Error!void {
+    _ = allocator;
+    _ = b;
+    var nop: NextOrPrev = .none;
+    if (0x1200 <= cp and cp <= 0x1235) {
+        nop = switch (cp % 3) {
+            0 => .{ .next = cp + 1 },
+            1 => .{ .prev = cp - 1 },
+            2 => .none,
+            else => unreachable,
+        };
+    }
+
+    config.singleInit(
+        "next_or_prev",
+        cp,
+        data,
+        tracking,
+        nop,
+    );
+}
+
+const next_or_prev = config.Extension{
+    .inputs = &.{},
+    .compute = &computeNextOrPrev,
+    .fields = &.{
+        .{
+            .name = "next_or_prev",
+            .type = NextOrPrev,
+        },
+    },
+};
+
 pub const tables = [_]config.Table{
     .{
         .extensions = &.{
             foo,
             emoji_odd_or_even,
             info,
+            next_or_prev,
         },
         .fields = &.{
             foo.field("foo"),
@@ -182,6 +228,7 @@ pub const tables = [_]config.Table{
             info.field("uppercase_mapping_first_char"),
             info.field("has_simple_lowercase"),
             info.field("numeric_value_numeric_reversed"),
+            next_or_prev.field("next_or_prev"),
             d.field("name").override(.{
                 .embedded_len = 15,
                 .max_offset = 986096,
@@ -206,6 +253,7 @@ pub const tables = [_]config.Table{
         },
         .fields = &.{
             opt_emoji_odd_or_even.field("opt_emoji_odd_or_even"),
+            d.field("bidi_paired_bracket"),
         },
     },
     .{
