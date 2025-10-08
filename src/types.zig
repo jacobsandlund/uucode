@@ -1082,7 +1082,12 @@ pub fn PackedOptional(comptime c: config.Field) type {
 
         pub fn init(opt: ?T) Self {
             if (opt) |value| {
-                const d: Int = if (@typeInfo(T) == .int) @intCast(value) else @intCast(@intFromEnum(value));
+                const d: Int = switch (@typeInfo(T)) {
+                    .int => value,
+                    .@"enum" => @intFromEnum(value),
+                    .bool => @intFromBool(value),
+                    else => unreachable,
+                };
                 std.debug.assert(d != null_data);
                 return .{ .data = d };
             } else {
@@ -1093,10 +1098,13 @@ pub fn PackedOptional(comptime c: config.Field) type {
         pub fn unpack(self: Self) ?T {
             if (self.data == null_data) {
                 return null;
-            } else if (@typeInfo(T) == .int) {
-                return @intCast(self.data);
             } else {
-                return @enumFromInt(self.data);
+                return switch (@typeInfo(T)) {
+                    .int => @intCast(self.data),
+                    .@"enum" => @enumFromInt(self.data),
+                    .bool => self.data == 1,
+                    else => unreachable,
+                };
             }
         }
     };
@@ -1117,7 +1125,12 @@ pub fn OptionalTracking(comptime Optional: type) type {
 
         pub fn track(self: *Self, opt: ?T) void {
             if (opt) |value| {
-                const d: isize = if (@typeInfo(T) == .int) @intCast(value) else @intCast(@intFromEnum(value));
+                const d: isize = switch (@typeInfo(T)) {
+                    .int => value,
+                    .@"enum" => @intFromEnum(value),
+                    .bool => @intFromBool(value),
+                    else => unreachable,
+                };
                 if (self.max_value < d) {
                     self.max_value = d;
                 } else if (d < self.min_value) {

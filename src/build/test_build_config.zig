@@ -214,6 +214,42 @@ const next_or_prev = config.Extension{
     },
 };
 
+fn computeMaybeBit(
+    allocator: Allocator,
+    cp: u21,
+    data: anytype,
+    b: anytype,
+    tracking: anytype,
+) Allocator.Error!void {
+    _ = allocator;
+    _ = b;
+    var maybe: ?bool = null;
+    if (0x1200 <= cp and cp <= 0x1235) {
+        maybe = cp % 2 == 0;
+    }
+
+    config.singleInit(
+        "maybe_bit",
+        cp,
+        data,
+        tracking,
+        maybe,
+    );
+}
+
+const maybe_bit = config.Extension{
+    .inputs = &.{},
+    .compute = &computeMaybeBit,
+    .fields = &.{
+        .{
+            .name = "maybe_bit",
+            .type = ?bool,
+            .min_value = 0,
+            .max_value = 1,
+        },
+    },
+};
+
 pub const tables = [_]config.Table{
     .{
         .extensions = &.{
@@ -250,9 +286,11 @@ pub const tables = [_]config.Table{
         .extensions = &.{
             emoji_odd_or_even,
             opt_emoji_odd_or_even,
+            maybe_bit,
         },
         .fields = &.{
             opt_emoji_odd_or_even.field("opt_emoji_odd_or_even"),
+            maybe_bit.field("maybe_bit"),
             d.field("bidi_paired_bracket"),
         },
     },

@@ -70,6 +70,12 @@ test "get packed optional enum works" {
     try testing.expectEqual(null, get(.opt_emoji_odd_or_even, 0x01D8)); // ǘ
 }
 
+test "get packed optional bool works" {
+    try testing.expectEqual(true, get(.maybe_bit, 0x1200));
+    try testing.expectEqual(false, get(.maybe_bit, 0x1235));
+    try testing.expectEqual(null, get(.maybe_bit, 0x1236));
+}
+
 test "get union unpacked" {
     try testing.expectEqual(@as(u21, 0x1234), get(.next_or_prev, 0x1233).next);
     try testing.expectEqual(@as(u21, 0x1200), get(.next_or_prev, 0x1201).prev);

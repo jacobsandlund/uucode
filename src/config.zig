@@ -508,6 +508,7 @@ pub fn isPackableOptional(comptime T: type) bool {
         .@"enum" => |e| {
             return @typeInfo(e.tag_type).int.bits <= @bitSizeOf(isize);
         },
+        .bool => return true,
         else => return false,
     }
 }
