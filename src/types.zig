@@ -512,20 +512,12 @@ pub const BidiPairedBracket = union(enum) {
 // The following types are internal to `uucode`:
 
 pub fn Field(comptime c: config.Field, comptime packing: config.Table.Packing) type {
-    switch (packing) {
-        .unpacked => return switch (c.kind()) {
-            .var_len => VarLen(c),
-            .shift => Shift(c, packing),
-            .basic, .optional => c.type,
-        },
-        .@"packed" => return switch (c.kind()) {
-            .var_len => @compileError("Packed var_len fields are not supported"),
-            .shift => Shift(c, packing),
-            .optional => PackedOptional(c),
-            .basic => c.type,
-        },
-        .auto => @compileError("Packing should be resolved by the time Field is called"),
-    }
+    return switch (c.kind()) {
+        .var_len => if (packing == .unpacked) VarLen(c) else unreachable,
+        .shift => Shift(c, packing),
+        .optional => if (packing == .unpacked) c.type else PackedOptional(c),
+        .basic => c.type,
+    };
 }
 
 pub fn Data(comptime c: config.Table) type {
