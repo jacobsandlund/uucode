@@ -685,13 +685,9 @@ pub fn VarLen(
     }
 
     if (max_offset == 0 and !(embedded_len == max_len or
-        (max_len == 1 and c.cp_packing == .shift_single_item)))
+        (max_len == 1 and c.cp_packing == .shift)))
     {
-        @compileError("VarLen with max_offset == 0 is only supported if embedded_len is max_len, or max_len is 1 with shift_single_item");
-    }
-
-    if (c.cp_packing == .shift) {
-        @compileError("`shift` packing is not supported for VarLen: use `shift_single_item` or `direct` instead");
+        @compileError("VarLen with max_offset == 0 is only supported if embedded_len is max_len, or max_len is 1 with shift");
     }
 
     return struct {
@@ -705,7 +701,7 @@ pub fn VarLen(
         const Self = @This();
         const T = @typeInfo(c.type).pointer.child;
         const Offset = std.math.IntFittingRange(0, max_offset);
-        const ShiftSingleItem = if (c.cp_packing == .shift_single_item) Shift(c, .unpacked) else void;
+        const ShiftSingleItem = if (c.cp_packing == .shift) Shift(c, .unpacked) else void;
         const Len = std.math.IntFittingRange(0, max_len);
 
         pub const Tracking = VarLenTracking(T, max_len);
@@ -800,7 +796,7 @@ pub fn VarLen(
                 tracking.shift.track(cp, s[0]);
             }
 
-            if (c.cp_packing == .shift_single_item and s.len == 1) {
+            if (c.cp_packing == .shift and s.len == 1) {
                 tracking.max_len = @max(tracking.max_len, 1);
 
                 return .{
@@ -837,7 +833,7 @@ pub fn VarLen(
             single_item_buffer: *[1]T,
             cp: u21,
         ) []const T {
-            if (c.cp_packing == .shift_single_item and self.len == 1) {
+            if (c.cp_packing == .shift and self.len == 1) {
                 single_item_buffer[0] = self.data.shift.unshift(cp);
                 return single_item_buffer[0..1];
             } else {
@@ -875,7 +871,7 @@ pub fn VarLen(
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
             std.hash.autoHash(hasher, self.len);
-            if ((comptime c.cp_packing == .shift_single_item) and self.len == 1) {
+            if ((comptime c.cp_packing == .shift) and self.len == 1) {
                 return std.hash.autoHash(hasher, self.data.shift);
             } else if ((comptime embedded_len == 0) or self.len > embedded_len) {
                 return std.hash.autoHash(hasher, self.data.offset);
@@ -888,7 +884,7 @@ pub fn VarLen(
             if (a.len != b.len) {
                 return false;
             }
-            if ((comptime c.cp_packing == .shift_single_item) and a.len == 1) {
+            if ((comptime c.cp_packing == .shift) and a.len == 1) {
                 return a.data.shift.eql(b.data.shift);
             } else if ((comptime embedded_len == 0) or a.len > embedded_len) {
                 return a.data.offset == b.data.offset;
@@ -904,7 +900,7 @@ pub fn VarLen(
                 \\
             , .{self.len});
 
-            if ((comptime c.cp_packing == .shift_single_item) and self.len == 1) {
+            if ((comptime c.cp_packing == .shift) and self.len == 1) {
                 try writer.writeAll("    .data = .{ .shift = ");
                 try self.data.shift.write(writer);
                 try writer.writeAll("},\n");
@@ -971,7 +967,7 @@ pub fn VarLenTracking(comptime T: type, comptime max_len: usize) type {
 
             const actual = self.actualConfig(c);
 
-            // In case of everything fitting in shift_single_item, return early
+            // In case of everything fitting in shift, return early
             // to avoid log2_int error.
             if (actual.max_len == 1 and self.len_counts[0] == 0) {
                 return actual;

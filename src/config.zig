@@ -22,7 +22,7 @@ pub const default = Table{
         .{
             .name = "decomposition_mapping",
             .type = []const u21,
-            .cp_packing = .shift_single_item,
+            .cp_packing = .shift,
             .shift_low = -181519,
             .shift_high = 99324,
             .max_len = 18,
@@ -80,7 +80,7 @@ pub const default = Table{
         .{
             .name = "case_folding_full",
             .type = []const u21,
-            .cp_packing = .shift_single_item,
+            .cp_packing = .shift,
             .shift_low = -42561,
             .shift_high = 35267,
             .max_len = 3,
@@ -130,7 +130,7 @@ pub const default = Table{
         .{
             .name = "special_lowercase_mapping",
             .type = []const u21,
-            .cp_packing = .shift_single_item,
+            .cp_packing = .shift,
             .shift_low = -199,
             .shift_high = 232,
             .max_len = 3,
@@ -140,7 +140,7 @@ pub const default = Table{
         .{
             .name = "special_titlecase_mapping",
             .type = []const u21,
-            .cp_packing = .shift_single_item,
+            .cp_packing = .shift,
             .shift_low = 0,
             .shift_high = 199,
             .max_len = 3,
@@ -150,7 +150,7 @@ pub const default = Table{
         .{
             .name = "special_uppercase_mapping",
             .type = []const u21,
-            .cp_packing = .shift_single_item,
+            .cp_packing = .shift,
             .shift_low = 0,
             .shift_high = 199,
             .max_len = 3,
@@ -169,7 +169,7 @@ pub const default = Table{
         .{
             .name = "lowercase_mapping",
             .type = []const u21,
-            .cp_packing = .shift_single_item,
+            .cp_packing = .shift,
             .shift_low = -42561,
             .shift_high = 38864,
             .max_len = 1,
@@ -179,7 +179,7 @@ pub const default = Table{
         .{
             .name = "titlecase_mapping",
             .type = []const u21,
-            .cp_packing = .shift_single_item,
+            .cp_packing = .shift,
             .shift_low = -38864,
             .shift_high = 42561,
             .max_len = 3,
@@ -189,7 +189,7 @@ pub const default = Table{
         .{
             .name = "uppercase_mapping",
             .type = []const u21,
-            .cp_packing = .shift_single_item,
+            .cp_packing = .shift,
             .shift_low = -38864,
             .shift_high = 42561,
             .max_len = 3,
@@ -268,8 +268,7 @@ pub const Field = struct {
 
     pub const CpPacking = enum {
         direct,
-        shift, // Shift only
-        shift_single_item, // VarLen only
+        shift,
     };
 
     pub const Runtime = struct {
@@ -433,14 +432,12 @@ pub const Field = struct {
                 switch (self.cp_packing) {
                     .direct => return .optional,
                     .shift => return .shift,
-                    else => @compileError("Optional field with invalid cp_packing: must be .direct or .shift"),
                 }
             },
             else => {
                 switch (self.cp_packing) {
                     .direct => return .basic,
                     .shift => return .shift,
-                    else => @compileError("Non-optional field with invalid cp_packing: must be .direct or .shift"),
                 }
             },
         }
@@ -492,20 +489,6 @@ pub const Field = struct {
                 std.mem.eql(u8, f.name, "max_value"))
             {
                 @compileError("Cannot override field '" ++ f.name ++ "'");
-            } else if (std.mem.eql(u8, f.name, "cp_packing")) {
-                switch (self.cp_packing) {
-                    .shift => {
-                        if (overrides.cp_packing == .shift_single_item) {
-                            @panic("Cannot override shift with shift_single_item");
-                        }
-                    },
-                    .shift_single_item => {
-                        if (overrides.cp_packing == .shift) {
-                            @panic("Cannot override shift_single_item with shift");
-                        }
-                    },
-                    else => {},
-                }
             }
 
             @field(result, f.name) = @field(overrides, f.name);
