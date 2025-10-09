@@ -596,7 +596,11 @@ pub fn writeDataItems(comptime D: type, writer: *std.Io.Writer, data_items: []co
 pub fn writeDataField(comptime F: type, writer: *std.Io.Writer, field: F) !void {
     switch (@typeInfo(F)) {
         .@"struct" => {
-            try field.write(writer);
+            if (@hasDecl(F, "write")) {
+                try field.write(writer);
+            } else {
+                try writer.print("{}", .{field});
+            }
         },
         .@"enum" => {
             try writer.print(".{s}", .{@tagName(field)});
@@ -1049,6 +1053,29 @@ pub const ShiftTracking = struct {
     }
 };
 
+pub const UnionShiftTracking = struct {
+    shift: ShiftTracking = .{},
+
+    pub fn deinit(self: *UnionShiftTracking, allocator: Allocator) void {
+        _ = self;
+        _ = allocator;
+    }
+
+    pub fn track(self: *UnionShiftTracking, cp: u21, value: anytype) void {
+        switch (value) {
+            inline else => |v| if (@TypeOf(v) == u21) self.shift.track(cp, v),
+        }
+    }
+
+    pub fn actualConfig(self: *const UnionShiftTracking, c: config.Field.Runtime) config.Field.Runtime {
+        return self.shift.actualConfig(c);
+    }
+
+    pub fn minBitsConfig(self: *const UnionShiftTracking, c: config.Field.Runtime) config.Field.Runtime {
+        return self.shift.minBitsConfig(c);
+    }
+};
+
 pub fn SliceMap(comptime T: type, comptime V: type) type {
     return std.HashMapUnmanaged([]const T, V, struct {
         pub fn hash(self: @This(), s: []const T) u64 {
@@ -1256,7 +1283,7 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
 }
 
 pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) type {
-    if (packing == .unpacked) {
+    if (packing == .unpacked and c.cp_packing == .direct) {
         return c.type;
     }
 
@@ -1265,38 +1292,110 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
     const Int = @typeInfo(Tag).@"enum".tag_type;
     std.debug.assert(Int == std.meta.Int(.unsigned, @bitSizeOf(Tag)));
 
+    const ShiftMember = if (c.cp_packing == .shift) Shift(c, packing) else void;
+
     var fields: [info.fields.len]std.builtin.Type.UnionField = undefined;
+    var has_shift: bool = false;
     for (info.fields, 0..) |f, i| {
+        const T = if (c.cp_packing == .shift and f.type == u21) blk: {
+            has_shift = true;
+            break :blk ShiftMember;
+        } else f.type;
         fields[i] = .{
             .name = f.name,
-            .type = f.type,
-            .alignment = 0,
+            .type = T,
+            .alignment = if (packing == .@"packed") 0 else @alignOf(T),
         };
     }
-    const PackedUnion = @Type(.{
+
+    if (c.cp_packing == .shift and !has_shift) {
+        @compileError("Shift can only be used in unions with at least one field of type u21");
+    }
+
+    const InnerUnion = @Type(.{
         .@"union" = .{
-            .layout = .@"packed",
-            .tag_type = null,
+            .layout = if (packing == .@"packed") .@"packed" else .auto,
+            .tag_type = if (packing == .@"packed") null else Tag,
             .fields = &fields,
             .decls = &[_]std.builtin.Type.Declaration{},
         },
     });
 
-    return packed struct {
-        tag: Int,
-        @"union": PackedUnion,
+    return if (packing == .unpacked) struct {
+        @"union": InnerUnion,
 
         const Self = @This();
-        pub fn init(value: c.type) Self {
+        pub const Tracking = UnionShiftTracking;
+
+        pub fn init(cp: u21, value: c.type) Self {
             return .{
-                .tag = @intFromEnum(@as(Tag, value)),
                 .@"union" = switch (value) {
-                    inline else => |v, tag| @unionInit(PackedUnion, @tagName(tag), v),
+                    inline else => |v, tag| if (@FieldType(InnerUnion, @tagName(tag)) == ShiftMember)
+                        @unionInit(InnerUnion, @tagName(tag), .init(cp, v))
+                    else
+                        @unionInit(InnerUnion, @tagName(tag), v),
                 },
             };
         }
 
-        pub fn unpack(self: Self) c.type {
+        pub fn unshift(self: Self, cp: u21) c.type {
+            return switch (self.@"union") {
+                inline else => |v, comptime_tag| if (@FieldType(InnerUnion, @tagName(comptime_tag)) == ShiftMember)
+                    @unionInit(
+                        c.type,
+                        @tagName(comptime_tag),
+                        v.unshift(cp),
+                    )
+                else
+                    @unionInit(
+                        c.type,
+                        @tagName(comptime_tag),
+                        v,
+                    ),
+            };
+        }
+
+        pub fn write(self: Self, writer: *std.Io.Writer) !void {
+            try writer.writeAll(
+                \\.{
+                \\    .@"union" =
+            );
+            try writer.writeAll(" ");
+            try writeDataField(InnerUnion, writer, self.@"union");
+            try writer.writeAll(
+                \\,
+                \\}
+                \\
+            );
+        }
+    } else packed struct {
+        tag: Int,
+        @"union": InnerUnion,
+
+        const Self = @This();
+
+        fn _init(value: c.type) Self {
+            return .{
+                .tag = @intFromEnum(@as(Tag, value)),
+                .@"union" = switch (value) {
+                    inline else => |v, tag| @unionInit(InnerUnion, @tagName(tag), v),
+                },
+            };
+        }
+
+        fn _initShift(cp: u21, value: c.type) Self {
+            return .{
+                .tag = @intFromEnum(@as(Tag, value)),
+                .@"union" = switch (value) {
+                    inline else => |v, tag| if (@FieldType(InnerUnion, @tagName(tag)) == ShiftMember)
+                        @unionInit(InnerUnion, @tagName(tag), .init(cp, v))
+                    else
+                        @unionInit(InnerUnion, @tagName(tag), v),
+                },
+            };
+        }
+
+        fn _unpack(self: Self) c.type {
             const tag: Tag = @enumFromInt(self.tag);
             return switch (tag) {
                 inline else => |comptime_tag| @unionInit(
@@ -1306,6 +1405,29 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
                 ),
             };
         }
+
+        fn _unshift(self: Self, cp: u21) c.type {
+            const tag: Tag = @enumFromInt(self.tag);
+            return switch (tag) {
+                inline else => |comptime_tag| if (@FieldType(InnerUnion, @tagName(comptime_tag)) == ShiftMember)
+                    @unionInit(
+                        c.type,
+                        @tagName(comptime_tag),
+                        @field(self.@"union", @tagName(comptime_tag)).unshift(cp),
+                    )
+                else
+                    @unionInit(
+                        c.type,
+                        @tagName(comptime_tag),
+                        @field(self.@"union", @tagName(comptime_tag)),
+                    ),
+            };
+        }
+
+        pub const Tracking = if (c.cp_packing == .shift) UnionShiftTracking else void;
+        pub const init = if (c.cp_packing == .shift) _initShift else _init;
+        pub const unpack = if (c.cp_packing == .shift) void{} else _unpack;
+        pub const unshift = if (c.cp_packing == .shift) _unshift else void{};
 
         pub fn autoHash(self: Self, hasher: anytype) void {
             const tag: Tag = @enumFromInt(self.tag);
