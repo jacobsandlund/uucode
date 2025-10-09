@@ -239,7 +239,13 @@ pub const default = Table{
         .{ .name = "grapheme_break", .type = types.GraphemeBreak },
 
         // BidiPairedBracket field
-        .{ .name = "bidi_paired_bracket", .type = types.BidiPairedBracket },
+        .{
+            .name = "bidi_paired_bracket",
+            .type = types.BidiPairedBracket,
+            .cp_packing = .shift,
+            .shift_low = -3,
+            .shift_high = 3,
+        },
 
         // Block field
         .{ .name = "block", .type = types.Block },
@@ -688,7 +694,7 @@ pub fn singleInit(
     d: anytype,
 ) void {
     const F = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
-    if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unshift")) {
+    if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unshift") and @TypeOf(F.unshift) != void) {
         if (@typeInfo(@TypeOf(d)) == .optional) {
             @field(data, field) = .initOptional(
                 cp,

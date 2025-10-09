@@ -1,6 +1,7 @@
 const std = @import("std");
 const config = @import("config.zig");
 const config_x = @import("config.x.zig");
+const types = @import("types.zig");
 const d = config.default;
 
 const Allocator = std.mem.Allocator;
@@ -210,6 +211,67 @@ const next_or_prev = config.Extension{
         .{
             .name = "next_or_prev",
             .type = NextOrPrev,
+            .cp_packing = .shift,
+            .shift_low = -1,
+            .shift_high = 1,
+        },
+    },
+};
+
+fn computeNextOrPrevDirect(
+    allocator: Allocator,
+    cp: u21,
+    data: anytype,
+    b: anytype,
+    tracking: anytype,
+) Allocator.Error!void {
+    _ = allocator;
+    _ = b;
+    config.singleInit(
+        "next_or_prev_direct",
+        cp,
+        data,
+        tracking,
+        data.next_or_prev.unshift(cp),
+    );
+}
+
+const next_or_prev_direct = config.Extension{
+    .inputs = &.{"next_or_prev"},
+    .compute = &computeNextOrPrevDirect,
+    .fields = &.{
+        .{
+            .name = "next_or_prev_direct",
+            .type = NextOrPrev,
+        },
+    },
+};
+
+fn computeBidiPairedBracketDirect(
+    allocator: Allocator,
+    cp: u21,
+    data: anytype,
+    b: anytype,
+    tracking: anytype,
+) Allocator.Error!void {
+    _ = allocator;
+    _ = b;
+    config.singleInit(
+        "bidi_paired_bracket_direct",
+        cp,
+        data,
+        tracking,
+        data.bidi_paired_bracket.unshift(cp),
+    );
+}
+
+const bidi_paired_bracket_direct = config.Extension{
+    .inputs = &.{"bidi_paired_bracket"},
+    .compute = &computeBidiPairedBracketDirect,
+    .fields = &.{
+        .{
+            .name = "bidi_paired_bracket_direct",
+            .type = types.BidiPairedBracket,
         },
     },
 };
@@ -257,6 +319,8 @@ pub const tables = [_]config.Table{
             emoji_odd_or_even,
             info,
             next_or_prev,
+            next_or_prev_direct,
+            bidi_paired_bracket_direct,
         },
         .fields = &.{
             foo.field("foo"),
@@ -265,6 +329,8 @@ pub const tables = [_]config.Table{
             info.field("has_simple_lowercase"),
             info.field("numeric_value_numeric_reversed"),
             next_or_prev.field("next_or_prev"),
+            next_or_prev_direct.field("next_or_prev_direct"),
+            bidi_paired_bracket_direct.field("bidi_paired_bracket_direct"),
             d.field("name").override(.{
                 .embedded_len = 15,
                 .max_offset = 986096,
@@ -282,6 +348,7 @@ pub const tables = [_]config.Table{
         },
     },
     .{
+        .name = "pack",
         .packing = .@"packed",
         .extensions = &.{
             emoji_odd_or_even,

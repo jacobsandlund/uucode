@@ -117,10 +117,10 @@ fn DataField(comptime field: []const u8) type {
 fn FieldValue(comptime field: []const u8) type {
     const D = DataField(field);
     if (@typeInfo(D) == .@"struct") {
-        if (@hasDecl(D, "unpack")) {
-            return @typeInfo(@TypeOf(D.unpack)).@"fn".return_type.?;
-        } else if (@hasDecl(D, "unshift")) {
+        if (@hasDecl(D, "unshift") and @TypeOf(D.unshift) != void) {
             return @typeInfo(@TypeOf(D.unshift)).@"fn".return_type.?;
+        } else if (@hasDecl(D, "unpack")) {
+            return @typeInfo(@TypeOf(D.unpack)).@"fn".return_type.?;
         } else if (@hasDecl(D, "value") and @typeInfo(@TypeOf(D.value)) != .void) {
             return @typeInfo(@TypeOf(D.value)).@"fn".return_type.?;
         } else {
@@ -143,10 +143,10 @@ pub fn get(comptime field: FieldEnum, cp: u21) TypeOf(field) {
 
     if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "unpack") or @hasDecl(D, "unshift") or (@hasDecl(D, "value") and @typeInfo(@TypeOf(D.value)) != .void))) {
         const d = @field(data(table, cp), name);
-        if (@hasDecl(D, "unpack")) {
-            return d.unpack();
-        } else if (@hasDecl(D, "unshift")) {
+        if (@hasDecl(D, "unshift") and @TypeOf(D.unshift) != void) {
             return d.unshift(cp);
+        } else if (@hasDecl(D, "unpack")) {
+            return d.unpack();
         } else {
             return d.value();
         }

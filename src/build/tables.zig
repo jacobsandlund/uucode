@@ -353,8 +353,8 @@ fn TableTracking(comptime Struct: type) type {
 
     for (@typeInfo(Struct).@"struct".fields) |f| {
         switch (@typeInfo(f.type)) {
-            .@"struct" => {
-                if (@hasDecl(f.type, "Tracking")) {
+            .@"struct", .@"union" => {
+                if (@hasDecl(f.type, "Tracking") and f.type.Tracking != void) {
                     const T = @field(f.type, "Tracking");
                     tracking_fields[i] = .{
                         .name = f.name,

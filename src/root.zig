@@ -76,16 +76,29 @@ test "get packed optional bool works" {
     try testing.expectEqual(null, get(.maybe_bit, 0x1236));
 }
 
-test "get union unpacked" {
+test "get union unpacked, shift" {
     try testing.expectEqual(@as(u21, 0x1234), get(.next_or_prev, 0x1233).next);
     try testing.expectEqual(@as(u21, 0x1200), get(.next_or_prev, 0x1201).prev);
     try testing.expectEqual(.none, get(.next_or_prev, 0x1235));
 }
 
-test "get union packed" {
+test "get union unpacked, direct" {
+    try testing.expectEqual(@as(u21, 0x1234), get(.next_or_prev_direct, 0x1233).next);
+    try testing.expectEqual(@as(u21, 0x1200), get(.next_or_prev_direct, 0x1201).prev);
+    try testing.expectEqual(.none, get(.next_or_prev_direct, 0x1235));
+}
+
+test "get union packed, shift" {
+    try testing.expectEqual(5, @bitSizeOf(@FieldType(TypeOfAll("pack"), "bidi_paired_bracket")));
     try testing.expectEqual(@as(u21, 0x0029), get(.bidi_paired_bracket, 0x0028).open);
     try testing.expectEqual(@as(u21, 0x2997), get(.bidi_paired_bracket, 0x2998).close);
     try testing.expectEqual(.none, get(.bidi_paired_bracket, 0x4000));
+}
+
+test "get union packed, direct" {
+    try testing.expectEqual(@as(u21, 0x0029), get(.bidi_paired_bracket_direct, 0x0028).open);
+    try testing.expectEqual(@as(u21, 0x2997), get(.bidi_paired_bracket_direct, 0x2998).close);
+    try testing.expectEqual(.none, get(.bidi_paired_bracket_direct, 0x4000));
 }
 
 test "special_casing_condition" {
