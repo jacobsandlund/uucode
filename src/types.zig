@@ -1505,9 +1505,9 @@ pub fn initVarLen(
     backing: anytype,
     tracking: anytype,
     d: anytype,
-) void {
+) Allocator.Error!void {
     if (@typeInfo(@TypeOf(d)).pointer.child == u21) {
-        @field(data, field) = .initFor(
+        @field(data, field) = try .initFor(
             allocator,
             @field(backing, field),
             &@field(tracking, field),
@@ -1515,7 +1515,7 @@ pub fn initVarLen(
             cp,
         );
     } else {
-        @field(data, field) = .init(
+        @field(data, field) = try .init(
             allocator,
             @field(backing, field),
             &@field(tracking, field),

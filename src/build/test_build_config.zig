@@ -127,10 +127,13 @@ fn computeInfo(
         buffer[data.numeric_value_numeric.len - i - 1] = digit;
     }
 
-    data.numeric_value_numeric_reversed = try .init(
+    try types.initVarLen(
+        "numeric_value_numeric_reversed",
         allocator,
-        backing.numeric_value_numeric_reversed,
-        &tracking.numeric_value_numeric_reversed,
+        cp,
+        data,
+        backing,
+        tracking,
         buffer[0..data.numeric_value_numeric.len],
     );
 }
