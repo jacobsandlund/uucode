@@ -513,7 +513,7 @@ pub const BidiPairedBracket = union(enum) {
 
 pub fn Field(comptime c: config.Field, comptime packing: config.Table.Packing) type {
     return switch (c.kind()) {
-        .var_len => if (packing == .unpacked) VarLen(c) else unreachable,
+        .slice => if (packing == .unpacked) Slice(c) else unreachable,
         .shift => Shift(c, packing),
         .@"union" => Union(c, packing),
         .optional => if (packing == .unpacked) c.type else PackedOptional(c),
@@ -681,7 +681,7 @@ pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
     });
 }
 
-pub fn VarLen(
+pub fn Slice(
     comptime c: config.Field,
 ) type {
     const max_len = c.max_len;
@@ -689,13 +689,13 @@ pub fn VarLen(
     const embedded_len = c.embedded_len;
 
     if (max_len == 0) {
-        @compileError("VarLen with max_len == 0 is not supported due to Zig compiler bug");
+        @compileError("Slice with max_len == 0 is not supported due to Zig compiler bug");
     }
 
     if (max_offset == 0 and !(embedded_len == max_len or
         (max_len == 1 and c.cp_packing == .shift)))
     {
-        @compileError("VarLen with max_offset == 0 is only supported if embedded_len is max_len, or max_len is 1 with shift");
+        @compileError("Slice with max_offset == 0 is only supported if embedded_len is max_len, or max_len is 1 with shift");
     }
 
     return struct {
@@ -707,12 +707,12 @@ pub fn VarLen(
         len: Len,
 
         const Self = @This();
-        const T = @typeInfo(c.type).pointer.child;
+        pub const T = @typeInfo(c.type).pointer.child;
         const Offset = std.math.IntFittingRange(0, max_offset);
         const ShiftSingleItem = if (c.cp_packing == .shift) Shift(c, .unpacked) else void;
         const Len = std.math.IntFittingRange(0, max_len);
 
-        pub const Tracking = VarLenTracking(T, max_len);
+        pub const Tracking = SliceTracking(T, max_len);
         pub const BackingBuffer = []const T;
         pub const MutableBackingBuffer = []T;
         pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
@@ -854,7 +854,7 @@ pub fn VarLen(
             void{};
 
         // Note: while it would be better for modularity to pass `backing`
-        // in, this makes for a nicer API without having to wrap VarLen.
+        // in, this makes for a nicer API without having to wrap Slice.
         const hardcoded_backing = @import("get.zig").backingFor(c.name);
 
         fn _value(self: *const Self) []const T {
@@ -938,7 +938,7 @@ pub fn VarLen(
     };
 }
 
-pub fn VarLenTracking(comptime T: type, comptime max_len: usize) type {
+pub fn SliceTracking(comptime T: type, comptime max_len: usize) type {
     return struct {
         max_offset: usize = 0,
         max_len: usize = 0,
@@ -1187,8 +1187,8 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         @compileError("Shift field '" ++ c.name ++ "' must be type u21 or ?u21");
     }
 
-    if (c.kind() == .var_len and @typeInfo(c.type).pointer.child != u21) {
-        @compileError("VarLen field '" ++ c.name ++ "' must be type []const u21");
+    if (c.kind() == .slice and @typeInfo(c.type).pointer.child != u21) {
+        @compileError("Slice field '" ++ c.name ++ "' must be type []const u21");
     }
 
     const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional));
@@ -1458,9 +1458,9 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
 }
 
 /// This is used in build/tables.zig but is exposed to allow extension to use
-/// it as well. Use this to initialize "single data" fields, and use
-/// `initVarLen` for "var len" fields.
-pub fn initSingle(
+/// it as well. Use this to initialize non-slice fields, and use
+/// `sliceFieldInit` for slice fields.
+pub fn fieldInit(
     comptime field: []const u8,
     cp: u21,
     data: anytype,
@@ -1497,7 +1497,7 @@ pub fn initSingle(
 
 /// This is used in build/tables.zig but is exposed to allow extension to use
 /// it as well. Use this to initialize "var len" fields.
-pub fn initVarLen(
+pub fn sliceFieldInit(
     comptime field: []const u8,
     allocator: Allocator,
     cp: u21,
@@ -1506,7 +1506,8 @@ pub fn initVarLen(
     tracking: anytype,
     d: anytype,
 ) Allocator.Error!void {
-    if (@typeInfo(@TypeOf(d)).pointer.child == u21) {
+    const F = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
+    if (F.T == u21) {
         @field(data, field) = try .initFor(
             allocator,
             @field(backing, field),

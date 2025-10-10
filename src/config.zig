@@ -258,12 +258,12 @@ pub const Field = struct {
     name: [:0]const u8,
     type: type,
 
-    // For Shift + VarLen fields
+    // For Shift + Slice fields
     cp_packing: CpPacking = .direct,
     shift_low: isize = 0,
     shift_high: isize = 0,
 
-    // For VarLen fields
+    // For Slice fields
     max_len: usize = 0,
     max_offset: usize = 0,
     embedded_len: usize = 0,
@@ -422,7 +422,7 @@ pub const Field = struct {
 
     pub const Kind = enum {
         basic,
-        var_len,
+        slice,
         shift,
         optional,
         @"union",
@@ -430,7 +430,7 @@ pub const Field = struct {
 
     pub fn kind(self: Field) Kind {
         switch (@typeInfo(self.type)) {
-            .pointer => return .var_len,
+            .pointer => return .slice,
             .optional => |optional| {
                 if (!isPackable(optional.child)) {
                     return .basic;
@@ -452,7 +452,7 @@ pub const Field = struct {
     }
 
     pub fn canBePacked(self: Field) bool {
-        if (self.kind() == .var_len) {
+        if (self.kind() == .slice) {
             return false;
         }
 

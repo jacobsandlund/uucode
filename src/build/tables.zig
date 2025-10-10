@@ -129,7 +129,7 @@ const updating_ucd_fields = brk: {
                     .shift_high = max_cp,
                 });
             },
-            .var_len => {
+            .slice => {
                 fields[i] = f.override(.{
                     .shift_low = -@as(isize, max_cp),
                     .shift_high = max_cp,
@@ -597,7 +597,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "simple_uppercase_mapping")) {
-            types.initSingle(
+            types.fieldInit(
                 "simple_uppercase_mapping",
                 cp,
                 &a,
@@ -606,7 +606,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "simple_lowercase_mapping")) {
-            types.initSingle(
+            types.fieldInit(
                 "simple_lowercase_mapping",
                 cp,
                 &a,
@@ -615,7 +615,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "simple_titlecase_mapping")) {
-            types.initSingle(
+            types.fieldInit(
                 "simple_titlecase_mapping",
                 cp,
                 &a,
@@ -636,7 +636,7 @@ pub fn writeTableData(
                 // simple_lowercase_mapping so we use that here.
                 case_folding.case_folding_turkish_only orelse
                 cp;
-            types.initSingle("case_folding_simple", cp, &a, &tracking, d);
+            types.fieldInit("case_folding_simple", cp, &a, &tracking, d);
         }
         if (@hasField(AllData, "case_folding_full")) {
             if (case_folding.case_folding_full_only.len > 0) {
@@ -915,7 +915,7 @@ pub fn writeTableData(
 
         // BidiPairedBracket field
         if (@hasField(AllData, "bidi_paired_bracket")) {
-            types.initSingle(
+            types.fieldInit(
                 "bidi_paired_bracket",
                 cp,
                 &a,

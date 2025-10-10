@@ -108,7 +108,7 @@ fn computeInfo(
     tracking: anytype,
 ) Allocator.Error!void {
     var single_item_buffer: [1]u21 = undefined;
-    types.initSingle(
+    types.fieldInit(
         "uppercase_mapping_first_char",
         cp,
         data,
@@ -127,7 +127,7 @@ fn computeInfo(
         buffer[data.numeric_value_numeric.len - i - 1] = digit;
     }
 
-    try types.initVarLen(
+    try types.sliceFieldInit(
         "numeric_value_numeric_reversed",
         allocator,
         cp,
@@ -147,7 +147,7 @@ fn computeOptEmojiOddOrEven(
 ) Allocator.Error!void {
     _ = allocator;
     _ = b;
-    types.initSingle(
+    types.fieldInit(
         "opt_emoji_odd_or_even",
         cp,
         data,
@@ -198,7 +198,7 @@ fn computeNextOrPrev(
         };
     }
 
-    types.initSingle(
+    types.fieldInit(
         "next_or_prev",
         cp,
         data,
@@ -230,7 +230,7 @@ fn computeNextOrPrevDirect(
 ) Allocator.Error!void {
     _ = allocator;
     _ = b;
-    types.initSingle(
+    types.fieldInit(
         "next_or_prev_direct",
         cp,
         data,
@@ -259,7 +259,7 @@ fn computeBidiPairedBracketDirect(
 ) Allocator.Error!void {
     _ = allocator;
     _ = b;
-    types.initSingle(
+    types.fieldInit(
         "bidi_paired_bracket_direct",
         cp,
         data,
@@ -293,7 +293,7 @@ fn computeMaybeBit(
         maybe = cp % 2 == 0;
     }
 
-    types.initSingle(
+    types.fieldInit(
         "maybe_bit",
         cp,
         data,
