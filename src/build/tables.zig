@@ -510,7 +510,7 @@ pub fn writeTableData(
 
         // UnicodeData fields
         if (@hasField(AllData, "name")) {
-            a.name = try .fromSlice(
+            a.name = try .init(
                 allocator,
                 backing.name,
                 &tracking.name,
@@ -552,7 +552,7 @@ pub fn writeTableData(
             a.decomposition_type = unicode_data.decomposition_type;
         }
         if (@hasField(AllData, "decomposition_mapping")) {
-            a.decomposition_mapping = try .fromSliceFor(
+            a.decomposition_mapping = try .initFor(
                 allocator,
                 backing.decomposition_mapping,
                 &tracking.decomposition_mapping,
@@ -578,7 +578,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "numeric_value_numeric")) {
-            a.numeric_value_numeric = try .fromSlice(
+            a.numeric_value_numeric = try .init(
                 allocator,
                 backing.numeric_value_numeric,
                 &tracking.numeric_value_numeric,
@@ -589,7 +589,7 @@ pub fn writeTableData(
             a.is_bidi_mirrored = unicode_data.is_bidi_mirrored;
         }
         if (@hasField(AllData, "unicode_1_name")) {
-            a.unicode_1_name = try .fromSlice(
+            a.unicode_1_name = try .init(
                 allocator,
                 backing.unicode_1_name,
                 &tracking.unicode_1_name,
@@ -597,7 +597,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "simple_uppercase_mapping")) {
-            config.singleInit(
+            types.initSingle(
                 "simple_uppercase_mapping",
                 cp,
                 &a,
@@ -606,7 +606,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "simple_lowercase_mapping")) {
-            config.singleInit(
+            types.initSingle(
                 "simple_lowercase_mapping",
                 cp,
                 &a,
@@ -615,7 +615,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "simple_titlecase_mapping")) {
-            config.singleInit(
+            types.initSingle(
                 "simple_titlecase_mapping",
                 cp,
                 &a,
@@ -636,11 +636,11 @@ pub fn writeTableData(
                 // simple_lowercase_mapping so we use that here.
                 case_folding.case_folding_turkish_only orelse
                 cp;
-            config.singleInit("case_folding_simple", cp, &a, &tracking, d);
+            types.initSingle("case_folding_simple", cp, &a, &tracking, d);
         }
         if (@hasField(AllData, "case_folding_full")) {
             if (case_folding.case_folding_full_only.len > 0) {
-                a.case_folding_full = try .fromSliceFor(
+                a.case_folding_full = try .initFor(
                     allocator,
                     backing.case_folding_full,
                     &tracking.case_folding_full,
@@ -648,7 +648,7 @@ pub fn writeTableData(
                     cp,
                 );
             } else {
-                a.case_folding_full = try .fromSliceFor(
+                a.case_folding_full = try .initFor(
                     allocator,
                     backing.case_folding_full,
                     &tracking.case_folding_full,
@@ -659,7 +659,7 @@ pub fn writeTableData(
         }
         if (@hasField(AllData, "case_folding_turkish_only")) {
             if (case_folding.case_folding_turkish_only) |t| {
-                a.case_folding_turkish_only = try .fromSliceFor(
+                a.case_folding_turkish_only = try .initFor(
                     allocator,
                     backing.case_folding_turkish_only,
                     &tracking.case_folding_turkish_only,
@@ -672,7 +672,7 @@ pub fn writeTableData(
         }
         if (@hasField(AllData, "case_folding_common_only")) {
             if (case_folding.case_folding_common_only) |c| {
-                a.case_folding_common_only = try .fromSliceFor(
+                a.case_folding_common_only = try .initFor(
                     allocator,
                     backing.case_folding_common_only,
                     &tracking.case_folding_common_only,
@@ -685,7 +685,7 @@ pub fn writeTableData(
         }
         if (@hasField(AllData, "case_folding_simple_only")) {
             if (case_folding.case_folding_simple_only) |s| {
-                a.case_folding_simple_only = try .fromSliceFor(
+                a.case_folding_simple_only = try .initFor(
                     allocator,
                     backing.case_folding_simple_only,
                     &tracking.case_folding_simple_only,
@@ -697,7 +697,7 @@ pub fn writeTableData(
             }
         }
         if (@hasField(AllData, "case_folding_full_only")) {
-            a.case_folding_full_only = try .fromSliceFor(
+            a.case_folding_full_only = try .initFor(
                 allocator,
                 backing.case_folding_full_only,
                 &tracking.case_folding_full_only,
@@ -711,7 +711,7 @@ pub fn writeTableData(
             a.has_special_casing = special_casing.has_special_casing;
         }
         if (@hasField(AllData, "special_lowercase_mapping")) {
-            a.special_lowercase_mapping = try .fromSliceFor(
+            a.special_lowercase_mapping = try .initFor(
                 allocator,
                 backing.special_lowercase_mapping,
                 &tracking.special_lowercase_mapping,
@@ -720,7 +720,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "special_titlecase_mapping")) {
-            a.special_titlecase_mapping = try .fromSliceFor(
+            a.special_titlecase_mapping = try .initFor(
                 allocator,
                 backing.special_titlecase_mapping,
                 &tracking.special_titlecase_mapping,
@@ -729,7 +729,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "special_uppercase_mapping")) {
-            a.special_uppercase_mapping = try .fromSliceFor(
+            a.special_uppercase_mapping = try .initFor(
                 allocator,
                 backing.special_uppercase_mapping,
                 &tracking.special_uppercase_mapping,
@@ -738,7 +738,7 @@ pub fn writeTableData(
             );
         }
         if (@hasField(AllData, "special_casing_condition")) {
-            a.special_casing_condition = try .fromSlice(
+            a.special_casing_condition = try .init(
                 allocator,
                 backing.special_casing_condition,
                 &tracking.special_casing_condition,
@@ -752,7 +752,7 @@ pub fn writeTableData(
                 special_casing.special_casing_condition.len == 0;
 
             if (use_special) {
-                a.lowercase_mapping = try .fromSliceFor(
+                a.lowercase_mapping = try .initFor(
                     allocator,
                     backing.lowercase_mapping,
                     &tracking.lowercase_mapping,
@@ -760,7 +760,7 @@ pub fn writeTableData(
                     cp,
                 );
             } else {
-                a.lowercase_mapping = try .fromSliceFor(
+                a.lowercase_mapping = try .initFor(
                     allocator,
                     backing.lowercase_mapping,
                     &tracking.lowercase_mapping,
@@ -775,7 +775,7 @@ pub fn writeTableData(
                 special_casing.special_casing_condition.len == 0;
 
             if (use_special) {
-                a.titlecase_mapping = try .fromSliceFor(
+                a.titlecase_mapping = try .initFor(
                     allocator,
                     backing.titlecase_mapping,
                     &tracking.titlecase_mapping,
@@ -783,7 +783,7 @@ pub fn writeTableData(
                     cp,
                 );
             } else {
-                a.titlecase_mapping = try .fromSliceFor(
+                a.titlecase_mapping = try .initFor(
                     allocator,
                     backing.titlecase_mapping,
                     &tracking.titlecase_mapping,
@@ -798,7 +798,7 @@ pub fn writeTableData(
                 special_casing.special_casing_condition.len == 0;
 
             if (use_special) {
-                a.uppercase_mapping = try .fromSliceFor(
+                a.uppercase_mapping = try .initFor(
                     allocator,
                     backing.uppercase_mapping,
                     &tracking.uppercase_mapping,
@@ -806,7 +806,7 @@ pub fn writeTableData(
                     cp,
                 );
             } else {
-                a.uppercase_mapping = try .fromSliceFor(
+                a.uppercase_mapping = try .initFor(
                     allocator,
                     backing.uppercase_mapping,
                     &tracking.uppercase_mapping,
@@ -915,7 +915,7 @@ pub fn writeTableData(
 
         // BidiPairedBracket field
         if (@hasField(AllData, "bidi_paired_bracket")) {
-            config.singleInit(
+            types.initSingle(
                 "bidi_paired_bracket",
                 cp,
                 &a,

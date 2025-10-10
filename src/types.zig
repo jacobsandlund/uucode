@@ -713,12 +713,11 @@ pub fn VarLen(
         const Len = std.math.IntFittingRange(0, max_len);
 
         pub const Tracking = VarLenTracking(T, max_len);
-        pub const CopyBuffer = [max_len]T;
         pub const BackingBuffer = []const T;
         pub const MutableBackingBuffer = []T;
         pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
 
-        inline fn _fromSlice(
+        inline fn _init(
             allocator: Allocator,
             backing: []T,
             tracking: *Tracking,
@@ -780,20 +779,20 @@ pub fn VarLen(
             }
         }
 
-        pub fn fromSlice(
+        pub fn init(
             allocator: Allocator,
             backing: []T,
             tracking: *Tracking,
             s: []const T,
         ) Allocator.Error!Self {
             if (c.cp_packing != .direct) {
-                @compileError("fromSlice is only supported for direct packing: use fromSliceFor instead");
+                @compileError("init is only supported for direct packing: use initFor instead");
             }
 
-            return ._fromSlice(allocator, backing, tracking, s);
+            return ._init(allocator, backing, tracking, s);
         }
 
-        pub fn fromSliceFor(
+        pub fn initFor(
             allocator: Allocator,
             backing: []T,
             tracking: *Tracking,
@@ -814,7 +813,7 @@ pub fn VarLen(
                     },
                 };
             } else {
-                return ._fromSlice(allocator, backing, tracking, s);
+                return ._init(allocator, backing, tracking, s);
             }
         }
 
@@ -1456,4 +1455,71 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
             }
         }
     };
+}
+
+/// This is used in build/tables.zig but is exposed to allow extension to use
+/// it as well. Use this to initialize "single data" fields, and use
+/// `initVarLen` for "var len" fields.
+pub fn initSingle(
+    comptime field: []const u8,
+    cp: u21,
+    data: anytype,
+    tracking: anytype,
+    d: anytype,
+) void {
+    const F = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
+    if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unshift") and @TypeOf(F.unshift) != void) {
+        if (@typeInfo(@TypeOf(d)) == .optional) {
+            @field(data, field) = .initOptional(
+                cp,
+                d,
+            );
+        } else {
+            @field(data, field) = .init(
+                cp,
+                d,
+            );
+        }
+    } else if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unpack")) {
+        @field(data, field) = .init(d);
+    } else {
+        @field(data, field) = d;
+    }
+    const Tracking = @typeInfo(@TypeOf(tracking)).pointer.child;
+    if (@hasField(Tracking, field)) {
+        if (@typeInfo(@TypeOf(@FieldType(Tracking, field).track)).@"fn".params.len == 3) {
+            @field(tracking, field).track(cp, d);
+        } else {
+            @field(tracking, field).track(d);
+        }
+    }
+}
+
+/// This is used in build/tables.zig but is exposed to allow extension to use
+/// it as well. Use this to initialize "var len" fields.
+pub fn initVarLen(
+    comptime field: []const u8,
+    allocator: Allocator,
+    cp: u21,
+    data: anytype,
+    backing: anytype,
+    tracking: anytype,
+    d: anytype,
+) void {
+    if (@typeInfo(@TypeOf(d)).pointer.child == u21) {
+        @field(data, field) = .initFor(
+            allocator,
+            @field(backing, field),
+            &@field(tracking, field),
+            d,
+            cp,
+        );
+    } else {
+        @field(data, field) = .init(
+            allocator,
+            @field(backing, field),
+            &@field(tracking, field),
+            d,
+        );
+    }
 }

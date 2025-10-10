@@ -108,7 +108,7 @@ fn computeInfo(
     tracking: anytype,
 ) Allocator.Error!void {
     var single_item_buffer: [1]u21 = undefined;
-    config.singleInit(
+    types.initSingle(
         "uppercase_mapping_first_char",
         cp,
         data,
@@ -127,7 +127,7 @@ fn computeInfo(
         buffer[data.numeric_value_numeric.len - i - 1] = digit;
     }
 
-    data.numeric_value_numeric_reversed = try .fromSlice(
+    data.numeric_value_numeric_reversed = try .init(
         allocator,
         backing.numeric_value_numeric_reversed,
         &tracking.numeric_value_numeric_reversed,
@@ -144,7 +144,7 @@ fn computeOptEmojiOddOrEven(
 ) Allocator.Error!void {
     _ = allocator;
     _ = b;
-    config.singleInit(
+    types.initSingle(
         "opt_emoji_odd_or_even",
         cp,
         data,
@@ -195,7 +195,7 @@ fn computeNextOrPrev(
         };
     }
 
-    config.singleInit(
+    types.initSingle(
         "next_or_prev",
         cp,
         data,
@@ -227,7 +227,7 @@ fn computeNextOrPrevDirect(
 ) Allocator.Error!void {
     _ = allocator;
     _ = b;
-    config.singleInit(
+    types.initSingle(
         "next_or_prev_direct",
         cp,
         data,
@@ -256,7 +256,7 @@ fn computeBidiPairedBracketDirect(
 ) Allocator.Error!void {
     _ = allocator;
     _ = b;
-    config.singleInit(
+    types.initSingle(
         "bidi_paired_bracket_direct",
         cp,
         data,
@@ -290,7 +290,7 @@ fn computeMaybeBit(
         maybe = cp % 2 == 0;
     }
 
-    config.singleInit(
+    types.initSingle(
         "maybe_bit",
         cp,
         data,
