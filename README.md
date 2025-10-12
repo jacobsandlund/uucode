@@ -272,8 +272,3 @@ The architecture works in a few layers:
 * Layer 1 (`src/build/Ucd.zig`): Parses the Unicode Character Database (UCD).
 * Layer 2 (`src/build/tables.zig`): Generates table data written to a zig file.
 * Layer 3 (`src/root.zig`): Exposes methods to fetch information from the built tables.
-
-
-## AGENTS.md
-
-The `AGENTS.md` has primarily been useful for an initial pass at parsing the UCD text files, but all agent code has been carefully reviewed, and most code has been written manually.
