@@ -13,6 +13,7 @@ unicode_data: [n]UnicodeData,
 case_folding: [n]CaseFolding,
 special_casing: [n]SpecialCasing,
 derived_core_properties: [n]DerivedCoreProperties,
+derived_bidi_class: [n]types.BidiClass,
 east_asian_width: [n]types.EastAsianWidth,
 original_grapheme_break: [n]types.OriginalGraphemeBreak,
 emoji_data: [n]EmojiData,
@@ -92,6 +93,7 @@ pub fn parse(self: *Self, allocator: std.mem.Allocator) !void {
     try parseCaseFolding(allocator, &self.case_folding);
     try parseSpecialCasing(allocator, &self.special_casing);
     try parseDerivedCoreProperties(allocator, &self.derived_core_properties);
+    try parseDerivedBidiClass(allocator, &self.derived_bidi_class);
     try parseEastAsianWidth(allocator, &self.east_asian_width);
     try parseGraphemeBreak(allocator, &self.original_grapheme_break);
     try parseEmojiData(allocator, &self.emoji_data);
@@ -367,6 +369,13 @@ const bidi_class_map = std.StaticStringMap(types.BidiClass).initComptime(.{
     .{ "RLI", .right_to_left_isolate },
     .{ "FSI", .first_strong_isolate },
     .{ "PDI", .pop_directional_isolate },
+});
+
+const bidi_longform_map = std.StaticStringMap(types.BidiClass).initComptime(.{
+    .{ "Left_To_Right", .left_to_right },
+    .{ "Right_To_Left", .right_to_left },
+    .{ "Arabic_Letter", .right_to_left_arabic },
+    .{ "European_Terminator", .european_number_terminator },
 });
 
 fn parseCaseFolding(
@@ -654,6 +663,73 @@ const indic_conjunct_break_map = std.StaticStringMap(types.IndicConjunctBreak).i
     .{ "Consonant", .consonant },
     .{ "Extend", .extend },
 });
+
+fn parseDerivedBidiClass(
+    allocator: std.mem.Allocator,
+    derived_bidi_class: []types.BidiClass,
+) !void {
+    @memset(derived_bidi_class, .left_to_right);
+
+    const file_path = "ucd/extracted/DerivedBidiClass.txt";
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \t");
+        if (trimmed.len == 0) continue;
+
+        // Handle @missing directives first
+        if (std.mem.startsWith(u8, trimmed, "# @missing:")) {
+            const missing_line = trimmed["# @missing:".len..];
+            var parts = std.mem.splitScalar(u8, missing_line, ';');
+            const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+            const class_str = std.mem.trim(u8, parts.next().?, " \t");
+
+            const range = try parseRange(cp_str);
+
+            // Skip Left_To_Right as it's the default
+            if (std.mem.eql(u8, class_str, "Left_To_Right")) {
+                continue;
+            }
+
+            const bidi_class = bidi_longform_map.get(class_str) orelse {
+                std.log.err("Unknown @missing BidiClass value: {s}", .{class_str});
+                unreachable;
+            };
+
+            var cp: u21 = range.start;
+            while (cp <= range.end) : (cp += 1) {
+                derived_bidi_class[cp] = bidi_class;
+            }
+            continue;
+        }
+
+        // Handle regular entries
+        const data_line = trim(trimmed);
+        if (data_line.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, data_line, ';');
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const class_str = std.mem.trim(u8, parts.next().?, " \t");
+
+        const range = try parseRange(cp_str);
+
+        const bidi_class = bidi_class_map.get(class_str) orelse {
+            std.log.err("Unknown BidiClass value: {s}", .{class_str});
+            unreachable;
+        };
+
+        var cp: u21 = range.start;
+        while (cp <= range.end) : (cp += 1) {
+            derived_bidi_class[cp] = bidi_class;
+        }
+    }
+}
 
 fn parseEastAsianWidth(
     allocator: std.mem.Allocator,

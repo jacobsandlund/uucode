@@ -3,7 +3,7 @@
 # to list un-ignored files correctly
 
 ArabicShaping.txt
-# BidiBrackets.txt
+# BidiBrackets.txt (used)
 BidiCharacterTest.txt
 BidiMirroring.txt
 BidiTest.txt
@@ -69,7 +69,7 @@ auxiliary/WordBreakTest.txt
 emoji/ReadMe.txt
 # emoji/emoji-data.txt (used)
 emoji/emoji-variation-sequences.txt
-extracted/DerivedBidiClass.txt
+# extracted/DerivedBidiClass.txt (used)
 extracted/DerivedBinaryProperties.txt
 extracted/DerivedCombiningClass.txt
 extracted/DerivedDecompositionType.txt
