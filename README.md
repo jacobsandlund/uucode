@@ -307,6 +307,6 @@ The architecture works in a few layers:
 
 ## History and acknowledgments
 
-`uucode` began out of an [issue to upgrade dependencies](https://github.com/ghostty-org/ghostty/issues/5694) in the [Ghostty terminal](https://ghostty.org/), where the experience modifying [zg](https://codeberg.org/atman/zg/) gave the confidence to build a fresh new library.
+`uucode` began out of work on the [Ghostty terminal](https://ghostty.org/) on [an issue to upgrade dependencies](https://github.com/ghostty-org/ghostty/issues/5694), where the experience modifying [zg](https://codeberg.org/atman/zg/) gave the confidence to build a fresh new library.
 
 `uucode` builds upon the Unicode performance work done in Ghostty, [as outlined in this excellent Devlog](https://mitchellh.com/writing/ghostty-devlog-006). The 3-stage lookup tables, as mentioned in that Devlog, come from [this article](https://here-be-braces.com/fast-lookup-of-unicode-properties/).
