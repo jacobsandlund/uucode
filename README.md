@@ -301,7 +301,7 @@ The architecture works in a few layers:
 * Layer 2 (`src/build/tables.zig`): Generates table data written to a zig file.
 * Layer 3 (`src/root.zig`): Exposes methods to fetch information from the built tables.
 
-## LICENSE
+## License
 
 `uucode` is available under an [MIT License](./LICENSE). See also [./licenses](./licenses) for licenses of code being used in the repo.
 
