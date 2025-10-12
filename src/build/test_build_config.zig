@@ -339,7 +339,6 @@ pub const tables = [_]config.Table{
                 .max_offset = 986096,
             }),
             d.field("grapheme_break"),
-            d.field("special_casing_condition"),
             d.field("special_lowercase_mapping"),
         },
     },
@@ -375,14 +374,15 @@ pub const tables = [_]config.Table{
         },
     },
     .{
-        .name = "needed_for_tests",
+        .name = "needed_for_tests_and_build_build_config",
         .extensions = &.{
             config_x.grapheme_break_pedantic_emoji,
             config_x.wcwidth,
         },
-        .fields = &.{
-            config_x.grapheme_break_pedantic_emoji.field("grapheme_break_pedantic_emoji"),
-            config_x.wcwidth.field("wcwidth"),
-        },
+        .fields = &config._resolveFields(
+            config_x,
+            &.{ "grapheme_break_pedantic_emoji", "wcwidth", "special_casing_condition" },
+            &.{ "grapheme_break_pedantic_emoji", "wcwidth" },
+        ),
     },
 };

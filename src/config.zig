@@ -674,6 +674,14 @@ pub const Extension = struct {
         tracking: anytype,
     ) std.mem.Allocator.Error!void,
 
+    pub fn hasField(comptime self: *const Extension, name: []const u8) bool {
+        return inline for (self.fields) |f| {
+            if (std.mem.eql(u8, f.name, name)) {
+                break true;
+            }
+        } else false;
+    }
+
     pub fn field(comptime self: *const Extension, name: []const u8) Field {
         return for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
@@ -682,3 +690,27 @@ pub const Extension = struct {
         } else @compileError("Field '" ++ name ++ "' not found in Extension");
     }
 };
+
+// This is used by generated build_config.zig, and not intended for direct use
+// when using advanced configuration.
+pub fn _resolveFields(
+    comptime config_x: type,
+    comptime field_names: []const []const u8,
+    comptime extension_names: []const []const u8,
+) [field_names.len]Field {
+    @setEvalBranchQuota(100_000);
+    var result: [field_names.len]Field = undefined;
+    for (field_names, 0..) |field_name, i| {
+        result[i] = extensions_loop: inline for (@typeInfo(config_x).@"struct".decls) |decl| {
+            for (extension_names) |ext_name| {
+                if (std.mem.eql(u8, decl.name, ext_name)) {
+                    const extension = @field(config_x, decl.name);
+                    if (extension.hasField(field_name)) {
+                        break :extensions_loop extension.field(field_name);
+                    }
+                }
+            }
+        } else default.field(field_name);
+    }
+    return result;
+}

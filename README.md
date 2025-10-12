@@ -141,6 +141,34 @@ if (b.lazyDependency("uucode", .{
 }
 ```
 
+### Builtin extensions
+
+`uucode` includes builtin extensions that add derived properties. Use `extensions` or `extensions_0` through `extensions_9` to include them:
+
+``` zig
+// In `build.zig`:
+if (b.lazyDependency("uucode", .{
+    .target = target,
+    .optimize = optimize,
+    .extensions = @as([]const []const u8, &.{
+        "wcwidth",
+    }),
+    .fields = @as([]const []const u8, &.{
+        // Make sure to also include the extension's fields here:
+        "wcwidth",
+        ...
+        "general_category",
+    }),
+})) |dep| {
+    step.root_module.addImport("uucode", dep.module("uucode"));
+}
+
+// In your code:
+uucode.get(.wcwidth, 0x26F5) // ⛵ == 2
+```
+
+See [src/x/config.x.zig](src/x/config.x.zig) for the full list of builtin extensions.
+
 ### Advanced configuration
 
 ``` zig
@@ -232,7 +260,7 @@ pub const tables = [_]config.Table{
         },
 
         .fields = &.{
-            // Don't forget to include the extension fields here.
+            // Don't forget to include the extension's fields here.
             emoji_odd_or_even.field("emoji_odd_or_even"),
             wcwidth.field("wcwidth"),
 
