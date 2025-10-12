@@ -190,7 +190,7 @@ b.dependency("uucode", .{
 const std = @import("std");
 const config = @import("config.zig");
 
-// Use `config.x.zig` for extensions already built into `uucode`:
+// Use `config.x.zig` for builtin extensions:
 const config_x = @import("config.x.zig");
 
 const d = config.default;
