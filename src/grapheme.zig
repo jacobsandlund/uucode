@@ -11,6 +11,11 @@ pub const IteratorResult = struct {
     is_break: bool,
 };
 
+pub const Grapheme = struct {
+    start: usize,
+    end: usize,
+};
+
 pub fn CustomIterator(
     comptime CodePointIterator: type,
     comptime GB: type,
@@ -76,13 +81,14 @@ pub fn CustomIterator(
             return it.nextCodepoint();
         }
 
-        pub fn nextGrapheme(self: *Self) ?usize {
+        pub fn nextGrapheme(self: *Self) ?Grapheme {
+            const start = self.i;
             return while (self.nextCodepoint()) |result| {
-                if (result.is_break) break self.i;
+                if (result.is_break) break .{ .start = start, .end = self.i };
             } else null;
         }
 
-        pub fn peekGrapheme(self: Self) ?usize {
+        pub fn peekGrapheme(self: Self) ?Grapheme {
             var it = self;
             return it.nextGrapheme();
         }
@@ -152,27 +158,34 @@ test "Iterator nextCodepoint/peekCodepoint" {
 
 test "utf8Iterator nextGrapheme/peekGrapheme" {
     const str = "👩🏽‍🚀🇨🇭👨🏻‍🍼";
-    var start_i: usize = 0;
     var it = utf8Iterator(str);
     try std.testing.expect(it.i == 0);
 
-    try std.testing.expect(it.peekGrapheme() == 15);
+    var result = it.peekGrapheme();
+    try std.testing.expect(result.?.start == 0);
+    try std.testing.expect(result.?.end == 15);
     try std.testing.expect(it.i == 0);
 
-    try std.testing.expect(it.nextGrapheme() == 15);
+    result = it.nextGrapheme();
+    try std.testing.expect(result.?.start == 0);
+    try std.testing.expect(result.?.end == 15);
     try std.testing.expect(it.i == 15);
-    try std.testing.expect(std.mem.eql(u8, str[start_i..it.i], "👩🏽‍🚀"));
+    try std.testing.expect(std.mem.eql(u8, str[result.?.start..result.?.end], "👩🏽‍🚀"));
 
-    start_i = it.i;
-    try std.testing.expect(it.nextGrapheme() == 23);
+    result = it.nextGrapheme();
+    try std.testing.expect(result.?.start == 15);
+    try std.testing.expect(result.?.end == 23);
     try std.testing.expect(it.i == 23);
-    try std.testing.expect(std.mem.eql(u8, str[start_i..it.i], "🇨🇭"));
+    try std.testing.expect(std.mem.eql(u8, str[result.?.start..result.?.end], "🇨🇭"));
 
-    try std.testing.expect(it.peekGrapheme() == str.len);
-    try std.testing.expect(it.i == 23);
-    try std.testing.expect(std.mem.eql(u8, str[it.i..it.peekGrapheme().?], "👨🏻‍🍼"));
+    result = it.peekGrapheme();
+    try std.testing.expect(result.?.start == 23);
+    try std.testing.expect(result.?.end == str.len);
+    try std.testing.expect(std.mem.eql(u8, str[result.?.start..result.?.end], "👨🏻‍🍼"));
 
-    try std.testing.expect(it.nextGrapheme() == str.len);
+    result = it.nextGrapheme();
+    try std.testing.expect(result.?.start == 23);
+    try std.testing.expect(result.?.end == str.len);
     try std.testing.expect(it.i == str.len);
 
     try std.testing.expect(it.peekGrapheme() == null);

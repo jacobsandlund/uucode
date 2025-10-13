@@ -71,12 +71,12 @@ it.nextCodepoint(); // { .cp = 0x1F680; .is_break = true } // 🚀
 const start_i = it.i;
 
 // `nextGrapheme` advances until the start of the next grapheme cluster
-it.nextGrapheme(); // "👩🏽‍🚀🇨🇭".len
+const result = it.nextGrapheme(); // { .start = 15; .end = 23 }
 it.i; // "👩🏽‍🚀🇨🇭".len
-str[start_i..it.i]; // "🇨🇭"
+str[result.?.start..result.?.end]; // "🇨🇭"
 
-it.peekGrapheme(); // "👩🏽‍🚀🇨🇭👨🏻‍🍼".len
-str[it.i..it.peekGrapheme()]; // "👨🏻‍🍼"
+const result = it.peekGrapheme();
+str[result.?.start..result.?.end]; // "👨🏻‍🍼"
 
 //////////////////////
 // grapheme.isBreak
