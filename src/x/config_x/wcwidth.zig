@@ -127,6 +127,8 @@ fn compute(
         // Note though that 0x1160 and up in hangul_jamo are
         // east_asian_width == .neutral
         data.wcwidth = 0;
+    } else if (data.is_emoji_modifier) {
+        data.wcwidth = 0;
     } else if (data.east_asian_width == .wide or data.east_asian_width == .fullwidth) {
         data.wcwidth = 2;
     } else if (data.grapheme_break == .regional_indicator) {
@@ -142,6 +144,7 @@ pub const wcwidth = config.Extension{
         "east_asian_width",
         "general_category",
         "grapheme_break",
+        "is_emoji_modifier",
     },
     .compute = &compute,
     .fields = &.{

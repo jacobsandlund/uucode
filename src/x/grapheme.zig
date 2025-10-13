@@ -13,6 +13,12 @@ pub fn unverifiedWcwidth(const_it: anytype) i3 {
     while (it.nextCodepoint()) |result| {
         if (result.codepoint == uucode.config.zero_width_joiner) {
             width = 2;
+        } else if (result.codepoint == 0xFE0F) {
+            // Emoji presentation selector
+            width = 2;
+        } else if (result.codepoint == 0xFE0E) {
+            // Text presentation selector
+            width = 1;
         } else if (width <= 0) {
             width = uucode.get(.wcwidth, result.codepoint);
         }
