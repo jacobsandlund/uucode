@@ -48,8 +48,10 @@ fn isDoneDecoding(state: usize) bool {
 }
 
 pub const Iterator = struct {
-    bytes: []const u8,
+    // This "i" is part of the documented API of this iterator, pointing to the
+    // current location of the iterator in `bytes`.
     i: usize = 0,
+    bytes: []const u8,
 
     const Self = @This();
 

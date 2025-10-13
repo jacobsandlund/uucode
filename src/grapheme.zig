@@ -6,7 +6,7 @@ const get = getpkg.get;
 const FieldEnum = getpkg.FieldEnum;
 
 pub const IteratorResult = struct {
-    cp: u21,
+    codepoint: u21,
     is_break: bool,
 };
 
@@ -18,8 +18,12 @@ pub fn CustomIterator(
     comptime customIsBreak: fn (gb1: GB, gb2: GB, state: *State) bool,
 ) type {
     return struct {
-        state: State,
+        // This "i" is part of the documented API of this iterator, pointing to
+        // the current location of the iterator in the underlying bytes (the
+        // `i` of the CodePointIterator).
         i: usize,
+
+        state: State,
         next_cp_it: CodePointIterator,
         next_cp: ?u21,
         next_gb: GB,
@@ -36,14 +40,14 @@ pub fn CustomIterator(
                 .i = i,
                 .next_cp_it = next_cp_it,
                 .next_cp = next_cp,
-                .next_gb = if (next_cp) |cp|
-                    get(grapheme_break_field, cp)
+                .next_gb = if (next_cp) |codepoint|
+                    get(grapheme_break_field, codepoint)
                 else
                     .other,
             };
         }
 
-        pub fn next(self: *Self) ?IteratorResult {
+        pub fn nextCodepoint(self: *Self) ?IteratorResult {
             if (self.next_cp == null) return null;
 
             const cp1 = self.next_cp.?;
@@ -55,26 +59,31 @@ pub fn CustomIterator(
                 self.next_gb = get(grapheme_break_field, cp2);
                 const is_break = customIsBreak(gb1, self.next_gb, &self.state);
                 return IteratorResult{
-                    .cp = cp1,
+                    .codepoint = cp1,
                     .is_break = is_break,
                 };
             } else {
                 return IteratorResult{
-                    .cp = cp1,
+                    .codepoint = cp1,
                     .is_break = true,
                 };
             }
         }
 
-        pub fn peek(self: Self) ?IteratorResult {
+        pub fn peekCodepoint(self: Self) ?IteratorResult {
             var it = self;
-            return it.next();
+            return it.nextCodepoint();
         }
 
-        pub fn nextBreak(self: *Self) ?usize {
-            return while (self.next()) |result| {
+        pub fn nextGrapheme(self: *Self) ?usize {
+            return while (self.nextCodepoint()) |result| {
                 if (result.is_break) break self.i;
             } else null;
+        }
+
+        pub fn peekGrapheme(self: Self) ?usize {
+            var it = self;
+            return it.nextGrapheme();
         }
     };
 }
@@ -89,69 +98,83 @@ pub fn Iterator(comptime CodePointIterator: type) type {
     );
 }
 
-test "Iterator next/peek" {
+test "Iterator nextCodepoint/peekCodepoint" {
     const utf8 = @import("utf8.zig");
-    const str = "👩‍🍼😀";
+    const str = "👩🏽‍🚀🇨🇭";
     var it = Iterator(utf8.Iterator).init(.init(str));
     try std.testing.expect(it.i == 0);
 
-    var result = it.peek();
+    var result = it.peekCodepoint();
     try std.testing.expect(it.i == 0);
-    try std.testing.expect(result != null);
-    try std.testing.expect(result.?.cp == 0x1F469); // 👩
+    try std.testing.expect(result.?.codepoint == 0x1F469); // 👩
     try std.testing.expect(result.?.is_break == false);
 
-    result = it.next();
+    result = it.nextCodepoint();
     try std.testing.expect(it.i == 4);
-    try std.testing.expect(result != null);
-    try std.testing.expect(result.?.cp == 0x1F469); // 👩
+    try std.testing.expect(result.?.codepoint == 0x1F469); // 👩
     try std.testing.expect(result.?.is_break == false);
 
-    result = it.next();
-    try std.testing.expect(result != null);
-    try std.testing.expect(result.?.cp == 0x200D); // Zero width joiner
+    result = it.nextCodepoint();
+    try std.testing.expect(result.?.codepoint == 0x1F3FD); // 🏽
     try std.testing.expect(result.?.is_break == false);
 
-    result = it.next();
-    try std.testing.expect(result != null);
-    try std.testing.expect(result.?.cp == 0x1F37C); // 🍼
+    result = it.nextCodepoint();
+    try std.testing.expect(result.?.codepoint == 0x200D); // Zero width joiner
+    try std.testing.expect(result.?.is_break == false);
+
+    result = it.peekCodepoint();
+    try std.testing.expect(result.?.codepoint == 0x1F680); // 🚀
     try std.testing.expect(result.?.is_break == true);
 
-    result = it.peek();
-    try std.testing.expect(result != null);
-    try std.testing.expect(result.?.cp == 0x1F600); // 😀
+    result = it.nextCodepoint();
+    try std.testing.expect(it.i == 15);
+    try std.testing.expect(result.?.codepoint == 0x1F680); // 🚀
     try std.testing.expect(result.?.is_break == true);
+    try std.testing.expect(std.mem.eql(u8, str[0..it.i], "👩🏽‍🚀"));
 
-    result = it.next();
+    result = it.nextCodepoint();
+    try std.testing.expect(result.?.codepoint == 0x1F1E8); // Regional Indicator "C"
+    try std.testing.expect(result.?.is_break == false);
+
+    result = it.nextCodepoint();
     try std.testing.expect(it.i == str.len);
-    try std.testing.expect(result != null);
-    try std.testing.expect(result.?.cp == 0x1F600); // 😀
+    try std.testing.expect(result.?.codepoint == 0x1F1ED); // Regional Indicator "H"
     try std.testing.expect(result.?.is_break == true);
 
-    try std.testing.expect(it.peek() == null);
-    try std.testing.expect(it.next() == null);
-    try std.testing.expect(it.next() == null);
+    try std.testing.expect(it.peekCodepoint() == null);
+    try std.testing.expect(it.nextCodepoint() == null);
+    try std.testing.expect(it.nextCodepoint() == null);
 }
 
-test "Iterator nextBreak" {
+test "Iterator nextGrapheme/peekGrapheme" {
     const utf8 = @import("utf8.zig");
-    const str = "👩‍🍼😀";
+    const str = "👩🏽‍🚀🇨🇭👨🏻‍🍼";
+    var start_i: usize = 0;
     var it = Iterator(utf8.Iterator).init(.init(str));
+    try std.testing.expect(it.i == 0);
 
-    try std.testing.expect(it.nextBreak() == 11);
-    try std.testing.expect(it.i == 11);
+    try std.testing.expect(it.peekGrapheme() == 15);
+    try std.testing.expect(it.i == 0);
 
-    const result = it.peek();
-    try std.testing.expect(result != null);
-    try std.testing.expect(result.?.cp == 0x1F600); // 😀
-    try std.testing.expect(result.?.is_break == true);
+    try std.testing.expect(it.nextGrapheme() == 15);
+    try std.testing.expect(it.i == 15);
+    try std.testing.expect(std.mem.eql(u8, str[start_i..it.i], "👩🏽‍🚀"));
 
-    const start_i = it.i;
-    try std.testing.expect(it.nextBreak() == str.len);
+    start_i = it.i;
+    try std.testing.expect(it.nextGrapheme() == 23);
+    try std.testing.expect(it.i == 23);
+    try std.testing.expect(std.mem.eql(u8, str[start_i..it.i], "🇨🇭"));
+
+    try std.testing.expect(it.peekGrapheme() == str.len);
+    try std.testing.expect(it.i == 23);
+    try std.testing.expect(std.mem.eql(u8, str[it.i..it.peekGrapheme().?], "👨🏻‍🍼"));
+
+    try std.testing.expect(it.nextGrapheme() == str.len);
     try std.testing.expect(it.i == str.len);
-    try std.testing.expect(std.mem.eql(u8, str[start_i..it.i], "😀"));
-    try std.testing.expect(it.nextBreak() == null);
-    try std.testing.expect(it.nextBreak() == null);
+
+    try std.testing.expect(it.peekGrapheme() == null);
+    try std.testing.expect(it.nextGrapheme() == null);
+    try std.testing.expect(it.nextGrapheme() == null);
 }
 
 pub const BreakState = enum(u3) {

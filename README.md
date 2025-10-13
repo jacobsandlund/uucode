@@ -53,22 +53,27 @@ it.next(); // 0x1F47A
 //////////////////////
 // grapheme.Iterator
 
-var it = uucode.grapheme.Iterator(uccode.utf8.Iterator).init(.init("👩‍🍼😀"));
+var it = uucode.grapheme.Iterator(uccode.utf8.Iterator).init(.init("👩🏽‍🚀🇨🇭👨🏻‍🍼"));
 
-// `next` still advances one code point at a time
-it.next(); // { .cp = 0x1F469; .is_break = false } // 👩
+// `nextCodepoint` advances one code point at a time, indicating a new grapheme
+// with `is_break = true`.
+it.nextCodepoint(); // { .cp = 0x1F469; .is_break = false } // 👩
 it.i; // 4 (bytes into the utf8 string)
 
-it.peek(); // { .cp = 0x200D; .is_break = false } // Zero width joiner
-it.next(); // { .cp = 0x200D; .is_break = false } // Zero width joiner
-it.next(); // { .cp = 0x1F37C; .is_break = true } // 🍼
+it.peekCodepoint(); // { .cp = 0x1F3FD; .is_break = false } // 🏽
+it.nextCodepoint(); // { .cp = 0x1F3FD; .is_break = false } // 🏽
+it.nextCodepoint(); // { .cp = 0x200D; .is_break = false } // Zero width joiner
+it.nextCodepoint(); // { .cp = 0x1F680; .is_break = true } // 🚀
 
 const start_i = it.i;
 
-// `nextBreak` advances until the start of the next grapheme cluster
-it.nextBreak(); // "👩‍🍼😀".len
-it.i; // "👩‍🍼😀".len
-str[start_i..it.i]; // "😀"
+// `nextGrapheme` advances until the start of the next grapheme cluster
+it.nextGrapheme(); // "👩🏽‍🚀🇨🇭".len
+it.i; // "👩🏽‍🚀🇨🇭".len
+str[start_i..it.i]; // "🇨🇭"
+
+it.peekGrapheme(); // "👩🏽‍🚀🇨🇭👨🏻‍🍼".len
+str[it.i..it.peekGrapheme()]; // "👨🏻‍🍼"
 
 //////////////////////
 // grapheme.isBreak
@@ -76,18 +81,20 @@ str[start_i..it.i]; // "😀"
 var break_state: uucode.grapheme.BreakState = .default;
 
 var cp1: u21 = 0x1F469; // 👩
-var cp2: u21 = 0x200D; // Zero width joiner
-
+var cp2: u21 = 0x1F3FD; // 🏽
 uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
 
 cp1 = cp2;
-cp2 = 0x1F37C; // 🍼
-
-// The combined grapheme cluster is 👩‍🍼 (woman feeding baby)
+cp2 = 0x200D; // Zero width joiner
 uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
 
 cp1 = cp2;
-cp2 = 0x1F600; // 😀
+cp2 = 0x1F680; // 🚀
+// The combined grapheme cluster is 👩‍🍼 (woman astronaut)
+uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
+
+cp1 = cp2;
+cp2 = 0x1F468; // 👨
 uucode.grapheme.isBreak(cp1, cp2, &break_state); // true
 ```
 

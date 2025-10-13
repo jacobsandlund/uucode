@@ -10,12 +10,14 @@ const types_x = @import("types.x.zig");
 pub fn unverifiedWcwidth(const_it: anytype) i3 {
     var it = const_it;
     var width: i3 = 0;
-    while (it.next()) |result| {
-        if (result.cp == uucode.config.zero_width_joiner) {
+    while (it.nextCodepoint()) |result| {
+        if (result.codepoint == uucode.config.zero_width_joiner) {
             width = 2;
         } else if (width <= 0) {
-            width = uucode.get(.wcwidth, result.cp);
+            width = uucode.get(.wcwidth, result.codepoint);
         }
+
+        if (result.is_break) break;
     }
 
     return width;
