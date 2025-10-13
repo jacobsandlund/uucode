@@ -2,6 +2,7 @@ const std = @import("std");
 
 const types = @import("types.zig");
 const getpkg = @import("get.zig");
+const utf8 = @import("utf8.zig");
 const get = getpkg.get;
 const FieldEnum = getpkg.FieldEnum;
 
@@ -98,8 +99,11 @@ pub fn Iterator(comptime CodePointIterator: type) type {
     );
 }
 
+pub fn utf8Iterator(bytes: []const u8) Iterator(utf8.Iterator) {
+    return Iterator(utf8.Iterator).init(.init(bytes));
+}
+
 test "Iterator nextCodepoint/peekCodepoint" {
-    const utf8 = @import("utf8.zig");
     const str = "👩🏽‍🚀🇨🇭";
     var it = Iterator(utf8.Iterator).init(.init(str));
     try std.testing.expect(it.i == 0);
@@ -146,11 +150,10 @@ test "Iterator nextCodepoint/peekCodepoint" {
     try std.testing.expect(it.nextCodepoint() == null);
 }
 
-test "Iterator nextGrapheme/peekGrapheme" {
-    const utf8 = @import("utf8.zig");
+test "utf8Iterator nextGrapheme/peekGrapheme" {
     const str = "👩🏽‍🚀🇨🇭👨🏻‍🍼";
     var start_i: usize = 0;
-    var it = Iterator(utf8.Iterator).init(.init(str));
+    var it = utf8Iterator(str);
     try std.testing.expect(it.i == 0);
 
     try std.testing.expect(it.peekGrapheme() == 15);

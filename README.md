@@ -51,8 +51,11 @@ it.next(); // 0x1F63B
 it.next(); // 0x1F47A
 
 //////////////////////
-// grapheme.Iterator
+// grapheme.Iterator / grapheme.utf8Iterator
 
+var it = uucode.grapheme.utf8Iterator("👩🏽‍🚀🇨🇭👨🏻‍🍼")
+
+// (which is equivalent to:)
 var it = uucode.grapheme.Iterator(uccode.utf8.Iterator).init(.init("👩🏽‍🚀🇨🇭👨🏻‍🍼"));
 
 // `nextCodepoint` advances one code point at a time, indicating a new grapheme
