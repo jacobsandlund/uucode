@@ -26,6 +26,13 @@ pub fn unverifiedWcwidth(const_it: anytype) i3 {
             if (uucode.get(.grapheme_break, prev_cp) == .extended_pictographic) {
                 width = 1;
             }
+        } else if (result.codepoint == 0x20E3) {
+            // Emoji keycap sequenece.
+            if (prev_cp == 0xFE0F) { // Emoji presentation selector
+                // TODO: check the previous previous codepoint, or even use
+                // emoji-sequences.txt
+                width = 2;
+            }
         } else if (width <= 0) {
             width = uucode.get(.wcwidth, result.codepoint);
         }
