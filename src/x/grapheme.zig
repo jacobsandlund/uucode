@@ -10,19 +10,27 @@ const types_x = @import("types.x.zig");
 pub fn unverifiedWcwidth(const_it: anytype) i3 {
     var it = const_it;
     var width: i3 = 0;
+    var prev_cp: u21 = 0;
     while (it.nextCodepoint()) |result| {
         if (result.codepoint == uucode.config.zero_width_joiner) {
             width = 2;
         } else if (result.codepoint == 0xFE0F) {
-            // Emoji presentation selector
-            width = 2;
+            // Emoji presentation selector. Only apply to emoji (TODO: use
+            // emoji-variation-sequences.txt)
+            if (uucode.get(.grapheme_break, prev_cp) == .extended_pictographic) {
+                width = 2;
+            }
         } else if (result.codepoint == 0xFE0E) {
-            // Text presentation selector
-            width = 1;
+            // Text presentation selector. Only apply to emoji (TODO: use
+            // emoji-variation-sequences.txt)
+            if (uucode.get(.grapheme_break, prev_cp) == .extended_pictographic) {
+                width = 1;
+            }
         } else if (width <= 0) {
             width = uucode.get(.wcwidth, result.codepoint);
         }
 
+        prev_cp = result.codepoint;
         if (result.is_break) break;
     }
 
