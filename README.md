@@ -254,7 +254,7 @@ pub const tables = [_]config.Table{
         // `getAll("0")`
         .name = "foo",
 
-        // A two stage table can be a slightly faster if the data is small. The
+        // A two stage table can be slightly faster if the data is small. The
         // default `.auto` will pick a reasonable value, but to get the
         // absolute best performance run benchmarks with `.two` or `.three`
         // on realistic data.
