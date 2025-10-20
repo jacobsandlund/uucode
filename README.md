@@ -313,7 +313,7 @@ The architecture works in a few layers:
 
 ## License
 
-`uucode` is available under an [MIT License](./LICENSE). See also [./licenses](./licenses) for licenses of code being used in the repo.
+`uucode` is available under an [MIT License](./LICENSE.md).
 
 ## History and acknowledgments
 
