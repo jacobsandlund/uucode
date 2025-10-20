@@ -311,12 +311,16 @@ The architecture works in a few layers:
 * Layer 2 (`src/build/tables.zig`): Generates table data written to a zig file.
 * Layer 3 (`src/root.zig`): Exposes methods to fetch information from the built tables.
 
-## License
-
-`uucode` is available under an [MIT License](./LICENSE.md).
-
 ## History and acknowledgments
 
 `uucode` began out of work on the [Ghostty terminal](https://ghostty.org/) on [an issue to upgrade dependencies](https://github.com/ghostty-org/ghostty/issues/5694), where the experience modifying [zg](https://codeberg.org/atman/zg/) gave the confidence to build a fresh new library.
 
 `uucode` builds upon the Unicode performance work done in Ghostty, [as outlined in this excellent Devlog](https://mitchellh.com/writing/ghostty-devlog-006). The 3-stage lookup tables, as mentioned in that Devlog, come from [this article](https://here-be-braces.com/fast-lookup-of-unicode-properties/).
+
+## License
+
+`uucode` is available under an MIT License. See [./LICENSE.md](./LICENSE.md) for the license text and an index of licenses for code used in the repo.
+
+## Resources
+
+See [./RESOURCES.md](./RESOURCES.md) for a list of resources used to build `uucode`.
