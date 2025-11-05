@@ -235,6 +235,10 @@ pub const default = Table{
         .{ .name = "is_emoji_component", .type = bool },
         .{ .name = "is_extended_pictographic", .type = bool },
 
+        // EmojiVariationSequences field
+        .{ .name = "is_emoji_vs_text", .type = bool },
+        .{ .name = "is_emoji_vs_emoji", .type = bool },
+
         // GraphemeBreak field (derived)
         .{ .name = "grapheme_break", .type = types.GraphemeBreak },
 

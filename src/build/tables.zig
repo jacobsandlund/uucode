@@ -501,6 +501,7 @@ pub fn writeTableData(
         const east_asian_width = ucd.east_asian_width[cp];
         const original_grapheme_break = ucd.original_grapheme_break[cp];
         const emoji_data = ucd.emoji_data[cp];
+        const emoji_vs = ucd.emoji_vs[cp];
         const bidi_paired_bracket = ucd.bidi_paired_bracket[cp];
         const block_value = ucd.blocks[cp];
 
@@ -891,6 +892,14 @@ pub fn writeTableData(
         }
         if (@hasField(AllData, "is_extended_pictographic")) {
             a.is_extended_pictographic = emoji_data.is_extended_pictographic;
+        }
+
+        // EmojiVariationSelector field
+        if (@hasField(AllData, "is_emoji_vs_text")) {
+            a.is_emoji_vs_text = emoji_vs.text;
+        }
+        if (@hasField(AllData, "is_emoji_vs_emoji")) {
+            a.is_emoji_vs_emoji = emoji_vs.emoji;
         }
 
         // BidiPairedBracket field

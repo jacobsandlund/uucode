@@ -68,7 +68,7 @@ auxiliary/WordBreakTest.html
 auxiliary/WordBreakTest.txt
 emoji/ReadMe.txt
 # emoji/emoji-data.txt (used)
-emoji/emoji-variation-sequences.txt
+# emoji/emoji-variation-sequences.txt (used)
 # extracted/DerivedBidiClass.txt (used)
 extracted/DerivedBinaryProperties.txt
 extracted/DerivedCombiningClass.txt

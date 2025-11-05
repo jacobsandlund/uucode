@@ -17,6 +17,7 @@ derived_bidi_class: [n]types.BidiClass,
 east_asian_width: [n]types.EastAsianWidth,
 original_grapheme_break: [n]types.OriginalGraphemeBreak,
 emoji_data: [n]EmojiData,
+emoji_vs: [n]EmojiVariationSequence,
 bidi_paired_bracket: [n]types.BidiPairedBracket,
 blocks: [n]types.Block,
 
@@ -85,6 +86,11 @@ const EmojiData = packed struct {
     is_extended_pictographic: bool = false,
 };
 
+const EmojiVariationSequence = packed struct {
+    text: bool = false, // VS15
+    emoji: bool = false, // VS16
+};
+
 const Self = @This();
 
 pub fn parse(self: *Self, allocator: std.mem.Allocator) !void {
@@ -97,6 +103,7 @@ pub fn parse(self: *Self, allocator: std.mem.Allocator) !void {
     try parseEastAsianWidth(allocator, &self.east_asian_width);
     try parseGraphemeBreak(allocator, &self.original_grapheme_break);
     try parseEmojiData(allocator, &self.emoji_data);
+    try parseEmojiVariationSequences(allocator, &self.emoji_vs);
     try parseBlocks(allocator, &self.blocks);
     try parseBidiBrackets(allocator, &self.bidi_paired_bracket);
 
@@ -906,6 +913,37 @@ const emoji_data_property_map = std.StaticStringMap(std.meta.FieldEnum(EmojiData
     .{ "Emoji_Component", .is_emoji_component },
     .{ "Extended_Pictographic", .is_extended_pictographic },
 });
+
+fn parseEmojiVariationSequences(
+    allocator: std.mem.Allocator,
+    emoji_vs: []EmojiVariationSequence,
+) !void {
+    @memset(emoji_vs, .{});
+
+    const file_path = "ucd/emoji/emoji-variation-sequences.txt";
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = trim(line);
+        if (trimmed.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, trimmed, ' ');
+        const cp: u21 = try parseCp(parts.next().?);
+        const vs_str = parts.next().?;
+
+        if (std.mem.eql(u8, vs_str, "FE0E"))
+            emoji_vs[cp].text = true
+        else if (std.mem.eql(u8, vs_str, "FE0F"))
+            emoji_vs[cp].emoji = true
+        else
+            std.log.err("Unknown Emoji Variation Selector: {s}", .{vs_str});
+    }
+}
 
 fn parseBlocks(
     allocator: std.mem.Allocator,
