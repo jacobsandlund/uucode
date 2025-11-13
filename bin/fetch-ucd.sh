@@ -3,6 +3,7 @@
 version="16.0.0"
 
 base_url="https://www.unicode.org/Public/zipped/${version}"
+emoji_url="https://www.unicode.org/Public/emoji/latest"
 
 mv ucd/.gitignore ucd-gitignore
 rm -rf ucd
@@ -14,10 +15,19 @@ curl -o ucd.zip "${base_url}/UCD.zip"
 unzip ucd.zip
 rm ucd.zip
 
+cd emoji
+curl -o emoji-sequences.txt "${emoji_url}/emoji-sequences.txt"
+curl -o emoji-test.txt "${emoji_url}/emoji-test.txt"
+curl -o emoji-zwj-sequences.txt "${emoji_url}/emoji-zwj-sequences.txt"
+cd ..
+
 cd Unihan
 curl -o unihan.zip "${base_url}/Unihan.zip"
 unzip unihan.zip
 rm unihan.zip
+cd ..
+
+cd ..
 
 echo
 echo "########################################################################"
