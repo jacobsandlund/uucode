@@ -22,10 +22,10 @@ rm unihan.zip
 echo
 echo "########################################################################"
 echo
-echo "Done updating UCD files to version ${version}"
+echo "Done fetching UCD files"
 echo
 echo "Explicitly add any new files to start parsing to the list of .gitignore"
-echo "exceptions."
+echo "exceptions. Add a '#' to comment them out, appending '(used)' at the end."
 echo
 echo "Next, flip the 'is_updating_ucd' flag in 'src/config.zig' to true, and"
 echo "'zig build test' once, updating the 'default' config if it needs"
