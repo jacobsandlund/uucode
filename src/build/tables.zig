@@ -123,7 +123,7 @@ const updating_ucd_fields = brk: {
             .basic, .optional => {
                 fields[i] = f;
             },
-            .shift => {
+            .shift, .@"union" => {
                 fields[i] = f.override(.{
                     .shift_low = -@as(isize, max_cp),
                     .shift_high = max_cp,
