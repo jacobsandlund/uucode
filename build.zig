@@ -419,7 +419,12 @@ fn buildTables(
     build_tables_mod.addImport("config.zig", config_mod);
     build_tables_mod.addImport("build_config", build_config_mod);
     build_tables_mod.addImport("types.zig", types_mod);
+
+    const ucd = b.dependency("ucd", .{});
+    const ucd_path = ucd.path("");
+
     const run_build_tables_exe = b.addRunArtifact(build_tables_exe);
+    run_build_tables_exe.addDirectoryArg(ucd_path);
     run_build_tables_exe.setCwd(b.path(""));
     const tables_path = run_build_tables_exe.addOutputFileArg("tables.zig");
 

@@ -1,6 +1,13 @@
 .{
     .name = .uucode,
     .version = "0.1.0",
+    .dependencies = .{
+        .ucd = .{
+            // Unicode version 16.0.0 as of this writing.
+            .url = "https://www.unicode.org/Public/UCD/latest/ucd/UCD.zip",
+            .hash = "N-V-__8AALTJcQJ3hosujokSgxYTsa3q1mDZ2dasYhuJwaOV",
+        },
+    },
     .fingerprint = 0x8d4ebdea3ec19865,
     .minimum_zig_version = "0.15.1",
     .paths = .{

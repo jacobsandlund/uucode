@@ -21,15 +21,16 @@ pub fn main() !void {
     var ucd_fba = std.heap.FixedBufferAllocator.init(buffer_for_fba);
     const ucd_allocator = ucd_fba.allocator();
 
-    var ucd = try ucd_allocator.create(Ucd);
-
-    try ucd.parse(ucd_allocator);
 
     var args_iter = try std.process.argsWithAllocator(ucd_allocator);
     _ = args_iter.skip(); // Skip program name
-
-    // Get output path (only argument now)
+    // Get UCD data path
+    const ucd_path = args_iter.next() orelse std.debug.panic("No ucd directory arg!", .{});
+    // Get output path
     const output_path = args_iter.next() orelse std.debug.panic("No output file arg!", .{});
+
+    var ucd = try ucd_allocator.create(Ucd);
+    try ucd.parse(ucd_path, ucd_allocator);
 
     std.log.debug("Ucd fba end_index: {d}", .{ucd_fba.end_index});
 
