@@ -910,11 +910,15 @@ pub fn writeTableData(
         if (comptime Ucd.needsSection(table_config, .emoji_vs)) {
             const emoji_vs = &ucd.emoji_vs[cp];
 
+            if (@hasField(AllData, "is_emoji_vs_base")) {
+                std.debug.assert(emoji_vs.is_text == emoji_vs.is_emoji);
+                a.is_emoji_vs_base = emoji_vs.is_text;
+            }
             if (@hasField(AllData, "is_emoji_vs_text")) {
-                a.is_emoji_vs_text = emoji_vs.text;
+                a.is_emoji_vs_text = emoji_vs.is_text;
             }
             if (@hasField(AllData, "is_emoji_vs_emoji")) {
-                a.is_emoji_vs_emoji = emoji_vs.emoji;
+                a.is_emoji_vs_emoji = emoji_vs.is_emoji;
             }
         }
 
