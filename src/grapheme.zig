@@ -205,10 +205,29 @@ fn isIndicConjunctBreakExtend(gb: types.GraphemeBreak) bool {
     return gb == .indic_conjunct_break_extend or gb == .zwj;
 }
 
+// Despite `emoji_modifier` being `extend` according to
+// GraphemeBreakProperty.txt and UAX #29 (in addition to tests in
+// GraphemeBreakTest.txt), UTS #51 states: `emoji_modifier_sequence :=
+// emoji_modifier_base emoji_modifier` in ED-13 (emoji modifier sequence) under
+// 1.4.4 (Emoji Modifiers), and: "When used alone, the default representation
+// of these modifier characters is a color swatch... To have an effect on an
+// emoji, an emoji modifier must immediately follow that base emoji
+// character." in 2.4 (Diversity). Additionally it states "Skin tone
+// modifiers and hair components should be
+// displayed even in isolation" in ED-20 (basic emoji set) under 1.4.6 (Emoji
+// Sets). See this revision of UAX #29 when the grapheme cluster break
+// properties were simplified to remove `E_Base` and `E_Modifier`:
+// http://www.unicode.org/reports/tr29/tr29-32.html
+// Here we decide to diverge from the grapheme break spec, which is allowed
+// under "tailored" grapheme clusters.
 fn isExtend(gb: types.GraphemeBreak) bool {
     return gb == .zwnj or
         gb == .indic_conjunct_break_extend or
         gb == .indic_conjunct_break_linker;
+}
+
+fn isExtendedPictographic(gb: types.GraphemeBreak) bool {
+    return gb == .extended_pictographic or gb == .emoji_modifier_base;
 }
 
 pub fn computeGraphemeBreak(
@@ -231,6 +250,8 @@ pub fn computeGraphemeBreak(
                 .zwnj, // extend
                 .zwj,
                 .extended_pictographic,
+                .emoji_modifier_base,
+                .emoji_modifier,
                 => {},
 
                 else => state.* = .default,
@@ -243,6 +264,8 @@ pub fn computeGraphemeBreak(
                 .zwnj, // extend
                 .zwj,
                 .extended_pictographic,
+                .emoji_modifier_base,
+                .emoji_modifier,
                 => {},
 
                 else => state.* = .default,
@@ -360,8 +383,8 @@ pub fn computeGraphemeBreak(
         }
     }
 
-    // GB11: Emoji ZWJ sequence
-    if (gb1 == .extended_pictographic) {
+    // GB11: Emoji ZWJ sequence and Emoji modifier sequence
+    if (isExtendedPictographic(gb1)) {
         // start of sequence:
 
         // In normal operation, we'll be in this state, but
@@ -372,14 +395,24 @@ pub fn computeGraphemeBreak(
             state.* = .extended_pictographic;
             return false;
         }
+
+        // The `emoji_modifier_sequence` case is described in the comment for
+        // `isExtend` above, from UTS #51.
+        if (gb1 == .emoji_modifier_base and gb2 == .emoji_modifier) {
+            state.* = .extended_pictographic;
+            return false;
+        }
+
         // else, not an Emoji ZWJ sequence
     } else if (state.* == .extended_pictographic) {
         // continue or end sequence:
 
-        if (isExtend(gb1) and (isExtend(gb2) or gb2 == .zwj)) {
+        if ((isExtend(gb1) or gb1 == .emoji_modifier) and
+            (isExtend(gb2) or gb2 == .zwj))
+        {
             // continue extend* ZWJ sequence
             return false;
-        } else if (gb1 == .zwj and gb2 == .extended_pictographic) {
+        } else if (gb1 == .zwj and isExtendedPictographic(gb2)) {
             // ZWJ -> end of sequence
             state.* = .default;
             return false;
@@ -407,7 +440,7 @@ pub fn computeGraphemeBreak(
     return true;
 }
 
-fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *BreakState) bool) !void {
+fn testGraphemeBreak(getActualIsBreak: fn (cp1: u21, cp2: u21, state: *BreakState) bool) !void {
     const Ucd = @import("build/Ucd.zig");
 
     const trim = Ucd.trim;
@@ -437,26 +470,44 @@ fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *BreakState) bool
 
         var state: BreakState = .default;
         var cp1 = try parseCp(parts.next().?);
+        var gb1 = get(.grapheme_break, cp1);
         var expected_str = parts.next().?;
         var cp2 = try parseCp(parts.next().?);
+        var gb2 = get(.grapheme_break, cp2);
         var next_expected_str = parts.next().?;
 
         while (true) {
-            const gb1 = get(.grapheme_break, cp1);
-            const gb2 = get(.grapheme_break, cp2);
-            const expected = std.mem.eql(u8, expected_str, "÷");
-            const actual = getActual(cp1, cp2, &state);
-            try std.testing.expect(expected or std.mem.eql(u8, expected_str, "×"));
-            if (actual != expected) {
-                std.log.err("line={d} cp1={x}, cp2={x}: gb1={}, gb2={}, state={}, expected={}, actual={}", .{ line_num, cp1, cp2, gb1, gb2, state, expected, actual });
+            var expected_is_break = std.mem.eql(u8, expected_str, "÷");
+            const actual_is_break = getActualIsBreak(cp1, cp2, &state);
+            try std.testing.expect(expected_is_break or std.mem.eql(u8, expected_str, "×"));
+            // GraphemeBreakTest.txt has tests for UAX #29 treating emoji
+            // modifier as extend, always, but we diverge from that (see
+            // comment above `isExtend`).
+            if (gb2 == .emoji_modifier and gb1 != .emoji_modifier_base) {
+                std.debug.assert(!expected_is_break);
+                expected_is_break = true;
+            }
+            if (actual_is_break != expected_is_break) {
+                std.log.err("line={d} cp1={x}, cp2={x}: gb1={}, gb2={}, state={}, expected={}, actual={}", .{
+                    line_num,
+                    cp1,
+                    cp2,
+                    gb1,
+                    gb2,
+                    state,
+                    expected_is_break,
+                    actual_is_break,
+                });
                 success = false;
             }
 
             if (parts.peek() == null) break;
 
             cp1 = cp2;
+            gb1 = gb2;
             expected_str = next_expected_str;
             cp2 = try parseCp(parts.next().?);
+            gb2 = get(.grapheme_break, cp2);
             next_expected_str = parts.next().?;
         }
 
@@ -550,8 +601,8 @@ pub fn precomputedGraphemeBreak(
         BreakState,
         computeGraphemeBreak,
     );
-    // 5 BreakState fields x 2 x 18 GraphemeBreak fields = 1620
-    std.debug.assert(@sizeOf(@TypeOf(table)) == 1620);
+    // 5 BreakState fields x (20 GraphemeBreak fields)^2 = 2000
+    std.debug.assert(@sizeOf(@TypeOf(table)) == 2000);
     const result = table.get(gb1, gb2, state.*);
     state.* = result.state;
     return result.result;

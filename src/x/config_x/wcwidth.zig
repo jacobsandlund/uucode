@@ -1,3 +1,6 @@
+//! The `wcwidth` is a calculation of the expected width of a codepoint in
+//! cells of a monospaced font. It is not part of the Unicode standard.
+//!
 //! From: https://www.cl.cam.ac.uk/~mgk25/ucs/wcwidth.c
 //!
 //! This is an implementation of wcwidth() and wcswidth() (defined in
@@ -128,7 +131,7 @@ fn compute(
         // east_asian_width == .neutral
         data.wcwidth = 0;
     } else if (data.is_emoji_modifier) {
-        data.wcwidth = 0;
+        data.wcwidth = 2;
     } else if (data.east_asian_width == .wide or data.east_asian_width == .fullwidth) {
         data.wcwidth = 2;
     } else if (data.grapheme_break == .regional_indicator) {

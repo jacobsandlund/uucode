@@ -140,6 +140,8 @@ pub const GraphemeBreak = enum(u5) {
     zwj,
     zwnj,
     extended_pictographic,
+    emoji_modifier_base,
+    emoji_modifier,
     // extend, ==
     //   zwnj +
     //   indic_conjunct_break_extend +

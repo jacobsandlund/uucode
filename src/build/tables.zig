@@ -935,7 +935,16 @@ pub fn writeTableData(
             const original_grapheme_break = ucd.original_grapheme_break[cp];
             const derived_core_properties = &ucd.derived_core_properties[cp];
 
-            if (emoji_data.is_extended_pictographic) {
+            if (emoji_data.is_emoji_modifier) {
+                std.debug.assert(original_grapheme_break == .extend);
+                std.debug.assert(!emoji_data.is_extended_pictographic and
+                    emoji_data.is_emoji_component);
+                a.grapheme_break = .emoji_modifier;
+            } else if (emoji_data.is_emoji_modifier_base) {
+                std.debug.assert(original_grapheme_break == .other);
+                std.debug.assert(emoji_data.is_extended_pictographic);
+                a.grapheme_break = .emoji_modifier_base;
+            } else if (emoji_data.is_extended_pictographic) {
                 std.debug.assert(original_grapheme_break == .other);
                 a.grapheme_break = .extended_pictographic;
             } else {
@@ -944,6 +953,10 @@ pub fn writeTableData(
                         a.grapheme_break = switch (original_grapheme_break) {
                             .extend => blk: {
                                 if (cp == config.zero_width_non_joiner) {
+                                    // `zwnj` is the only grapheme break
+                                    // `extend` that is `none` for Indic
+                                    // conjunct break as opposed to ICB
+                                    // `extend` or `linker`.
                                     break :blk .zwnj;
                                 } else {
                                     std.log.err(
@@ -961,6 +974,7 @@ pub fn writeTableData(
                     },
                     .extend => {
                         if (cp == config.zero_width_joiner) {
+                            std.debug.assert(original_grapheme_break == .zwj);
                             a.grapheme_break = .zwj;
                         } else {
                             std.debug.assert(original_grapheme_break == .extend);
