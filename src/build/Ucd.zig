@@ -9,17 +9,186 @@ const config = @import("config.zig");
 
 const n = config.max_code_point + 1;
 
-unicode_data: [n]UnicodeData,
-case_folding: [n]CaseFolding,
-special_casing: [n]SpecialCasing,
-derived_core_properties: [n]DerivedCoreProperties,
-derived_bidi_class: [n]types.BidiClass,
-east_asian_width: [n]types.EastAsianWidth,
-original_grapheme_break: [n]types.OriginalGraphemeBreak,
-emoji_data: [n]EmojiData,
-emoji_vs: [n]EmojiVariationSequence,
-bidi_paired_bracket: [n]types.BidiPairedBracket,
-blocks: [n]types.Block,
+unicode_data: []UnicodeData = undefined,
+case_folding: []CaseFolding = undefined,
+special_casing: []SpecialCasing = undefined,
+derived_core_properties: []DerivedCoreProperties = undefined,
+derived_bidi_class: []types.BidiClass = undefined,
+east_asian_width: []types.EastAsianWidth = undefined,
+original_grapheme_break: []types.OriginalGraphemeBreak = undefined,
+emoji_data: []EmojiData = undefined,
+emoji_vs: []EmojiVariationSequence = undefined,
+bidi_paired_bracket: []types.BidiPairedBracket = undefined,
+blocks: []types.Block = undefined,
+
+const Self = @This();
+
+pub const UcdSection = std.meta.FieldEnum(Self);
+
+pub fn needsSection(comptime table_config: config.Table, comptime ucd_section: UcdSection) bool {
+    inline for (table_config.fields) |field| {
+        if (fieldNeedsSection(field.name, ucd_section)) {
+            return true;
+        }
+    }
+    inline for (table_config.extensions) |extension| {
+        inline for (extension.inputs) |field| {
+            if (fieldNeedsSection(field, ucd_section)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+fn needsSectionAny(comptime table_configs: []const config.Table, comptime ucd_section: UcdSection) bool {
+    @setEvalBranchQuota(10_000);
+
+    inline for (table_configs) |table_config| {
+        if (needsSection(table_config, ucd_section)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+const field_to_sections = std.StaticStringMap([]const UcdSection).initComptime(.{
+    .{ "name", &.{.unicode_data} },
+    .{ "general_category", &.{.unicode_data} },
+    .{ "canonical_combining_class", &.{.unicode_data} },
+    .{ "bidi_class", &.{.derived_bidi_class} },
+    .{ "decomposition_type", &.{.unicode_data} },
+    .{ "decomposition_mapping", &.{.unicode_data} },
+    .{ "numeric_type", &.{.unicode_data} },
+    .{ "numeric_value_decimal", &.{.unicode_data} },
+    .{ "numeric_value_digit", &.{.unicode_data} },
+    .{ "numeric_value_numeric", &.{.unicode_data} },
+    .{ "is_bidi_mirrored", &.{.unicode_data} },
+    .{ "unicode_1_name", &.{.unicode_data} },
+    .{ "simple_uppercase_mapping", &.{.unicode_data} },
+    .{ "simple_lowercase_mapping", &.{.unicode_data} },
+    .{ "simple_titlecase_mapping", &.{.unicode_data} },
+    .{ "case_folding_simple", &.{.case_folding} },
+    .{ "case_folding_full", &.{.case_folding} },
+    .{ "case_folding_turkish_only", &.{.case_folding} },
+    .{ "case_folding_common_only", &.{.case_folding} },
+    .{ "case_folding_simple_only", &.{.case_folding} },
+    .{ "case_folding_full_only", &.{.case_folding} },
+    .{ "has_special_casing", &.{.special_casing} },
+    .{ "special_lowercase_mapping", &.{.special_casing} },
+    .{ "special_titlecase_mapping", &.{.special_casing} },
+    .{ "special_uppercase_mapping", &.{.special_casing} },
+    .{ "special_casing_condition", &.{.special_casing} },
+    .{ "is_math", &.{.derived_core_properties} },
+    .{ "is_alphabetic", &.{.derived_core_properties} },
+    .{ "is_lowercase", &.{.derived_core_properties} },
+    .{ "is_uppercase", &.{.derived_core_properties} },
+    .{ "is_cased", &.{.derived_core_properties} },
+    .{ "is_case_ignorable", &.{.derived_core_properties} },
+    .{ "changes_when_lowercased", &.{.derived_core_properties} },
+    .{ "changes_when_uppercased", &.{.derived_core_properties} },
+    .{ "changes_when_titlecased", &.{.derived_core_properties} },
+    .{ "changes_when_casefolded", &.{.derived_core_properties} },
+    .{ "changes_when_casemapped", &.{.derived_core_properties} },
+    .{ "is_id_start", &.{.derived_core_properties} },
+    .{ "is_id_continue", &.{.derived_core_properties} },
+    .{ "is_xid_start", &.{.derived_core_properties} },
+    .{ "is_xid_continue", &.{.derived_core_properties} },
+    .{ "is_default_ignorable_code_point", &.{.derived_core_properties} },
+    .{ "is_grapheme_extend", &.{.derived_core_properties} },
+    .{ "is_grapheme_base", &.{.derived_core_properties} },
+    .{ "is_grapheme_link", &.{.derived_core_properties} },
+    .{ "indic_conjunct_break", &.{.derived_core_properties} },
+    .{ "east_asian_width", &.{.east_asian_width} },
+    .{ "original_grapheme_break", &.{.original_grapheme_break} },
+    .{ "is_emoji", &.{.emoji_data} },
+    .{ "is_emoji_presentation", &.{.emoji_data} },
+    .{ "is_emoji_modifier", &.{.emoji_data} },
+    .{ "is_emoji_modifier_base", &.{.emoji_data} },
+    .{ "is_emoji_component", &.{.emoji_data} },
+    .{ "is_extended_pictographic", &.{.emoji_data} },
+    .{ "is_emoji_vs_text", &.{.emoji_vs} },
+    .{ "is_emoji_vs_emoji", &.{.emoji_vs} },
+    .{ "bidi_paired_bracket", &.{.bidi_paired_bracket} },
+    .{ "block", &.{.blocks} },
+    .{ "lowercase_mapping", &.{ .special_casing, .unicode_data } },
+    .{ "titlecase_mapping", &.{ .special_casing, .unicode_data } },
+    .{ "uppercase_mapping", &.{ .special_casing, .unicode_data } },
+    .{ "grapheme_break", &.{ .emoji_data, .original_grapheme_break, .derived_core_properties } },
+});
+
+fn fieldNeedsSection(comptime field: []const u8, comptime ucd_section: UcdSection) bool {
+    const sections = field_to_sections.get(field) orelse return false;
+    return std.mem.indexOfScalar(UcdSection, sections, ucd_section) != null;
+}
+
+pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config.Table) !Self {
+    const start = try std.time.Instant.now();
+
+    var self: Self = .{};
+
+    if (comptime needsSectionAny(table_configs, .unicode_data)) {
+        self.unicode_data = try allocator.alloc(UnicodeData, n);
+        try parseUnicodeData(allocator, self.unicode_data);
+    }
+
+    if (comptime needsSectionAny(table_configs, .case_folding)) {
+        self.case_folding = try allocator.alloc(CaseFolding, n);
+        try parseCaseFolding(allocator, self.case_folding);
+    }
+
+    if (comptime needsSectionAny(table_configs, .special_casing)) {
+        self.special_casing = try allocator.alloc(SpecialCasing, n);
+        try parseSpecialCasing(allocator, self.special_casing);
+    }
+
+    if (comptime needsSectionAny(table_configs, .derived_core_properties)) {
+        self.derived_core_properties = try allocator.alloc(DerivedCoreProperties, n);
+        try parseDerivedCoreProperties(allocator, self.derived_core_properties);
+    }
+
+    if (comptime needsSectionAny(table_configs, .derived_bidi_class)) {
+        self.derived_bidi_class = try allocator.alloc(types.BidiClass, n);
+        try parseDerivedBidiClass(allocator, self.derived_bidi_class);
+    }
+
+    if (comptime needsSectionAny(table_configs, .east_asian_width)) {
+        self.east_asian_width = try allocator.alloc(types.EastAsianWidth, n);
+        try parseEastAsianWidth(allocator, self.east_asian_width);
+    }
+
+    if (comptime needsSectionAny(table_configs, .original_grapheme_break)) {
+        self.original_grapheme_break = try allocator.alloc(types.OriginalGraphemeBreak, n);
+        try parseGraphemeBreak(allocator, self.original_grapheme_break);
+    }
+
+    if (comptime needsSectionAny(table_configs, .emoji_data)) {
+        self.emoji_data = try allocator.alloc(EmojiData, n);
+        try parseEmojiData(allocator, self.emoji_data);
+    }
+
+    if (comptime needsSectionAny(table_configs, .emoji_vs)) {
+        self.emoji_vs = try allocator.alloc(EmojiVariationSequence, n);
+        try parseEmojiVariationSequences(allocator, self.emoji_vs);
+    }
+
+    if (comptime needsSectionAny(table_configs, .bidi_paired_bracket)) {
+        self.bidi_paired_bracket = try allocator.alloc(types.BidiPairedBracket, n);
+        try parseBidiBrackets(allocator, self.bidi_paired_bracket);
+    }
+
+    if (comptime needsSectionAny(table_configs, .blocks)) {
+        self.blocks = try allocator.alloc(types.Block, n);
+        try parseBlocks(allocator, self.blocks);
+    }
+
+    const end = try std.time.Instant.now();
+    std.log.debug("Ucd init time: {d}ms\n", .{end.since(start) / std.time.ns_per_ms});
+
+    return self;
+}
 
 const UnicodeData = struct {
     name: []const u8 = &.{},
@@ -90,26 +259,6 @@ const EmojiVariationSequence = packed struct {
     text: bool = false, // VS15
     emoji: bool = false, // VS16
 };
-
-const Self = @This();
-
-pub fn parse(self: *Self, allocator: std.mem.Allocator) !void {
-    const start = try std.time.Instant.now();
-    try parseUnicodeData(allocator, &self.unicode_data);
-    try parseCaseFolding(allocator, &self.case_folding);
-    try parseSpecialCasing(allocator, &self.special_casing);
-    try parseDerivedCoreProperties(allocator, &self.derived_core_properties);
-    try parseDerivedBidiClass(allocator, &self.derived_bidi_class);
-    try parseEastAsianWidth(allocator, &self.east_asian_width);
-    try parseGraphemeBreak(allocator, &self.original_grapheme_break);
-    try parseEmojiData(allocator, &self.emoji_data);
-    try parseEmojiVariationSequences(allocator, &self.emoji_vs);
-    try parseBlocks(allocator, &self.blocks);
-    try parseBidiBrackets(allocator, &self.bidi_paired_bracket);
-
-    const end = try std.time.Instant.now();
-    std.log.debug("Ucd init time: {d}ms\n", .{end.since(start) / std.time.ns_per_ms});
-}
 
 // Public for GraphemeBreakTest in src/grapheme.zig
 pub fn parseCp(str: []const u8) !u21 {

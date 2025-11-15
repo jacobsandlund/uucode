@@ -15,15 +15,11 @@ pub fn main() !void {
     const total_start = try std.time.Instant.now();
     const table_configs: []const config.Table = if (config.is_updating_ucd) &.{updating_ucd} else &build_config.tables;
 
-    const ucd_buffer_size = if (config.is_updating_ucd) 500_000_000 else 270_000_000;
-    const buffer_for_fba = try std.heap.page_allocator.alloc(u8, ucd_buffer_size);
-    defer std.heap.page_allocator.free(buffer_for_fba);
-    var ucd_fba = std.heap.FixedBufferAllocator.init(buffer_for_fba);
-    const ucd_allocator = ucd_fba.allocator();
+    var ucd_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer ucd_arena.deinit();
+    const ucd_allocator = ucd_arena.allocator();
 
-    var ucd = try ucd_allocator.create(Ucd);
-
-    try ucd.parse(ucd_allocator);
+    const ucd = try Ucd.init(ucd_allocator, table_configs);
 
     var args_iter = try std.process.argsWithAllocator(ucd_allocator);
     _ = args_iter.skip(); // Skip program name
@@ -31,7 +27,7 @@ pub fn main() !void {
     // Get output path (only argument now)
     const output_path = args_iter.next() orelse std.debug.panic("No output file arg!", .{});
 
-    std.log.debug("Ucd fba end_index: {d}", .{ucd_fba.end_index});
+    std.log.debug("Ucd arena end capacity: {d}", .{ucd_arena.queryCapacity()});
 
     std.log.debug("Writing to file: {s}", .{output_path});
 
@@ -69,7 +65,7 @@ pub fn main() !void {
             resolved_table,
             i,
             arena_alloc,
-            ucd,
+            &ucd,
             writer,
         );
 
@@ -493,417 +489,437 @@ pub fn writeTableData(
     for (0..config.max_code_point + 1) |cp_usize| {
         const get_data_start = try std.time.Instant.now();
         const cp: u21 = @intCast(cp_usize);
-        const unicode_data = &ucd.unicode_data[cp];
-        const case_folding = ucd.case_folding[cp];
-        const special_casing = ucd.special_casing[cp];
-        const derived_core_properties = ucd.derived_core_properties[cp];
-        const derived_bidi_class = ucd.derived_bidi_class[cp];
-        const east_asian_width = ucd.east_asian_width[cp];
-        const original_grapheme_break = ucd.original_grapheme_break[cp];
-        const emoji_data = ucd.emoji_data[cp];
-        const emoji_vs = ucd.emoji_vs[cp];
-        const bidi_paired_bracket = ucd.bidi_paired_bracket[cp];
-        const block_value = ucd.blocks[cp];
 
         const get_data_end = try std.time.Instant.now();
         get_data_time += get_data_end.since(get_data_start);
 
         var a: AllData = undefined;
 
-        // UnicodeData fields
-        if (@hasField(AllData, "name")) {
-            a.name = try .init(
-                allocator,
-                backing.name,
-                &tracking.name,
-                unicode_data.name,
-            );
-        }
-        if (@hasField(AllData, "general_category")) {
-            a.general_category = unicode_data.general_category;
-        }
-        if (@hasField(AllData, "canonical_combining_class")) {
-            a.canonical_combining_class = unicode_data.canonical_combining_class;
-        }
-        if (@hasField(AllData, "bidi_class")) {
-            std.debug.assert(unicode_data.bidi_class == null or unicode_data.bidi_class.? == derived_bidi_class);
-            a.bidi_class = derived_bidi_class;
-        }
-        if (@hasField(AllData, "decomposition_type")) {
-            a.decomposition_type = unicode_data.decomposition_type;
-        }
-        if (@hasField(AllData, "decomposition_mapping")) {
-            a.decomposition_mapping = try .initFor(
-                allocator,
-                backing.decomposition_mapping,
-                &tracking.decomposition_mapping,
-                unicode_data.decomposition_mapping,
-                cp,
-            );
-        }
-        if (@hasField(AllData, "numeric_type")) {
-            a.numeric_type = unicode_data.numeric_type;
-        }
-        if (@hasField(AllData, "numeric_value_decimal")) {
-            maybePackedInit(
-                "numeric_value_decimal",
-                &a,
-                unicode_data.numeric_value_decimal,
-            );
-        }
-        if (@hasField(AllData, "numeric_value_digit")) {
-            maybePackedInit(
-                "numeric_value_digit",
-                &a,
-                unicode_data.numeric_value_digit,
-            );
-        }
-        if (@hasField(AllData, "numeric_value_numeric")) {
-            a.numeric_value_numeric = try .init(
-                allocator,
-                backing.numeric_value_numeric,
-                &tracking.numeric_value_numeric,
-                unicode_data.numeric_value_numeric,
-            );
-        }
-        if (@hasField(AllData, "is_bidi_mirrored")) {
-            a.is_bidi_mirrored = unicode_data.is_bidi_mirrored;
-        }
-        if (@hasField(AllData, "unicode_1_name")) {
-            a.unicode_1_name = try .init(
-                allocator,
-                backing.unicode_1_name,
-                &tracking.unicode_1_name,
-                unicode_data.unicode_1_name,
-            );
-        }
-        if (@hasField(AllData, "simple_uppercase_mapping")) {
-            types.fieldInit(
-                "simple_uppercase_mapping",
-                cp,
-                &a,
-                &tracking,
-                unicode_data.simple_uppercase_mapping,
-            );
-        }
-        if (@hasField(AllData, "simple_lowercase_mapping")) {
-            types.fieldInit(
-                "simple_lowercase_mapping",
-                cp,
-                &a,
-                &tracking,
-                unicode_data.simple_lowercase_mapping,
-            );
-        }
-        if (@hasField(AllData, "simple_titlecase_mapping")) {
-            types.fieldInit(
-                "simple_titlecase_mapping",
-                cp,
-                &a,
-                &tracking,
-                unicode_data.simple_titlecase_mapping,
-            );
-        }
+        if (comptime Ucd.needsSection(table_config, .unicode_data)) {
+            const unicode_data = &ucd.unicode_data[cp];
 
-        // CaseFolding fields
-        if (@hasField(AllData, "case_folding_simple")) {
-            const d =
-                case_folding.case_folding_simple_only orelse
-                case_folding.case_folding_common_only orelse
-
-                // This would seem not to be necessary based on the heading
-                // of CaseFolding.txt, but U+0130 has only an F and T
-                // mapping and no S. The T mapping is the same as the
-                // simple_lowercase_mapping so we use that here.
-                case_folding.case_folding_turkish_only orelse
-                cp;
-            types.fieldInit("case_folding_simple", cp, &a, &tracking, d);
-        }
-        if (@hasField(AllData, "case_folding_full")) {
-            if (case_folding.case_folding_full_only.len > 0) {
-                a.case_folding_full = try .initFor(
+            if (@hasField(AllData, "name")) {
+                a.name = try .init(
                     allocator,
-                    backing.case_folding_full,
-                    &tracking.case_folding_full,
+                    backing.name,
+                    &tracking.name,
+                    unicode_data.name,
+                );
+            }
+            if (@hasField(AllData, "general_category")) {
+                a.general_category = unicode_data.general_category;
+            }
+            if (@hasField(AllData, "canonical_combining_class")) {
+                a.canonical_combining_class = unicode_data.canonical_combining_class;
+            }
+            if (@hasField(AllData, "bidi_class")) {
+                const derived_bidi_class = ucd.derived_bidi_class[cp];
+                std.debug.assert(unicode_data.bidi_class == null or unicode_data.bidi_class.? == derived_bidi_class);
+                a.bidi_class = derived_bidi_class;
+            }
+            if (@hasField(AllData, "decomposition_type")) {
+                a.decomposition_type = unicode_data.decomposition_type;
+            }
+            if (@hasField(AllData, "decomposition_mapping")) {
+                a.decomposition_mapping = try .initFor(
+                    allocator,
+                    backing.decomposition_mapping,
+                    &tracking.decomposition_mapping,
+                    unicode_data.decomposition_mapping,
+                    cp,
+                );
+            }
+            if (@hasField(AllData, "numeric_type")) {
+                a.numeric_type = unicode_data.numeric_type;
+            }
+            if (@hasField(AllData, "numeric_value_decimal")) {
+                maybePackedInit(
+                    "numeric_value_decimal",
+                    &a,
+                    unicode_data.numeric_value_decimal,
+                );
+            }
+            if (@hasField(AllData, "numeric_value_digit")) {
+                maybePackedInit(
+                    "numeric_value_digit",
+                    &a,
+                    unicode_data.numeric_value_digit,
+                );
+            }
+            if (@hasField(AllData, "numeric_value_numeric")) {
+                a.numeric_value_numeric = try .init(
+                    allocator,
+                    backing.numeric_value_numeric,
+                    &tracking.numeric_value_numeric,
+                    unicode_data.numeric_value_numeric,
+                );
+            }
+            if (@hasField(AllData, "is_bidi_mirrored")) {
+                a.is_bidi_mirrored = unicode_data.is_bidi_mirrored;
+            }
+            if (@hasField(AllData, "unicode_1_name")) {
+                a.unicode_1_name = try .init(
+                    allocator,
+                    backing.unicode_1_name,
+                    &tracking.unicode_1_name,
+                    unicode_data.unicode_1_name,
+                );
+            }
+            if (@hasField(AllData, "simple_uppercase_mapping")) {
+                types.fieldInit(
+                    "simple_uppercase_mapping",
+                    cp,
+                    &a,
+                    &tracking,
+                    unicode_data.simple_uppercase_mapping,
+                );
+            }
+            if (@hasField(AllData, "simple_lowercase_mapping")) {
+                types.fieldInit(
+                    "simple_lowercase_mapping",
+                    cp,
+                    &a,
+                    &tracking,
+                    unicode_data.simple_lowercase_mapping,
+                );
+            }
+            if (@hasField(AllData, "simple_titlecase_mapping")) {
+                types.fieldInit(
+                    "simple_titlecase_mapping",
+                    cp,
+                    &a,
+                    &tracking,
+                    unicode_data.simple_titlecase_mapping,
+                );
+            }
+        }
+
+        if (comptime Ucd.needsSection(table_config, .case_folding)) {
+            const case_folding = &ucd.case_folding[cp];
+
+            if (@hasField(AllData, "case_folding_simple")) {
+                const d =
+                    case_folding.case_folding_simple_only orelse
+                    case_folding.case_folding_common_only orelse
+
+                    // This would seem not to be necessary based on the heading
+                    // of CaseFolding.txt, but U+0130 has only an F and T
+                    // mapping and no S. The T mapping is the same as the
+                    // simple_lowercase_mapping so we use that here.
+                    case_folding.case_folding_turkish_only orelse
+                    cp;
+                types.fieldInit("case_folding_simple", cp, &a, &tracking, d);
+            }
+            if (@hasField(AllData, "case_folding_full")) {
+                if (case_folding.case_folding_full_only.len > 0) {
+                    a.case_folding_full = try .initFor(
+                        allocator,
+                        backing.case_folding_full,
+                        &tracking.case_folding_full,
+                        case_folding.case_folding_full_only,
+                        cp,
+                    );
+                } else {
+                    a.case_folding_full = try .initFor(
+                        allocator,
+                        backing.case_folding_full,
+                        &tracking.case_folding_full,
+                        &.{case_folding.case_folding_common_only orelse cp},
+                        cp,
+                    );
+                }
+            }
+            if (@hasField(AllData, "case_folding_turkish_only")) {
+                if (case_folding.case_folding_turkish_only) |t| {
+                    a.case_folding_turkish_only = try .initFor(
+                        allocator,
+                        backing.case_folding_turkish_only,
+                        &tracking.case_folding_turkish_only,
+                        &.{t},
+                        cp,
+                    );
+                } else {
+                    a.case_folding_turkish_only = .empty;
+                }
+            }
+            if (@hasField(AllData, "case_folding_common_only")) {
+                if (case_folding.case_folding_common_only) |c| {
+                    a.case_folding_common_only = try .initFor(
+                        allocator,
+                        backing.case_folding_common_only,
+                        &tracking.case_folding_common_only,
+                        &.{c},
+                        cp,
+                    );
+                } else {
+                    a.case_folding_common_only = .empty;
+                }
+            }
+            if (@hasField(AllData, "case_folding_simple_only")) {
+                if (case_folding.case_folding_simple_only) |s| {
+                    a.case_folding_simple_only = try .initFor(
+                        allocator,
+                        backing.case_folding_simple_only,
+                        &tracking.case_folding_simple_only,
+                        &.{s},
+                        cp,
+                    );
+                } else {
+                    a.case_folding_simple_only = .empty;
+                }
+            }
+            if (@hasField(AllData, "case_folding_full_only")) {
+                a.case_folding_full_only = try .initFor(
+                    allocator,
+                    backing.case_folding_full_only,
+                    &tracking.case_folding_full_only,
                     case_folding.case_folding_full_only,
                     cp,
                 );
-            } else {
-                a.case_folding_full = try .initFor(
-                    allocator,
-                    backing.case_folding_full,
-                    &tracking.case_folding_full,
-                    &.{case_folding.case_folding_common_only orelse cp},
-                    cp,
-                );
             }
-        }
-        if (@hasField(AllData, "case_folding_turkish_only")) {
-            if (case_folding.case_folding_turkish_only) |t| {
-                a.case_folding_turkish_only = try .initFor(
-                    allocator,
-                    backing.case_folding_turkish_only,
-                    &tracking.case_folding_turkish_only,
-                    &.{t},
-                    cp,
-                );
-            } else {
-                a.case_folding_turkish_only = .empty;
-            }
-        }
-        if (@hasField(AllData, "case_folding_common_only")) {
-            if (case_folding.case_folding_common_only) |c| {
-                a.case_folding_common_only = try .initFor(
-                    allocator,
-                    backing.case_folding_common_only,
-                    &tracking.case_folding_common_only,
-                    &.{c},
-                    cp,
-                );
-            } else {
-                a.case_folding_common_only = .empty;
-            }
-        }
-        if (@hasField(AllData, "case_folding_simple_only")) {
-            if (case_folding.case_folding_simple_only) |s| {
-                a.case_folding_simple_only = try .initFor(
-                    allocator,
-                    backing.case_folding_simple_only,
-                    &tracking.case_folding_simple_only,
-                    &.{s},
-                    cp,
-                );
-            } else {
-                a.case_folding_simple_only = .empty;
-            }
-        }
-        if (@hasField(AllData, "case_folding_full_only")) {
-            a.case_folding_full_only = try .initFor(
-                allocator,
-                backing.case_folding_full_only,
-                &tracking.case_folding_full_only,
-                case_folding.case_folding_full_only,
-                cp,
-            );
         }
 
-        // SpecialCasing fields
-        if (@hasField(AllData, "has_special_casing")) {
-            a.has_special_casing = special_casing.has_special_casing;
-        }
-        if (@hasField(AllData, "special_lowercase_mapping")) {
-            a.special_lowercase_mapping = try .initFor(
-                allocator,
-                backing.special_lowercase_mapping,
-                &tracking.special_lowercase_mapping,
-                special_casing.special_lowercase_mapping,
-                cp,
-            );
-        }
-        if (@hasField(AllData, "special_titlecase_mapping")) {
-            a.special_titlecase_mapping = try .initFor(
-                allocator,
-                backing.special_titlecase_mapping,
-                &tracking.special_titlecase_mapping,
-                special_casing.special_titlecase_mapping,
-                cp,
-            );
-        }
-        if (@hasField(AllData, "special_uppercase_mapping")) {
-            a.special_uppercase_mapping = try .initFor(
-                allocator,
-                backing.special_uppercase_mapping,
-                &tracking.special_uppercase_mapping,
-                special_casing.special_uppercase_mapping,
-                cp,
-            );
-        }
-        if (@hasField(AllData, "special_casing_condition")) {
-            a.special_casing_condition = try .init(
-                allocator,
-                backing.special_casing_condition,
-                &tracking.special_casing_condition,
-                special_casing.special_casing_condition,
-            );
-        }
+        if (comptime Ucd.needsSection(table_config, .special_casing)) {
+            const special_casing = &ucd.special_casing[cp];
 
-        // Case mappings
-        if (@hasField(AllData, "lowercase_mapping")) {
-            const use_special = special_casing.has_special_casing and
-                special_casing.special_casing_condition.len == 0;
-
-            if (use_special) {
-                a.lowercase_mapping = try .initFor(
+            if (@hasField(AllData, "has_special_casing")) {
+                a.has_special_casing = special_casing.has_special_casing;
+            }
+            if (@hasField(AllData, "special_lowercase_mapping")) {
+                a.special_lowercase_mapping = try .initFor(
                     allocator,
-                    backing.lowercase_mapping,
-                    &tracking.lowercase_mapping,
+                    backing.special_lowercase_mapping,
+                    &tracking.special_lowercase_mapping,
                     special_casing.special_lowercase_mapping,
                     cp,
                 );
-            } else {
-                a.lowercase_mapping = try .initFor(
-                    allocator,
-                    backing.lowercase_mapping,
-                    &tracking.lowercase_mapping,
-                    &.{unicode_data.simple_lowercase_mapping orelse cp},
-                    cp,
-                );
             }
-        }
-
-        if (@hasField(AllData, "titlecase_mapping")) {
-            const use_special = special_casing.has_special_casing and
-                special_casing.special_casing_condition.len == 0;
-
-            if (use_special) {
-                a.titlecase_mapping = try .initFor(
+            if (@hasField(AllData, "special_titlecase_mapping")) {
+                a.special_titlecase_mapping = try .initFor(
                     allocator,
-                    backing.titlecase_mapping,
-                    &tracking.titlecase_mapping,
+                    backing.special_titlecase_mapping,
+                    &tracking.special_titlecase_mapping,
                     special_casing.special_titlecase_mapping,
                     cp,
                 );
-            } else {
-                a.titlecase_mapping = try .initFor(
-                    allocator,
-                    backing.titlecase_mapping,
-                    &tracking.titlecase_mapping,
-                    &.{unicode_data.simple_titlecase_mapping orelse cp},
-                    cp,
-                );
             }
-        }
-
-        if (@hasField(AllData, "uppercase_mapping")) {
-            const use_special = special_casing.has_special_casing and
-                special_casing.special_casing_condition.len == 0;
-
-            if (use_special) {
-                a.uppercase_mapping = try .initFor(
+            if (@hasField(AllData, "special_uppercase_mapping")) {
+                a.special_uppercase_mapping = try .initFor(
                     allocator,
-                    backing.uppercase_mapping,
-                    &tracking.uppercase_mapping,
+                    backing.special_uppercase_mapping,
+                    &tracking.special_uppercase_mapping,
                     special_casing.special_uppercase_mapping,
                     cp,
                 );
-            } else {
-                a.uppercase_mapping = try .initFor(
+            }
+            if (@hasField(AllData, "special_casing_condition")) {
+                a.special_casing_condition = try .init(
                     allocator,
-                    backing.uppercase_mapping,
-                    &tracking.uppercase_mapping,
-                    &.{unicode_data.simple_uppercase_mapping orelse cp},
-                    cp,
+                    backing.special_casing_condition,
+                    &tracking.special_casing_condition,
+                    special_casing.special_casing_condition,
                 );
             }
         }
 
-        // DerivedCoreProperties fields
-        if (@hasField(AllData, "is_math")) {
-            a.is_math = derived_core_properties.is_math;
-        }
-        if (@hasField(AllData, "is_alphabetic")) {
-            a.is_alphabetic = derived_core_properties.is_alphabetic;
-        }
-        if (@hasField(AllData, "is_lowercase")) {
-            a.is_lowercase = derived_core_properties.is_lowercase;
-        }
-        if (@hasField(AllData, "is_uppercase")) {
-            a.is_uppercase = derived_core_properties.is_uppercase;
-        }
-        if (@hasField(AllData, "is_cased")) {
-            a.is_cased = derived_core_properties.is_cased;
-        }
-        if (@hasField(AllData, "is_case_ignorable")) {
-            a.is_case_ignorable = derived_core_properties.is_case_ignorable;
-        }
-        if (@hasField(AllData, "changes_when_lowercased")) {
-            a.changes_when_lowercased = derived_core_properties.changes_when_lowercased;
-        }
-        if (@hasField(AllData, "changes_when_uppercased")) {
-            a.changes_when_uppercased = derived_core_properties.changes_when_uppercased;
-        }
-        if (@hasField(AllData, "changes_when_titlecased")) {
-            a.changes_when_titlecased = derived_core_properties.changes_when_titlecased;
-        }
-        if (@hasField(AllData, "changes_when_casefolded")) {
-            a.changes_when_casefolded = derived_core_properties.changes_when_casefolded;
-        }
-        if (@hasField(AllData, "changes_when_casemapped")) {
-            a.changes_when_casemapped = derived_core_properties.changes_when_casemapped;
-        }
-        if (@hasField(AllData, "is_id_start")) {
-            a.is_id_start = derived_core_properties.is_id_start;
-        }
-        if (@hasField(AllData, "is_id_continue")) {
-            a.is_id_continue = derived_core_properties.is_id_continue;
-        }
-        if (@hasField(AllData, "is_xid_start")) {
-            a.is_xid_start = derived_core_properties.is_xid_start;
-        }
-        if (@hasField(AllData, "is_xid_continue")) {
-            a.is_xid_continue = derived_core_properties.is_xid_continue;
-        }
-        if (@hasField(AllData, "is_default_ignorable_code_point")) {
-            a.is_default_ignorable_code_point = derived_core_properties.is_default_ignorable_code_point;
-        }
-        if (@hasField(AllData, "is_grapheme_extend")) {
-            a.is_grapheme_extend = derived_core_properties.is_grapheme_extend;
-        }
-        if (@hasField(AllData, "is_grapheme_base")) {
-            a.is_grapheme_base = derived_core_properties.is_grapheme_base;
-        }
-        if (@hasField(AllData, "is_grapheme_link")) {
-            a.is_grapheme_link = derived_core_properties.is_grapheme_link;
-        }
-        if (@hasField(AllData, "indic_conjunct_break")) {
-            a.indic_conjunct_break = derived_core_properties.indic_conjunct_break;
+        // Case mappings
+        if (@hasField(AllData, "lowercase_mapping") or
+            @hasField(AllData, "titlecase_mapping") or
+            @hasField(AllData, "uppercase_mapping"))
+        {
+            const unicode_data = &ucd.unicode_data[cp];
+            const special_casing = &ucd.special_casing[cp];
+
+            if (@hasField(AllData, "lowercase_mapping")) {
+                const use_special = special_casing.has_special_casing and
+                    special_casing.special_casing_condition.len == 0;
+
+                if (use_special) {
+                    a.lowercase_mapping = try .initFor(
+                        allocator,
+                        backing.lowercase_mapping,
+                        &tracking.lowercase_mapping,
+                        special_casing.special_lowercase_mapping,
+                        cp,
+                    );
+                } else {
+                    a.lowercase_mapping = try .initFor(
+                        allocator,
+                        backing.lowercase_mapping,
+                        &tracking.lowercase_mapping,
+                        &.{unicode_data.simple_lowercase_mapping orelse cp},
+                        cp,
+                    );
+                }
+            }
+
+            if (@hasField(AllData, "titlecase_mapping")) {
+                const use_special = special_casing.has_special_casing and
+                    special_casing.special_casing_condition.len == 0;
+
+                if (use_special) {
+                    a.titlecase_mapping = try .initFor(
+                        allocator,
+                        backing.titlecase_mapping,
+                        &tracking.titlecase_mapping,
+                        special_casing.special_titlecase_mapping,
+                        cp,
+                    );
+                } else {
+                    a.titlecase_mapping = try .initFor(
+                        allocator,
+                        backing.titlecase_mapping,
+                        &tracking.titlecase_mapping,
+                        &.{unicode_data.simple_titlecase_mapping orelse cp},
+                        cp,
+                    );
+                }
+            }
+
+            if (@hasField(AllData, "uppercase_mapping")) {
+                const use_special = special_casing.has_special_casing and
+                    special_casing.special_casing_condition.len == 0;
+
+                if (use_special) {
+                    a.uppercase_mapping = try .initFor(
+                        allocator,
+                        backing.uppercase_mapping,
+                        &tracking.uppercase_mapping,
+                        special_casing.special_uppercase_mapping,
+                        cp,
+                    );
+                } else {
+                    a.uppercase_mapping = try .initFor(
+                        allocator,
+                        backing.uppercase_mapping,
+                        &tracking.uppercase_mapping,
+                        &.{unicode_data.simple_uppercase_mapping orelse cp},
+                        cp,
+                    );
+                }
+            }
         }
 
-        // EastAsianWidth field
+        if (comptime Ucd.needsSection(table_config, .derived_core_properties)) {
+            const derived_core_properties = &ucd.derived_core_properties[cp];
+
+            if (@hasField(AllData, "is_math")) {
+                a.is_math = derived_core_properties.is_math;
+            }
+            if (@hasField(AllData, "is_alphabetic")) {
+                a.is_alphabetic = derived_core_properties.is_alphabetic;
+            }
+            if (@hasField(AllData, "is_lowercase")) {
+                a.is_lowercase = derived_core_properties.is_lowercase;
+            }
+            if (@hasField(AllData, "is_uppercase")) {
+                a.is_uppercase = derived_core_properties.is_uppercase;
+            }
+            if (@hasField(AllData, "is_cased")) {
+                a.is_cased = derived_core_properties.is_cased;
+            }
+            if (@hasField(AllData, "is_case_ignorable")) {
+                a.is_case_ignorable = derived_core_properties.is_case_ignorable;
+            }
+            if (@hasField(AllData, "changes_when_lowercased")) {
+                a.changes_when_lowercased = derived_core_properties.changes_when_lowercased;
+            }
+            if (@hasField(AllData, "changes_when_uppercased")) {
+                a.changes_when_uppercased = derived_core_properties.changes_when_uppercased;
+            }
+            if (@hasField(AllData, "changes_when_titlecased")) {
+                a.changes_when_titlecased = derived_core_properties.changes_when_titlecased;
+            }
+            if (@hasField(AllData, "changes_when_casefolded")) {
+                a.changes_when_casefolded = derived_core_properties.changes_when_casefolded;
+            }
+            if (@hasField(AllData, "changes_when_casemapped")) {
+                a.changes_when_casemapped = derived_core_properties.changes_when_casemapped;
+            }
+            if (@hasField(AllData, "is_id_start")) {
+                a.is_id_start = derived_core_properties.is_id_start;
+            }
+            if (@hasField(AllData, "is_id_continue")) {
+                a.is_id_continue = derived_core_properties.is_id_continue;
+            }
+            if (@hasField(AllData, "is_xid_start")) {
+                a.is_xid_start = derived_core_properties.is_xid_start;
+            }
+            if (@hasField(AllData, "is_xid_continue")) {
+                a.is_xid_continue = derived_core_properties.is_xid_continue;
+            }
+            if (@hasField(AllData, "is_default_ignorable_code_point")) {
+                a.is_default_ignorable_code_point = derived_core_properties.is_default_ignorable_code_point;
+            }
+            if (@hasField(AllData, "is_grapheme_extend")) {
+                a.is_grapheme_extend = derived_core_properties.is_grapheme_extend;
+            }
+            if (@hasField(AllData, "is_grapheme_base")) {
+                a.is_grapheme_base = derived_core_properties.is_grapheme_base;
+            }
+            if (@hasField(AllData, "is_grapheme_link")) {
+                a.is_grapheme_link = derived_core_properties.is_grapheme_link;
+            }
+            if (@hasField(AllData, "indic_conjunct_break")) {
+                a.indic_conjunct_break = derived_core_properties.indic_conjunct_break;
+            }
+        }
+
+        // EastAsianWidth
         if (@hasField(AllData, "east_asian_width")) {
+            const east_asian_width = ucd.east_asian_width[cp];
             a.east_asian_width = east_asian_width;
         }
 
-        // Block field
+        // Block
         if (@hasField(AllData, "block")) {
+            const block_value = ucd.blocks[cp];
             a.block = block_value;
         }
 
-        // OriginalGraphemeBreak field
+        // OriginalGraphemeBreak
         if (@hasField(AllData, "original_grapheme_break")) {
+            const original_grapheme_break = ucd.original_grapheme_break[cp];
             a.original_grapheme_break = original_grapheme_break;
         }
 
-        // EmojiData fields
-        if (@hasField(AllData, "is_emoji")) {
-            a.is_emoji = emoji_data.is_emoji;
-        }
-        if (@hasField(AllData, "is_emoji_presentation")) {
-            a.is_emoji_presentation = emoji_data.is_emoji_presentation;
-        }
-        if (@hasField(AllData, "is_emoji_modifier")) {
-            a.is_emoji_modifier = emoji_data.is_emoji_modifier;
-        }
-        if (@hasField(AllData, "is_emoji_modifier_base")) {
-            a.is_emoji_modifier_base = emoji_data.is_emoji_modifier_base;
-        }
-        if (@hasField(AllData, "is_emoji_component")) {
-            a.is_emoji_component = emoji_data.is_emoji_component;
-        }
-        if (@hasField(AllData, "is_extended_pictographic")) {
-            a.is_extended_pictographic = emoji_data.is_extended_pictographic;
+        // EmojiData
+        if (comptime Ucd.needsSection(table_config, .emoji_data)) {
+            const emoji_data = &ucd.emoji_data[cp];
+
+            if (@hasField(AllData, "is_emoji")) {
+                a.is_emoji = emoji_data.is_emoji;
+            }
+            if (@hasField(AllData, "is_emoji_presentation")) {
+                a.is_emoji_presentation = emoji_data.is_emoji_presentation;
+            }
+            if (@hasField(AllData, "is_emoji_modifier")) {
+                a.is_emoji_modifier = emoji_data.is_emoji_modifier;
+            }
+            if (@hasField(AllData, "is_emoji_modifier_base")) {
+                a.is_emoji_modifier_base = emoji_data.is_emoji_modifier_base;
+            }
+            if (@hasField(AllData, "is_emoji_component")) {
+                a.is_emoji_component = emoji_data.is_emoji_component;
+            }
+            if (@hasField(AllData, "is_extended_pictographic")) {
+                a.is_extended_pictographic = emoji_data.is_extended_pictographic;
+            }
         }
 
-        // EmojiVariationSelector field
-        if (@hasField(AllData, "is_emoji_vs_text")) {
-            a.is_emoji_vs_text = emoji_vs.text;
-        }
-        if (@hasField(AllData, "is_emoji_vs_emoji")) {
-            a.is_emoji_vs_emoji = emoji_vs.emoji;
+        if (comptime Ucd.needsSection(table_config, .emoji_vs)) {
+            const emoji_vs = &ucd.emoji_vs[cp];
+
+            if (@hasField(AllData, "is_emoji_vs_text")) {
+                a.is_emoji_vs_text = emoji_vs.text;
+            }
+            if (@hasField(AllData, "is_emoji_vs_emoji")) {
+                a.is_emoji_vs_emoji = emoji_vs.emoji;
+            }
         }
 
-        // BidiPairedBracket field
         if (@hasField(AllData, "bidi_paired_bracket")) {
+            const bidi_paired_bracket = ucd.bidi_paired_bracket[cp];
             types.fieldInit(
                 "bidi_paired_bracket",
                 cp,
@@ -915,6 +931,10 @@ pub fn writeTableData(
 
         // GraphemeBreak field (derived)
         if (@hasField(AllData, "grapheme_break")) {
+            const emoji_data = &ucd.emoji_data[cp];
+            const original_grapheme_break = ucd.original_grapheme_break[cp];
+            const derived_core_properties = &ucd.derived_core_properties[cp];
+
             if (emoji_data.is_extended_pictographic) {
                 std.debug.assert(original_grapheme_break == .other);
                 a.grapheme_break = .extended_pictographic;
