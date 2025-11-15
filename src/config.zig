@@ -237,6 +237,16 @@ pub const default = Table{
         .{ .name = "is_extended_pictographic", .type = bool },
 
         // EmojiVariationSequences
+        // These are all going to be equivalent, but
+        // `emoji-variation-sequences.txt` and UTS #51 split out the emoji and
+        // text variation sequences separately. However, ever since these were
+        // introduced in Unicode 6.1 (see
+        // https://unicode.org/Public/6.1.0/ucd/StandardizedVariants.txt --
+        // dated 2011-11-10), until present, there has never been an emoji
+        // variation sequence that isn't also a valid text variation sequence,
+        // and vice versa, so the recommendation is to just use
+        // `is_emoji_vs_base`.
+        .{ .name = "is_emoji_vs_base", .type = bool },
         .{ .name = "is_emoji_vs_text", .type = bool },
         .{ .name = "is_emoji_vs_emoji", .type = bool },
 

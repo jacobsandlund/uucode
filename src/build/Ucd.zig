@@ -109,6 +109,7 @@ const field_to_sections = std.StaticStringMap([]const UcdSection).initComptime(.
     .{ "is_emoji_modifier_base", &.{.emoji_data} },
     .{ "is_emoji_component", &.{.emoji_data} },
     .{ "is_extended_pictographic", &.{.emoji_data} },
+    .{ "is_emoji_vs_base", &.{.emoji_vs} },
     .{ "is_emoji_vs_text", &.{.emoji_vs} },
     .{ "is_emoji_vs_emoji", &.{.emoji_vs} },
     .{ "bidi_paired_bracket", &.{.bidi_paired_bracket} },
@@ -256,8 +257,8 @@ const EmojiData = packed struct {
 };
 
 const EmojiVariationSequence = packed struct {
-    text: bool = false, // VS15
-    emoji: bool = false, // VS16
+    is_text: bool = false, // VS15
+    is_emoji: bool = false, // VS16
 };
 
 // Public for GraphemeBreakTest in src/grapheme.zig
@@ -1082,15 +1083,16 @@ fn parseEmojiVariationSequences(
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ' ');
-        const cp: u21 = try parseCp(parts.next().?);
-        const vs_str = parts.next().?;
+        const cp = try parseCp(parts.next().?);
+        const vs = try parseCp(parts.next().?);
 
-        if (std.mem.eql(u8, vs_str, "FE0E"))
-            emoji_vs[cp].text = true
-        else if (std.mem.eql(u8, vs_str, "FE0F"))
-            emoji_vs[cp].emoji = true
-        else
-            std.log.err("Unknown Emoji Variation Selector: {s}", .{vs_str});
+        if (vs == 0xFE0E) {
+            emoji_vs[cp].is_text = true;
+        } else if (vs == 0xFE0F) {
+            emoji_vs[cp].is_emoji = true;
+        } else {
+            std.log.err("Unknown Emoji Variation Selector: {x}", .{vs});
+        }
     }
 }
 

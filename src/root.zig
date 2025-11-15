@@ -130,3 +130,9 @@ test "info extension" {
     // MALAYALAM FRACTION ONE ONE-HUNDRED-AND-SIXTIETH
     try testing.expect(std.mem.eql(u8, "061/1", get(.numeric_value_numeric_reversed, 0x0D58)));
 }
+
+test "is_emoji_vs_base" {
+    try testing.expect(get(.is_emoji_vs_base, 0x231B)); // ⌛
+    try testing.expect(get(.is_emoji_vs_base, 0x1F327)); // 🌧
+    try testing.expect(!get(.is_emoji_vs_base, 0x1F46C)); // 👬
+}
