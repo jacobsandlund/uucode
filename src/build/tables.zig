@@ -929,7 +929,7 @@ pub fn writeTableData(
             );
         }
 
-        // GraphemeBreak field (derived)
+        // GraphemeBreak
         if (@hasField(AllData, "grapheme_break")) {
             const emoji_data = &ucd.emoji_data[cp];
             const original_grapheme_break = ucd.original_grapheme_break[cp];

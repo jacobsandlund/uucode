@@ -7,7 +7,7 @@ pub const zero_width_joiner = 0x200D;
 
 pub const default = Table{
     .fields = &.{
-        // UnicodeData fields
+        // UnicodeData
         .{
             .name = "name",
             .type = []const u8,
@@ -69,7 +69,7 @@ pub const default = Table{
             .shift_high = 42561,
         },
 
-        // CaseFolding fields
+        // CaseFolding
         .{
             .name = "case_folding_simple",
             .type = u21,
@@ -125,7 +125,7 @@ pub const default = Table{
             .embedded_len = 0,
         },
 
-        // SpecialCasing fields
+        // SpecialCasing
         .{ .name = "has_special_casing", .type = bool },
         .{
             .name = "special_lowercase_mapping",
@@ -165,7 +165,7 @@ pub const default = Table{
             .embedded_len = 0,
         },
 
-        //// Case mappings
+        // Case mappings
         .{
             .name = "lowercase_mapping",
             .type = []const u21,
@@ -197,7 +197,7 @@ pub const default = Table{
             .embedded_len = 0,
         },
 
-        // DerivedCoreProperties fields
+        // DerivedCoreProperties
         .{ .name = "is_math", .type = bool },
         .{ .name = "is_alphabetic", .type = bool },
         .{ .name = "is_lowercase", .type = bool },
@@ -219,15 +219,16 @@ pub const default = Table{
         .{ .name = "is_grapheme_link", .type = bool },
         .{ .name = "indic_conjunct_break", .type = types.IndicConjunctBreak },
 
-        // EastAsianWidth field
+        // EastAsianWidth
         .{ .name = "east_asian_width", .type = types.EastAsianWidth },
 
-        // OriginalGraphemeBreak field
-        // The original field from GraphemeBreakProperty.txt, but without
-        // treating emoji modifiers correctly, fixed below in GraphemeBreak.
+        // OriginalGraphemeBreak
+        // This is the field from GraphemeBreakProperty.txt, without combining
+        // `indic_conjunct_break`, `is_emoji_modifier`,
+        // `is_emoji_modifier_base`, and `is_extended_pictographic`
         .{ .name = "original_grapheme_break", .type = types.OriginalGraphemeBreak },
 
-        // EmojiData fields
+        // EmojiData
         .{ .name = "is_emoji", .type = bool },
         .{ .name = "is_emoji_presentation", .type = bool },
         .{ .name = "is_emoji_modifier", .type = bool },
@@ -235,14 +236,18 @@ pub const default = Table{
         .{ .name = "is_emoji_component", .type = bool },
         .{ .name = "is_extended_pictographic", .type = bool },
 
-        // EmojiVariationSequences field
+        // EmojiVariationSequences
         .{ .name = "is_emoji_vs_text", .type = bool },
         .{ .name = "is_emoji_vs_emoji", .type = bool },
 
-        // GraphemeBreak field (derived)
+        // GraphemeBreak (derived)
+        // This is derived from `original_grapheme_break`
+        // (GraphemeBreakProperty.txt), `indic_conjunct_break`,
+        // `is_emoji_modifier`, `is_emoji_modifier_base`, and
+        // `is_extended_pictographic`
         .{ .name = "grapheme_break", .type = types.GraphemeBreak },
 
-        // BidiPairedBracket field
+        // BidiPairedBracket
         .{
             .name = "bidi_paired_bracket",
             .type = types.BidiPairedBracket,
@@ -251,7 +256,7 @@ pub const default = Table{
             .shift_high = 3,
         },
 
-        // Block field
+        // Block
         .{ .name = "block", .type = types.Block },
     },
 };
