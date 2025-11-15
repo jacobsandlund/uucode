@@ -376,13 +376,12 @@ pub const tables = [_]config.Table{
     .{
         .name = "needed_for_tests_and_build_build_config",
         .extensions = &.{
-            config_x.grapheme_break_pedantic_emoji,
             config_x.wcwidth,
         },
         .fields = &config._resolveFields(
             config_x,
-            &.{ "grapheme_break_pedantic_emoji", "wcwidth", "special_casing_condition" },
-            &.{ "grapheme_break_pedantic_emoji", "wcwidth" },
+            &.{ "wcwidth", "special_casing_condition" },
+            &.{"wcwidth"},
         ),
     },
 };
