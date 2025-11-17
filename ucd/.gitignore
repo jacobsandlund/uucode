@@ -77,7 +77,7 @@ extracted/DerivedBinaryProperties.txt
 extracted/DerivedCombiningClass.txt
 extracted/DerivedDecompositionType.txt
 # extracted/DerivedEastAsianWidth.txt (used)
-extracted/DerivedGeneralCategory.txt
+# extracted/DerivedGeneralCategory.txt (unused, but useful for reference)
 extracted/DerivedJoiningGroup.txt
 extracted/DerivedJoiningType.txt
 extracted/DerivedLineBreak.txt
