@@ -129,6 +129,12 @@
 //!   #14, Line_Break=BK, https://www.unicode.org/reports/tr14/#BK) and do not
 //!   advance horizontally on the same line.
 //!
+//! * Emoji modifiers (Fitzpatrick skin tone modifiers U+1F3FB..U+1F3FF) have
+//!   `wcwidth_standalone` = 2, as when standing alone they render as fullwidth
+//!   colored squares (and are marked East_Asian_Width=W) However,
+//!   `wcwidth_grapheme_unaware` = 0, as they are typically used to modify a
+//!   base emoji which contributes the width.
+//!
 
 const std = @import("std");
 const config = @import("config.zig");
@@ -180,6 +186,8 @@ fn compute(
     if (@hasField(Data, "wcwidth_grapheme_unaware")) {
         if (cp == 0x20E3) { // Combining enclosing keycap
             data.wcwidth_grapheme_unaware = 1;
+        } else if (data.is_emoji_modifier) {
+            data.wcwidth_grapheme_unaware = 0;
         } else if (gc == .mark_nonspacing or
             gc == .mark_enclosing or
             data.grapheme_break == .v or // Hangul Jamo and Kirat Rai vowels
@@ -198,6 +206,7 @@ pub const wcwidth = config.Extension{
         "general_category",
         "grapheme_break",
         "is_default_ignorable",
+        "is_emoji_modifier",
     },
     .compute = &compute,
     .fields = &.{

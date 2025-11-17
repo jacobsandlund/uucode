@@ -5,11 +5,6 @@ const testing = std.testing;
 
 // wcwidth tests
 
-test "wcwidth_standalone emoji_modifier is 2" {
-    const get = @import("get.zig").get;
-    try testing.expectEqual(@as(u2, 2), get(.wcwidth_standalone, 0x1F3FF)); // 🏿
-}
-
 test "wcwidth_standalone control characters are width 0" {
     const get = @import("get.zig").get;
     try testing.expectEqual(@as(u2, 0), get(.wcwidth_standalone, 0x0000)); // NULL (C0)
@@ -132,4 +127,16 @@ test "wcwidth_grapheme_unaware hangul jamo V and T are width 0" {
 test "wcwidth_standalone format characters non-DI are width 1" {
     const get = @import("get.zig").get;
     try testing.expectEqual(@as(u2, 1), get(.wcwidth_standalone, 0x0600)); // ARABIC NUMBER SIGN (Cf, not DI)
+}
+
+test "wcwidth_standalone emoji_modifier is 2" {
+    const get = @import("get.zig").get;
+    try testing.expectEqual(@as(u2, 2), get(.wcwidth_standalone, 0x1F3FB)); // 🏻 EMOJI MODIFIER FITZPATRICK TYPE-1-2
+    try testing.expectEqual(@as(u2, 2), get(.wcwidth_standalone, 0x1F3FF)); // 🏿 EMOJI MODIFIER FITZPATRICK TYPE-6
+}
+
+test "wcwidth_grapheme_unaware emoji_modifier is 0" {
+    const get = @import("get.zig").get;
+    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0x1F3FB)); // 🏻 EMOJI MODIFIER FITZPATRICK TYPE-1-2
+    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0x1F3FF)); // 🏿 EMOJI MODIFIER FITZPATRICK TYPE-6
 }
