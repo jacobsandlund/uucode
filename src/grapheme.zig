@@ -7,7 +7,7 @@ const get = getpkg.get;
 const FieldEnum = getpkg.FieldEnum;
 
 pub const IteratorResult = struct {
-    codepoint: u21,
+    code_point: u21,
     is_break: bool,
 };
 
@@ -46,14 +46,14 @@ pub fn CustomIterator(
                 .i = i,
                 .next_cp_it = next_cp_it,
                 .next_cp = next_cp,
-                .next_gb = if (next_cp) |codepoint|
-                    get(grapheme_break_field, codepoint)
+                .next_gb = if (next_cp) |code_point|
+                    get(grapheme_break_field, code_point)
                 else
                     .other,
             };
         }
 
-        pub fn nextCodepoint(self: *Self) ?IteratorResult {
+        pub fn nextCodePoint(self: *Self) ?IteratorResult {
             if (self.next_cp == null) return null;
 
             const cp1 = self.next_cp.?;
@@ -65,25 +65,25 @@ pub fn CustomIterator(
                 self.next_gb = get(grapheme_break_field, cp2);
                 const is_break = customIsBreak(gb1, self.next_gb, &self.state);
                 return IteratorResult{
-                    .codepoint = cp1,
+                    .code_point = cp1,
                     .is_break = is_break,
                 };
             } else {
                 return IteratorResult{
-                    .codepoint = cp1,
+                    .code_point = cp1,
                     .is_break = true,
                 };
             }
         }
 
-        pub fn peekCodepoint(self: Self) ?IteratorResult {
+        pub fn peekCodePoint(self: Self) ?IteratorResult {
             var it = self;
-            return it.nextCodepoint();
+            return it.nextCodePoint();
         }
 
         pub fn nextGrapheme(self: *Self) ?Grapheme {
             const start = self.i;
-            return while (self.nextCodepoint()) |result| {
+            return while (self.nextCodePoint()) |result| {
                 if (result.is_break) break .{ .start = start, .end = self.i };
             } else null;
         }
@@ -109,51 +109,51 @@ pub fn utf8Iterator(bytes: []const u8) Iterator(utf8.Iterator) {
     return Iterator(utf8.Iterator).init(.init(bytes));
 }
 
-test "Iterator nextCodepoint/peekCodepoint" {
+test "Iterator nextCodePoint/peekCodePoint" {
     const str = "👩🏽‍🚀🇨🇭";
     var it = Iterator(utf8.Iterator).init(.init(str));
     try std.testing.expect(it.i == 0);
 
-    var result = it.peekCodepoint();
+    var result = it.peekCodePoint();
     try std.testing.expect(it.i == 0);
-    try std.testing.expect(result.?.codepoint == 0x1F469); // 👩
+    try std.testing.expect(result.?.code_point == 0x1F469); // 👩
     try std.testing.expect(result.?.is_break == false);
 
-    result = it.nextCodepoint();
+    result = it.nextCodePoint();
     try std.testing.expect(it.i == 4);
-    try std.testing.expect(result.?.codepoint == 0x1F469); // 👩
+    try std.testing.expect(result.?.code_point == 0x1F469); // 👩
     try std.testing.expect(result.?.is_break == false);
 
-    result = it.nextCodepoint();
-    try std.testing.expect(result.?.codepoint == 0x1F3FD); // 🏽
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F3FD); // 🏽
     try std.testing.expect(result.?.is_break == false);
 
-    result = it.nextCodepoint();
-    try std.testing.expect(result.?.codepoint == 0x200D); // Zero width joiner
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x200D); // Zero width joiner
     try std.testing.expect(result.?.is_break == false);
 
-    result = it.peekCodepoint();
-    try std.testing.expect(result.?.codepoint == 0x1F680); // 🚀
+    result = it.peekCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F680); // 🚀
     try std.testing.expect(result.?.is_break == true);
 
-    result = it.nextCodepoint();
+    result = it.nextCodePoint();
     try std.testing.expect(it.i == 15);
-    try std.testing.expect(result.?.codepoint == 0x1F680); // 🚀
+    try std.testing.expect(result.?.code_point == 0x1F680); // 🚀
     try std.testing.expect(result.?.is_break == true);
     try std.testing.expect(std.mem.eql(u8, str[0..it.i], "👩🏽‍🚀"));
 
-    result = it.nextCodepoint();
-    try std.testing.expect(result.?.codepoint == 0x1F1E8); // Regional Indicator "C"
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F1E8); // Regional Indicator "C"
     try std.testing.expect(result.?.is_break == false);
 
-    result = it.nextCodepoint();
+    result = it.nextCodePoint();
     try std.testing.expect(it.i == str.len);
-    try std.testing.expect(result.?.codepoint == 0x1F1ED); // Regional Indicator "H"
+    try std.testing.expect(result.?.code_point == 0x1F1ED); // Regional Indicator "H"
     try std.testing.expect(result.?.is_break == true);
 
-    try std.testing.expect(it.peekCodepoint() == null);
-    try std.testing.expect(it.nextCodepoint() == null);
-    try std.testing.expect(it.nextCodepoint() == null);
+    try std.testing.expect(it.peekCodePoint() == null);
+    try std.testing.expect(it.nextCodePoint() == null);
+    try std.testing.expect(it.nextCodePoint() == null);
 }
 
 test "utf8Iterator nextGrapheme/peekGrapheme" {

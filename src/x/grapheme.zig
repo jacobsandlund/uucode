@@ -26,33 +26,33 @@ pub fn unverifiedWcwidth(const_it: anytype) i3 {
     var it = const_it;
     var width: i3 = 0;
     var prev_cp: u21 = 0;
-    while (it.nextCodepoint()) |result| {
-        if (result.codepoint == uucode.config.zero_width_joiner) {
+    while (it.nextCodePoint()) |result| {
+        if (result.code_point == uucode.config.zero_width_joiner) {
             width = 2;
-        } else if (result.codepoint == 0xFE0F) {
+        } else if (result.code_point == 0xFE0F) {
             // Emoji presentation selector. Only apply to emoji (TODO: use
             // emoji-variation-sequences.txt)
             if (uucode.get(.grapheme_break, prev_cp) == .extended_pictographic) {
                 width = 2;
             }
-        } else if (result.codepoint == 0xFE0E) {
+        } else if (result.code_point == 0xFE0E) {
             // Text presentation selector. Only apply to emoji (TODO: use
             // emoji-variation-sequences.txt)
             if (uucode.get(.grapheme_break, prev_cp) == .extended_pictographic) {
                 width = 1;
             }
-        } else if (result.codepoint == 0x20E3) {
+        } else if (result.code_point == 0x20E3) {
             // Emoji keycap sequenece.
             if (prev_cp == 0xFE0F) { // Emoji presentation selector
-                // TODO: check the previous previous codepoint, or even use
+                // TODO: check the previous previous code point, or even use
                 // emoji-sequences.txt
                 width = 2;
             }
         } else if (width <= 0) {
-            width = uucode.get(.wcwidth, result.codepoint);
+            width = uucode.get(.wcwidth, result.code_point);
         }
 
-        prev_cp = result.codepoint;
+        prev_cp = result.code_point;
         if (result.is_break) break;
     }
 

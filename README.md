@@ -58,17 +58,15 @@ var it = uucode.grapheme.utf8Iterator("👩🏽‍🚀🇨🇭👨🏻‍🍼")
 // (which is equivalent to:)
 var it = uucode.grapheme.Iterator(uccode.utf8.Iterator).init(.init("👩🏽‍🚀🇨🇭👨🏻‍🍼"));
 
-// `nextCodepoint` advances one code point at a time, indicating a new grapheme
+// `nextCodePoint` advances one code point at a time, indicating a new grapheme
 // with `is_break = true`.
-it.nextCodepoint(); // { .cp = 0x1F469; .is_break = false } // 👩
+it.nextCodePoint(); // { .code_point = 0x1F469; .is_break = false } // 👩
 it.i; // 4 (bytes into the utf8 string)
 
-it.peekCodepoint(); // { .cp = 0x1F3FD; .is_break = false } // 🏽
-it.nextCodepoint(); // { .cp = 0x1F3FD; .is_break = false } // 🏽
-it.nextCodepoint(); // { .cp = 0x200D; .is_break = false } // Zero width joiner
-it.nextCodepoint(); // { .cp = 0x1F680; .is_break = true } // 🚀
-
-const start_i = it.i;
+it.peekCodePoint(); // { .code_point = 0x1F3FD; .is_break = false } // 🏽
+it.nextCodePoint(); // { .code_point = 0x1F3FD; .is_break = false } // 🏽
+it.nextCodePoint(); // { .code_point = 0x200D; .is_break = false } // Zero width joiner
+it.nextCodePoint(); // { .code_point = 0x1F680; .is_break = true } // 🚀
 
 // `nextGrapheme` advances until the start of the next grapheme cluster
 const result = it.nextGrapheme(); // { .start = 15; .end = 23 }

@@ -420,13 +420,13 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
         if (numeric_decimal_str.len > 0) {
             numeric_type = types.NumericType.decimal;
             numeric_value_decimal = std.fmt.parseInt(u4, numeric_decimal_str, 10) catch |err| {
-                std.log.err("Invalid decimal numeric value '{s}' at codepoint {X}: {}", .{ numeric_decimal_str, cp, err });
+                std.log.err("Invalid decimal numeric value '{s}' at code point {X}: {}", .{ numeric_decimal_str, cp, err });
                 unreachable;
             };
         } else if (numeric_digit_str.len > 0) {
             numeric_type = types.NumericType.digit;
             numeric_value_digit = std.fmt.parseInt(u4, numeric_digit_str, 10) catch |err| {
-                std.log.err("Invalid digit numeric value '{s}' at codepoint {X}: {}", .{ numeric_digit_str, cp, err });
+                std.log.err("Invalid digit numeric value '{s}' at code point {X}: {}", .{ numeric_digit_str, cp, err });
                 unreachable;
             };
         } else if (numeric_numeric_str.len > 0) {
