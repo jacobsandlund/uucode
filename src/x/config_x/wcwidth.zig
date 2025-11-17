@@ -73,9 +73,10 @@
 //! * Hangul Jamo medial vowels (Grapheme_Cluster_Break=V) and final consonants
 //!   (Grapheme_Cluster_Break=T) are width 1 since they are
 //!   General_Category=Other_Letter with East_Asian_Width=Neutral, unlike other
-//!   wcwidth implementations which give them a width of 0 due to their
-//!   incorrect grapheme width algorithm of summing all the code points in the
-//!   cluster (which would add the L+V+T of these decomposed Hangul sequences).
+//!   wcwidth implementations which give them a width of 0 so that their
+//!   incorrect grapheme width algorithm that sums all the code points in the
+//!   cluster can add up the L+V+T of these decomposed Hangul sequences to get
+//!   the correct final width.
 //!
 //! * Surrogates (General_Category=Cs, U+D800..U+DFFF) are treated as width 0.
 //!   They are not Unicode scalar values (Core Spec 3.9,
