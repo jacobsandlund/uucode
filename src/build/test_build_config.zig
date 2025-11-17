@@ -381,7 +381,11 @@ pub const tables = [_]config.Table{
         },
         .fields = &config._resolveFields(
             config_x,
-            &.{ "wcwidth", "special_casing_condition" },
+            &.{
+                "wcwidth_standalone",
+                "wcwidth_grapheme_unaware",
+                "special_casing_condition",
+            },
             &.{"wcwidth"},
         ),
     },

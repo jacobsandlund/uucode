@@ -17,9 +17,9 @@ const types_x = @import("types.x.zig");
 //   spacing marks (Mc) have "positive advance width"
 //   (https://www.unicode.org/reports/tr44/#General_Category_Values).
 //   Enclosing marks (Me) are not explicitly specified, but in terminal
-//   rendering contexts they behave similarly to nonspacing marks—they don't
-//   add horizontal spacing. See also Core Spec 2.11, "Nonspacing combining
-//   characters do not occupy a spacing position by themselves"
+//   rendering contexts they behave similarly to nonspacing marks. See also
+//   Core Spec 2.11, "Nonspacing combining characters do not occupy a spacing
+//   position by themselves"
 //   (https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-2/#G1789).
 //
 pub fn unverifiedWcwidth(const_it: anytype) i3 {
@@ -49,7 +49,7 @@ pub fn unverifiedWcwidth(const_it: anytype) i3 {
                 width = 2;
             }
         } else if (width <= 0) {
-            width = uucode.get(.wcwidth, result.code_point);
+            width = uucode.get(.wcwidth_standalone, result.code_point);
         }
 
         prev_cp = result.code_point;

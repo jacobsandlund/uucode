@@ -291,26 +291,6 @@ fn TableAllData(comptime c: config.Table) type {
         i += 1;
     }
 
-    // Add extension fields not part of Data:
-    const data_fields = fields[0..i];
-    loop_x_fields: for (x_fields[0..x_i]) |xf| {
-        for (data_fields) |f| {
-            if (std.mem.eql(u8, xf.name, f.name)) {
-                continue :loop_x_fields;
-            }
-        }
-
-        const F = types.Field(xf, .unpacked);
-        fields[i] = .{
-            .name = xf.name,
-            .type = F,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(F),
-        };
-        i += 1;
-    }
-
     // Add extension inputs:
     for (c.extensions) |x| {
         loop_inputs: for (x.inputs) |input| {
@@ -320,7 +300,21 @@ fn TableAllData(comptime c: config.Table) type {
                 }
             }
 
-            const F = types.Field(config.default.field(input), .unpacked);
+            var cf: config.Field = undefined;
+
+            if (config.default.hasField(input)) {
+                cf = config.default.field(input);
+            } else {
+                // If a field isn't in `default` it's an extension field, which should
+                // be in x_fields.
+                cf = for (x_fields) |xf| {
+                    if (std.mem.eql(u8, xf.name, input)) break xf;
+                } else {
+                    @compileError("Extension field for input '" ++ input ++ "' not found in any of the table's extensions");
+                };
+            }
+
+            const F = types.Field(cf, .unpacked);
             fields[i] = .{
                 .name = input,
                 .type = F,
@@ -332,10 +326,31 @@ fn TableAllData(comptime c: config.Table) type {
         }
     }
 
+    const all_fields = fields[0..i];
+
+    // We sanity check here that at least one field from every extension is
+    // present in AllData, otherwise it's a configuration error, and we want to
+    // avoid running an extension that won't be used.
+    loop_extensions: for (c.extensions) |x| {
+        for (x.fields) |xf| {
+            for (all_fields) |f| {
+                if (std.mem.eql(u8, xf.name, f.name)) {
+                    continue :loop_extensions;
+                }
+            }
+        }
+
+        if (x.fields.len > 0) {
+            @compileError("Extension with field '" ++ x.fields[0].name ++ "' has no fields present in table or other extension inputs");
+        } else {
+            @compileError("Extension has no fields");
+        }
+    }
+
     return @Type(.{
         .@"struct" = .{
             .layout = .auto,
-            .fields = fields[0..i],
+            .fields = all_fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },

@@ -1,15 +1,35 @@
-//! The `wcwidth` is a calculation of the expected width of a codepoint in
+//! The `wcwidth` is a calculation of the expected width of a code point in
 //! cells of a monospaced font. It is not part of the Unicode standard.
+//!
+//! IMPORTANT: in general, do not use this directly, instead calculating the
+//! width of a grapheme cluster with `uucode.x.grapheme.unverifiedWcwidth(it)`.
+//! If it's already known that a code point is standing alone and not part of a
+//! multiple-code-point grapheme cluster, it's acceptable to use
+//! `wcwidth_standalone` directly.
+//!
+//! This `wcwidth` calculates two related values:
+//!
+//! * `wcwidth_standalone`:` The width for a code point as it would display
+//!   **standing alone** without being combined with other code point in a
+//!   grapheme cluster. Put another way, this is the width of a grapheme
+//!   cluster consisting of only this code point. For some code points, it is
+//!   rare or even technically "invalid" to be alone in a grapheme cluster but
+//!   despite that, we provide a width for them. See `unverifiedWcwidth` in
+//!   `src/x/grapheme.zig` for the code and documentation for determining the
+//!   width of a grapheme cluster that may contain multiple code points, and
+//!   not how it uses this `wcwidth_standalone` when there is only one code
+//!   point.
+//!
+//! * `wcwidth_grapheme_unaware`: Generally do not use this value. This is the
+//!   probable contribution of a code point to the width of a grapheme cluster,
+//!   but it does not take into consideration the context of the other code
+//!   points in the cluster, and is therefore a heuristic that _should only be
+//!   used in situations when grapheme clustering is disabled for some reason_.
 //!
 //! See resources/wcwidth for other implementations, that help to inform the
 //! implementation here.
 //!
 //! This implementation makes the following choices:
-//!
-//! * This wcwidth computes the width for a codepoint as it would display
-//!   **standing alone** without being combined with other codepoints in a
-//!   grapheme cluster. See `src/x/grapheme.zig` for the code to determine the
-//!   width of a grapheme cluster that may contain multiple code points.
 //!
 //! * The returned width is never negative. C0 and C1 control characters are
 //!   treated as zero width, diverging from some implementations that return
@@ -22,6 +42,18 @@
 //!   Per Core Spec 5.13: "Defective combining character sequences should be
 //!   rendered as if they had a no-break space as a base character"
 //!   (https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-5/#G1099).
+//!   Therefore, `wcwidth_standalone` is given a width of 1.
+//!
+//!   Note: Per UAX #44, nonspacing marks (Mn) have "zero advance width" while
+//!   spacing marks (Mc) have "positive advance width"
+//!   (https://www.unicode.org/reports/tr44/#General_Category_Values).
+//!   Enclosing marks (Me) are not explicitly specified, but in terminal
+//!   rendering contexts they behave similarly to nonspacing marks. See also
+//!   Core Spec 2.11, "Nonspacing combining characters do not occupy a spacing
+//!   position by themselves"
+//!   (https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-2/#G1789).
+//!   Therefore, `wcwidth_grapheme_unaware` is given a width of 0 for
+//!   nonspacing marks (Mn) and enclosing marks (Me).
 //!
 //! * East Asian Width (UAX #11, https://www.unicode.org/reports/tr11/) is used
 //!   to determine width, but only as a starting point. UAX #11 warns that
@@ -39,12 +71,15 @@
 //!   forms that rotate with the direction of writing, independent of their
 //!   treatment in one or more legacy character sets."
 //!
-//! * U+20E3 COMBINING ENCLOSING KEYCAP is treated as width 2 despite being an
-//!   enclosing mark (Me). When standing alone, it renders as an empty keycap
-//!   symbol which is emoji-like and visually occupies 2 cells. This is a
-//!   special case—other enclosing marks like U+20DD COMBINING ENCLOSING CIRCLE
-//!   are width 1. U+20E3 is commonly used in emoji keycap sequences like 1️⃣
-//!   (digit + VS16 + U+20E3).
+//! * U+20E3 COMBINING ENCLOSING KEYCAP is treated as width 2 for
+//!   wcwidth_standalone despite being an enclosing mark (Me). When standing
+//!   alone, it renders as an empty keycap symbol which is emoji-like and
+//!   visually occupies 2 cells. This is a special case—other enclosing marks
+//!   like U+20DD COMBINING ENCLOSING CIRCLE are width 1. U+20E3 is commonly
+//!   used in emoji keycap sequences like 1️⃣ (digit + VS16 + U+20E3). For
+//!   wcwidth_grapheme_unaware, it is given width 1, as it should follow
+//!   another code point of width 1 such as a number or '#', and so the
+//!   grapheme will be a width of 1 + 1 = 2.
 //!
 //! * Regional indicator symbols (U+1F1E6..U+1F1FF) are treated as width 2,
 //!   whether paired in valid emoji flag sequences or standing alone. Per UTS #51
@@ -70,13 +105,16 @@
 //!   a visible hyphen, requiring width 1. This matches ecosystem wcwidth
 //!   implementations.
 //!
-//! * Hangul Jamo medial vowels (Grapheme_Cluster_Break=V) and final consonants
-//!   (Grapheme_Cluster_Break=T) are width 1 since they are
-//!   General_Category=Other_Letter with East_Asian_Width=Neutral, unlike other
-//!   wcwidth implementations which give them a width of 0 so that their
+//! * Hangul Jamo medial vowels and Kirat Rai vowels (all
+//!   Grapheme_Cluster_Break=V) and Hangul trailing consonants
+//!   (Grapheme_Cluster_Break=T) are width 1 for wcwidth_standalone since they
+//!   are General_Category=Other_Letter with East_Asian_Width=Neutral, unlike
+//!   other wcwidth implementations which give them a width of 0 so that their
 //!   incorrect grapheme width algorithm that sums all the code points in the
 //!   cluster can add up the L+V+T of these decomposed Hangul sequences to get
-//!   the correct final width.
+//!   the correct final width. However, wcwidth_grapheme_unaware treats these
+//!   as width 0, as they should only be present in a grapheme cluster where
+//!   the other code points contribute to the width.
 //!
 //! * Surrogates (General_Category=Cs, U+D800..U+DFFF) are treated as width 0.
 //!   They are not Unicode scalar values (Core Spec 3.9,
@@ -107,28 +145,50 @@ fn compute(
     _ = tracking;
     const gc = data.general_category;
 
+    var width: u2 = undefined;
+
     if (gc == .other_control or
         gc == .other_surrogate or
         gc == .separator_line or
         gc == .separator_paragraph)
     {
-        data.wcwidth = 0;
+        width = 0;
     } else if (cp == 0x00AD) { // Soft hyphen
-        data.wcwidth = 1;
+        width = 1;
     } else if (data.is_default_ignorable) {
-        data.wcwidth = 0;
-    } else if (cp == 0x20E3) { // Combining enclosing keycap
-        data.wcwidth = 2;
+        width = 0;
     } else if (cp == 0x2E3A) { // Two-em dash
-        data.wcwidth = 2;
+        width = 2;
     } else if (cp == 0x2E3B) { // Three-em dash
-        data.wcwidth = 3;
+        width = 3;
     } else if (data.east_asian_width == .wide or data.east_asian_width == .fullwidth) {
-        data.wcwidth = 2;
+        width = 2;
     } else if (data.grapheme_break == .regional_indicator) {
-        data.wcwidth = 2;
+        width = 2;
     } else {
-        data.wcwidth = 1;
+        width = 1;
+    }
+
+    const Data = @TypeOf(data.*);
+    if (@hasField(Data, "wcwidth_standalone")) {
+        if (cp == 0x20E3) { // Combining enclosing keycap
+            data.wcwidth_standalone = 2;
+        } else {
+            data.wcwidth_standalone = width;
+        }
+    }
+    if (@hasField(Data, "wcwidth_grapheme_unaware")) {
+        if (cp == 0x20E3) { // Combining enclosing keycap
+            data.wcwidth_grapheme_unaware = 1;
+        } else if (gc == .mark_nonspacing or
+            gc == .mark_enclosing or
+            data.grapheme_break == .v or // Hangul Jamo and Kirat Rai vowels
+            data.grapheme_break == .t // Hangul trailing consonants
+        ) {
+            data.wcwidth_grapheme_unaware = 0;
+        } else {
+            data.wcwidth_grapheme_unaware = width;
+        }
     }
 }
 
@@ -141,6 +201,7 @@ pub const wcwidth = config.Extension{
     },
     .compute = &compute,
     .fields = &.{
-        .{ .name = "wcwidth", .type = u2 },
+        .{ .name = "wcwidth_standalone", .type = u2 },
+        .{ .name = "wcwidth_grapheme_unaware", .type = u2 },
     },
 };
