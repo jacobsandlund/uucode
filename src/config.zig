@@ -213,7 +213,7 @@ pub const default = Table{
         .{ .name = "is_id_continue", .type = bool },
         .{ .name = "is_xid_start", .type = bool },
         .{ .name = "is_xid_continue", .type = bool },
-        .{ .name = "is_default_ignorable_code_point", .type = bool },
+        .{ .name = "is_default_ignorable", .type = bool },
         .{ .name = "is_grapheme_extend", .type = bool },
         .{ .name = "is_grapheme_base", .type = bool },
         .{ .name = "is_grapheme_link", .type = bool },

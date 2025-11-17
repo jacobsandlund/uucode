@@ -848,8 +848,8 @@ pub fn writeTableData(
             if (@hasField(AllData, "is_xid_continue")) {
                 a.is_xid_continue = derived_core_properties.is_xid_continue;
             }
-            if (@hasField(AllData, "is_default_ignorable_code_point")) {
-                a.is_default_ignorable_code_point = derived_core_properties.is_default_ignorable_code_point;
+            if (@hasField(AllData, "is_default_ignorable")) {
+                a.is_default_ignorable = derived_core_properties.is_default_ignorable;
             }
             if (@hasField(AllData, "is_grapheme_extend")) {
                 a.is_grapheme_extend = derived_core_properties.is_grapheme_extend;
