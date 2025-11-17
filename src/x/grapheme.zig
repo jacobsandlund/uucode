@@ -7,6 +7,21 @@ const types_x = @import("types.x.zig");
 // is that all these code points are combined into one grapheme cluster.
 // However, if there is a zero width joiner, then consider the width to be 2
 // (wide), since it's likely to be a wide grapheme cluster.
+
+// See src/x/config_x/wcwidth.zig for the logic determining the width of a
+// single code point standing alone.
+//
+// This implementation makes the following choices (TODO):
+//
+// * Note: Per UAX #44, nonspacing marks (Mn) have "zero advance width" while
+//   spacing marks (Mc) have "positive advance width"
+//   (https://www.unicode.org/reports/tr44/#General_Category_Values).
+//   Enclosing marks (Me) are not explicitly specified, but in terminal
+//   rendering contexts they behave similarly to nonspacing marks—they don't
+//   add horizontal spacing. See also Core Spec 2.11, "Nonspacing combining
+//   characters do not occupy a spacing position by themselves"
+//   (https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-2/#G1789).
+//
 pub fn unverifiedWcwidth(const_it: anytype) i3 {
     var it = const_it;
     var width: i3 = 0;
