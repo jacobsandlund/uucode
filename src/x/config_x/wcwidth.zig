@@ -1,10 +1,10 @@
 //! The `wcwidth` is a calculation of the expected width of a code point in
 //! cells of a monospaced font. It is not part of the Unicode standard.
 //!
-//! IMPORTANT: in general, do not use this directly, instead calculating the
-//! width of a grapheme cluster with `uucode.x.grapheme.unverifiedWcwidth(it)`.
-//! If it's already known that a code point is standing alone and not part of a
-//! multiple-code-point grapheme cluster, it's acceptable to use
+//! IMPORTANT: in general, calculate the width of a grapheme cluster with
+//! `uucode.x.grapheme.unverifiedWcwidth(it)` instead of using this `wcwidth`
+//! directly. If it's already known that a code point is standing alone and not
+//! part of a multiple-code-point grapheme cluster, it's acceptable to use
 //! `wcwidth_standalone` directly.
 //!
 //! This `wcwidth` calculates two related values:
@@ -71,14 +71,17 @@
 //!   forms that rotate with the direction of writing, independent of their
 //!   treatment in one or more legacy character sets."
 //!
-//! * U+20E3 COMBINING ENCLOSING KEYCAP is treated as width 2 for
-//!   wcwidth_standalone despite being an enclosing mark (Me). When standing
-//!   alone, it renders as an empty keycap symbol which is emoji-like and
-//!   visually occupies 2 cells. This is a special case—other enclosing marks
-//!   like U+20DD COMBINING ENCLOSING CIRCLE are width 1. U+20E3 is commonly
-//!   used in emoji keycap sequences like 1️⃣ (digit + VS16 + U+20E3). For
-//!   wcwidth_grapheme_unaware, it is given width 1, as it should follow
-//!   another code point of width 1 such as a number or '#', and so the
+//! * U+20E3 COMBINING ENCLOSING KEYCAP is commonly used in emoji keycap
+//!   sequences like 1️⃣ (digit + VS16 + U+20E3), but when standing alone might
+//!   render as an empty keycap symbol visually occupying 2 cells, so sit is
+//!   given width 2. This is a special case—other enclosing marks like U+20DD
+//!   COMBINING ENCLOSING CIRCLE are width 1. UTS #51 §1.4.6 ED-20 states
+//!   "Other components (U+20E3 COMBINING ENCLOSING KEYCAP, ...) should never
+//!   have an emoji presentation in isolation"
+//!   (https://www.unicode.org/reports/tr51/#def_basic_emoji_set), so this
+//!   should display with text presentation standing alone. For
+//!   wcwidth_grapheme_unaware, it is given width 1, as it should usually
+//!   follow another code point of width 1 such as a number or '#', and so the
 //!   grapheme will be a width of 1 + 1 = 2.
 //!
 //! * Regional indicator symbols (U+1F1E6..U+1F1FF) are treated as width 2,
@@ -87,7 +90,9 @@
 //!   as a capital A..Z character with a special display"
 //!   (https://www.unicode.org/reports/tr51/#C3). Unpaired regional indicators
 //!   commonly render as the corresponding letter in a width-2 box (e.g., 🇺
-//!   displays as "U" in a box).
+//!   displays as "U" in a box). See the above bullet point (U+20E3) for the
+//!   text from UTS #51 §1.4.6 ED-20 that also applies to regional indicators,
+//!   meaning they should have a text presentation in isolation.
 //!
 //! * Default_Ignorable_Code_Point characters are treated as width 0. These are
 //!   characters that "should be ignored in rendering (unless explicitly

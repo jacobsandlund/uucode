@@ -163,7 +163,7 @@ if (b.lazyDependency("uucode", .{
     }),
     .fields = @as([]const []const u8, &.{
         // Make sure to also include the extension's fields here:
-        "wcwidth",
+        "wcwidth_standalone",
         ...
         "general_category",
     }),
@@ -172,7 +172,7 @@ if (b.lazyDependency("uucode", .{
 }
 
 // In your code:
-uucode.get(.wcwidth, 0x26F5) // ⛵ == 2
+uucode.get(.wcwidth_standalone, 0x26F5) // ⛵ == 2
 ```
 
 See [src/x/config.x.zig](src/x/config.x.zig) for the full list of builtin extensions.
@@ -270,7 +270,7 @@ pub const tables = [_]config.Table{
         .fields = &.{
             // Don't forget to include the extension's fields here.
             emoji_odd_or_even.field("emoji_odd_or_even"),
-            wcwidth.field("wcwidth"),
+            wcwidth.field("wcwidth_standalone"),
 
             // See `src/config.zig` for everything that can be overriden.
             // In this example, we're embedding 15 bytes into the `stage3` data,
@@ -295,7 +295,7 @@ pub const log_level = .debug;
 
 const uucode = @import("uucode");
 
-uucode.get(.wcwidth, 0x26F5) // ⛵ == 2
+uucode.get(.wcwidth_standalone, 0x26F5) // ⛵ == 2
 
 uucode.get(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
 
