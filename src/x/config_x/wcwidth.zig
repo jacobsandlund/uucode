@@ -80,9 +80,9 @@
 //!   have an emoji presentation in isolation"
 //!   (https://www.unicode.org/reports/tr51/#def_basic_emoji_set), so this
 //!   should display with text presentation standing alone. For
-//!   wcwidth_grapheme_unaware, it is given width 1, as it should usually
-//!   follow another code point of width 1 such as a number or '#', and so the
-//!   grapheme will be a width of 1 + 1 = 2.
+//!   wcwidth_grapheme_unaware, it is given a width of 0, as it should usually
+//!   follow VS16 preceded by a digit or '#', and so the entire keycap sequence
+//!   will be a width of 1 (digit/'#') + 1 (VS16) = 2.
 //!
 //! * Regional indicator symbols (U+1F1E6..U+1F1FF) are treated as width 2,
 //!   whether paired in valid emoji flag sequences or standing alone. Per UTS #51
@@ -109,6 +109,10 @@
 //!   sophisticated word-breaking algorithms and typically display SOFT HYPHEN as
 //!   a visible hyphen, requiring width 1. This matches ecosystem wcwidth
 //!   implementations.
+//!
+//!   VS15 and VS16 get treated as -1 or +1 for wcwidth_grapheme_unaware as
+//!   they will generally either shrink emoji from 2 to 1 width (VS15) or
+//!   enlarge text from 1 to 2 width (VS16).
 //!
 //! * Hangul Jamo medial vowels and Kirat Rai vowels (all
 //!   Grapheme_Cluster_Break=V) and Hangul trailing consonants
@@ -189,11 +193,13 @@ fn compute(
         }
     }
     if (@hasField(Data, "wcwidth_grapheme_unaware")) {
-        if (cp == 0x20E3) { // Combining enclosing keycap
+        if (cp == 0xFE0F) { // Emoji presentation selector
             data.wcwidth_grapheme_unaware = 1;
-        } else if (data.is_emoji_modifier) {
-            data.wcwidth_grapheme_unaware = 0;
-        } else if (gc == .mark_nonspacing or
+        } else if (cp == 0xFE0E) { // Text presentation selector
+            data.wcwidth_grapheme_unaware = -1;
+        } else if (cp == 0x20E3 or // Combining enclosing keycap
+            data.is_emoji_modifier or
+            gc == .mark_nonspacing or
             gc == .mark_enclosing or
             data.grapheme_break == .v or // Hangul Jamo and Kirat Rai vowels
             data.grapheme_break == .t // Hangul trailing consonants
@@ -216,6 +222,6 @@ pub const wcwidth = config.Extension{
     .compute = &compute,
     .fields = &.{
         .{ .name = "wcwidth_standalone", .type = u2 },
-        .{ .name = "wcwidth_grapheme_unaware", .type = u2 },
+        .{ .name = "wcwidth_grapheme_unaware", .type = i2 },
     },
 };
