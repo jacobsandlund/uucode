@@ -59,3 +59,65 @@ func StringWidth(s string) (width int) {
 	return
 }
 // copyv: end
+
+// copyv: track https://github.com/rivo/uniseg/blob/087b3e4194c1feb0856b68d0e7c425c0994829cf/grapheme.go#L287-L345
+// FirstGraphemeClusterInString is like [FirstGraphemeCluster] but its input and
+// outputs are strings.
+func FirstGraphemeClusterInString(str string, state int) (cluster, rest string, width, newState int) {
+	// An empty string returns nothing.
+	if len(str) == 0 {
+		return
+	}
+
+	// Extract the first rune.
+	r, length := utf8.DecodeRuneInString(str)
+	if len(str) <= length { // If we're already past the end, there is nothing else to parse.
+		var prop int
+		if state < 0 {
+			prop = propertyGraphemes(r)
+		} else {
+			prop = state >> shiftGraphemePropState
+		}
+		return str, "", runeWidth(r, prop), grAny | (prop << shiftGraphemePropState)
+	}
+
+	// If we don't know the state, determine it now.
+	var firstProp int
+	if state < 0 {
+		state, firstProp, _ = transitionGraphemeState(state, r)
+	} else {
+		firstProp = state >> shiftGraphemePropState
+	}
+	width += runeWidth(r, firstProp)
+
+	// Transition until we find a boundary.
+	for {
+		var (
+			prop     int
+			boundary bool
+		)
+
+		r, l := utf8.DecodeRuneInString(str[length:])
+		state, prop, boundary = transitionGraphemeState(state&maskGraphemeState, r)
+
+		if boundary {
+			return str[:length], str[length:], width, state | (prop << shiftGraphemePropState)
+		}
+
+		if firstProp == prExtendedPictographic {
+			if r == vs15 {
+				width = 1
+			} else if r == vs16 {
+				width = 2
+			}
+		} else if firstProp != prRegionalIndicator && firstProp != prL {
+			width += runeWidth(r, prop)
+		}
+
+		length += l
+		if len(str) <= length {
+			return str, "", width, grAny | (prop << shiftGraphemePropState)
+		}
+	}
+}
+// copyv: end
