@@ -50,22 +50,22 @@ test "wcwidth_standalone combining marks are width 1" {
     try testing.expectEqual(@as(u2, 1), get(.wcwidth_standalone, 0x20DD)); // COMBINING ENCLOSING CIRCLE (Me)
 }
 
-test "wcwidth_grapheme_unaware combining marks are width 0 for nonspacing and enclosing, and follow EAW for spacing" {
+test "wcwidth_zero_in_grapheme combining marks" {
     const get = @import("get.zig").get;
-    // Mn (Mark, Nonspacing) are width 0
-    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0x0300)); // COMBINING GRAVE ACCENT (Mn)
-    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0x0341)); // COMBINING GREEK PERISPOMENI (Mn)
-    // Me (Mark, Enclosing) are width 0
-    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0x20DD)); // COMBINING ENCLOSING CIRCLE (Me)
-    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0x20DE)); // COMBINING ENCLOSING SQUARE (Me)
-    // Mc (Mark, Spacing Combining) follow EAW - Neutral=1
-    try testing.expectEqual(@as(u2, 1), get(.wcwidth_grapheme_unaware, 0x0903)); // DEVANAGARI SIGN VISARGA (Mc, N)
-    try testing.expectEqual(@as(u2, 1), get(.wcwidth_grapheme_unaware, 0x093E)); // DEVANAGARI VOWEL SIGN AA (Mc, N)
-    // Mc with EAW=Wide are width 2
-    try testing.expectEqual(@as(u2, 2), get(.wcwidth_grapheme_unaware, 0x302E)); // HANGUL SINGLE DOT TONE MARK (Mc, W)
-    try testing.expectEqual(@as(u2, 2), get(.wcwidth_grapheme_unaware, 0x302F)); // HANGUL DOUBLE DOT TONE MARK (Mc, W)
-    try testing.expectEqual(@as(u2, 2), get(.wcwidth_grapheme_unaware, 0x16FF0)); // VIETNAMESE ALTERNATE READING MARK CA (Mc, W)
-    try testing.expectEqual(@as(u2, 2), get(.wcwidth_grapheme_unaware, 0x16FF1)); // VIETNAMESE ALTERNATE READING MARK NHAY (Mc, W)
+    // mark_nonspacing (Mn) are true
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x0300)); // COMBINING GRAVE ACCENT (Mn)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x0341)); // COMBINING GREEK PERISPOMENI (Mn)
+    // mark_enclosing (Me) are true
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x20DD)); // COMBINING ENCLOSING CIRCLE (Me)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x20DE)); // COMBINING ENCLOSING SQUARE (Me)
+    // mark_spacing_combining (Mc) follow EAW - Neutral=1, so false
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x0903)); // DEVANAGARI SIGN VISARGA (Mc, N)
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x093E)); // DEVANAGARI VOWEL SIGN AA (Mc, N)
+    // mark_spacing_combining with EAW=Wide are width 2, so false
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x302E)); // HANGUL SINGLE DOT TONE MARK (Mc, W)
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x302F)); // HANGUL DOUBLE DOT TONE MARK (Mc, W)
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x16FF0)); // VIETNAMESE ALTERNATE READING MARK CA (Mc, W)
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x16FF1)); // VIETNAMESE ALTERNATE READING MARK NHAY (Mc, W)
 }
 
 test "wcwidth_standalone combining enclosing keycap exception is width 2" {
@@ -73,9 +73,9 @@ test "wcwidth_standalone combining enclosing keycap exception is width 2" {
     try testing.expectEqual(@as(u2, 2), get(.wcwidth_standalone, 0x20E3)); // COMBINING ENCLOSING KEYCAP
 }
 
-test "wcwidth_grapheme_unaware combining enclosing keycap exception is width 1" {
+test "wcwidth_zero_in_grapheme combining enclosing keycap exception is true" {
     const get = @import("get.zig").get;
-    try testing.expectEqual(@as(u2, 1), get(.wcwidth_grapheme_unaware, 0x20E3)); // COMBINING ENCLOSING KEYCAP
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x20E3)); // COMBINING ENCLOSING KEYCAP
 }
 
 test "wcwidth_standalone regional indicators are width 2" {
@@ -115,13 +115,13 @@ test "wcwidth_standalone hangul jamo V and T are width 1" {
     try testing.expectEqual(@as(u2, 1), get(.wcwidth_standalone, 0xD7CB)); // HANGUL JONGSEONG NIEUN-RIEUL (T)
 }
 
-test "wcwidth_grapheme_unaware hangul jamo V and T are width 0" {
+test "wcwidth_zero_in_grapheme hangul jamo V and T are true" {
     const get = @import("get.zig").get;
-    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0x1161)); // HANGUL JUNGSEONG A (V)
-    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0x11A8)); // HANGUL JONGSEONG KIYEOK (T)
-    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0xD7B0)); // HANGUL JUNGSEONG O-YEO (V)
-    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0xD7CB)); // HANGUL JONGSEONG NIEUN-RIEUL (T)
-    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0x16D63)); // KIRAT RAI VOWEL SIGN AA (V)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x1161)); // HANGUL JUNGSEONG A (V)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x11A8)); // HANGUL JONGSEONG KIYEOK (T)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0xD7B0)); // HANGUL JUNGSEONG O-YEO (V)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0xD7CB)); // HANGUL JONGSEONG NIEUN-RIEUL (T)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x16D63)); // KIRAT RAI VOWEL SIGN AA (V)
 }
 
 test "wcwidth_standalone format characters non-DI are width 1" {
@@ -135,8 +135,8 @@ test "wcwidth_standalone emoji_modifier is 2" {
     try testing.expectEqual(@as(u2, 2), get(.wcwidth_standalone, 0x1F3FF)); // 🏿 EMOJI MODIFIER FITZPATRICK TYPE-6
 }
 
-test "wcwidth_grapheme_unaware emoji_modifier is 0" {
+test "wcwidth_zero_in_grapheme emoji_modifier is true" {
     const get = @import("get.zig").get;
-    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0x1F3FB)); // 🏻 EMOJI MODIFIER FITZPATRICK TYPE-1-2
-    try testing.expectEqual(@as(u2, 0), get(.wcwidth_grapheme_unaware, 0x1F3FF)); // 🏿 EMOJI MODIFIER FITZPATRICK TYPE-6
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x1F3FB)); // 🏻 EMOJI MODIFIER FITZPATRICK TYPE-1-2
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x1F3FF)); // 🏿 EMOJI MODIFIER FITZPATRICK TYPE-6
 }

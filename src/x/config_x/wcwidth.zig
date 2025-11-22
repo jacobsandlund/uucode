@@ -2,7 +2,7 @@
 //! cells of a monospaced font. It is not part of the Unicode standard.
 //!
 //! IMPORTANT: in general, calculate the width of a grapheme cluster with
-//! `uucode.x.grapheme.unverifiedWcwidth(it)` instead of using this `wcwidth`
+//! `uucode.x.grapheme.wcwidth(it)` instead of using this `wcwidth`
 //! directly. If it's already known that a code point is standing alone and not
 //! part of a multiple-code-point grapheme cluster, it's acceptable to use
 //! `wcwidth_standalone` directly.
@@ -14,17 +14,17 @@
 //!   grapheme cluster. Put another way, this is the width of a grapheme
 //!   cluster consisting of only this code point. For some code points, it is
 //!   rare or even technically "invalid" to be alone in a grapheme cluster but
-//!   despite that, we provide a width for them. See `unverifiedWcwidth` in
+//!   despite that, we provide a width for them. See `wcwidth` in
 //!   `src/x/grapheme.zig` for the code and documentation for determining the
 //!   width of a grapheme cluster that may contain multiple code points, and
 //!   not how it uses this `wcwidth_standalone` when there is only one code
 //!   point.
 //!
-//! * `wcwidth_grapheme_unaware`: Generally do not use this value. This is the
-//!   probable contribution of a code point to the width of a grapheme cluster,
-//!   but it does not take into consideration the context of the other code
-//!   points in the cluster, and is therefore a heuristic that _should only be
-//!   used in situations when grapheme clustering is disabled for some reason_.
+//! * `wcwidth_zero_in_grapheme`: This indicates whether a code point does not
+//!   contribute to width within a grapheme cluster, even if the code point
+//!   might have width when standing alone (`wcwidth_standalone`). Emoji
+//!   modifiers, nonspacing and enclosing marks, and Hangul/Kirat V/T are all
+//!   in this category.
 //!
 //! See resources/wcwidth for other implementations, that help to inform the
 //! implementation here.
@@ -52,8 +52,8 @@
 //!   Core Spec 2.11, "Nonspacing combining characters do not occupy a spacing
 //!   position by themselves"
 //!   (https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-2/#G1789).
-//!   Therefore, `wcwidth_grapheme_unaware` is given a width of 0 for
-//!   nonspacing marks (Mn) and enclosing marks (Me).
+//!   Therefore, `wcwidth_zero_in_grapheme` is true for nonspacing marks (Mn)
+//!   and enclosing marks (Me).
 //!
 //! * East Asian Width (UAX #11, https://www.unicode.org/reports/tr11/) is used
 //!   to determine width, but only as a starting point. UAX #11 warns that
@@ -80,9 +80,9 @@
 //!   have an emoji presentation in isolation"
 //!   (https://www.unicode.org/reports/tr51/#def_basic_emoji_set), so this
 //!   should display with text presentation standing alone. For
-//!   wcwidth_grapheme_unaware, it is given a width of 0, as it should usually
-//!   follow VS16 preceded by a digit or '#', and so the entire keycap sequence
-//!   will be a width of 1 (digit/'#') + 1 (VS16) = 2.
+//!   `wcwidth_zero_in_grapheme`, it is true, as it should usually follow VS16
+//!   preceded by a digit or '#', and so the entire keycap sequence will be a
+//!   width of 2 from the special VS16 handling.
 //!
 //! * Regional indicator symbols (U+1F1E6..U+1F1FF) are treated as width 2,
 //!   whether paired in valid emoji flag sequences or standing alone. Per UTS #51
@@ -110,20 +110,19 @@
 //!   a visible hyphen, requiring width 1. This matches ecosystem wcwidth
 //!   implementations.
 //!
-//!   VS15 and VS16 get treated as -1 or +1 for wcwidth_grapheme_unaware as
-//!   they will generally either shrink emoji from 2 to 1 width (VS15) or
-//!   enlarge text from 1 to 2 width (VS16).
+//!   VS15 and VS16 have `wcwidth_zero_in_grapheme` set to true. These are not
+//!   "zero in grapheme" in the sense that they don't affect width--they change
+//!   the width of the base char! But they don't have their *own* independent
+//!   width contribution that should be summed. They are special cased in the
+//!   `x/grapheme.zig` `wcwidth` calculation.
 //!
 //! * Hangul Jamo medial vowels and Kirat Rai vowels (all
 //!   Grapheme_Cluster_Break=V) and Hangul trailing consonants
 //!   (Grapheme_Cluster_Break=T) are width 1 for wcwidth_standalone since they
-//!   are General_Category=Other_Letter with East_Asian_Width=Neutral, unlike
-//!   other wcwidth implementations which give them a width of 0 so that their
-//!   incorrect grapheme width algorithm that sums all the code points in the
-//!   cluster can add up the L+V+T of these decomposed Hangul sequences to get
-//!   the correct final width. However, wcwidth_grapheme_unaware treats these
-//!   as width 0, as they should only be present in a grapheme cluster where
-//!   the other code points contribute to the width.
+//!   are General_Category=Other_Letter with East_Asian_Width=Neutral. However,
+//!   `wcwidth_zero_in_grapheme` is true for these, as they should only be
+//!   present in a grapheme cluster where the other code points contribute to
+//!   the width.
 //!
 //! * Surrogates (General_Category=Cs, U+D800..U+DFFF) are treated as width 0.
 //!   They are not Unicode scalar values (Core Spec 3.9,
@@ -141,7 +140,7 @@
 //! * Emoji modifiers (Fitzpatrick skin tone modifiers U+1F3FB..U+1F3FF) have
 //!   `wcwidth_standalone` = 2, as when standing alone they render as fullwidth
 //!   colored squares (and are marked East_Asian_Width=W) However,
-//!   `wcwidth_grapheme_unaware` = 0, as they are typically used to modify a
+//!   `wcwidth_zero_in_grapheme` is true, as they are typically used to modify a
 //!   base emoji which contributes the width.
 //!
 
@@ -192,21 +191,17 @@ fn compute(
             data.wcwidth_standalone = width;
         }
     }
-    if (@hasField(Data, "wcwidth_grapheme_unaware")) {
-        if (cp == 0xFE0F) { // Emoji presentation selector
-            data.wcwidth_grapheme_unaware = 1;
-        } else if (cp == 0xFE0E) { // Text presentation selector
-            data.wcwidth_grapheme_unaware = -1;
-        } else if (cp == 0x20E3 or // Combining enclosing keycap
+    if (@hasField(Data, "wcwidth_zero_in_grapheme")) {
+        if (width == 0 or // Includes default_ignorable such as ZWJ and VS
             data.is_emoji_modifier or
             gc == .mark_nonspacing or
-            gc == .mark_enclosing or
+            gc == .mark_enclosing or // Including keycap
             data.grapheme_break == .v or // Hangul Jamo and Kirat Rai vowels
             data.grapheme_break == .t // Hangul trailing consonants
         ) {
-            data.wcwidth_grapheme_unaware = 0;
+            data.wcwidth_zero_in_grapheme = true;
         } else {
-            data.wcwidth_grapheme_unaware = width;
+            data.wcwidth_zero_in_grapheme = false;
         }
     }
 }
@@ -222,6 +217,6 @@ pub const wcwidth = config.Extension{
     .compute = &compute,
     .fields = &.{
         .{ .name = "wcwidth_standalone", .type = u2 },
-        .{ .name = "wcwidth_grapheme_unaware", .type = i2 },
+        .{ .name = "wcwidth_zero_in_grapheme", .type = bool },
     },
 };

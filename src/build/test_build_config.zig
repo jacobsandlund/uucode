@@ -383,7 +383,7 @@ pub const tables = [_]config.Table{
             config_x,
             &.{
                 "wcwidth_standalone",
-                "wcwidth_grapheme_unaware",
+                "wcwidth_zero_in_grapheme",
                 "special_casing_condition",
             },
             &.{"wcwidth"},
