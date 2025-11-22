@@ -621,3 +621,89 @@ pub fn isBreak(
 test "GraphemeBreakTest.txt - isBreak" {
     try testGraphemeBreak(isBreak);
 }
+
+test "long emoji zwj sequences" {
+    // 👩‍👩‍👧‍👦 (family: woman, woman, girl, boy)
+    var it = utf8Iterator("\u{1F469}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}_");
+    var result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F469); // 👩
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x200D);
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F469); // 👩
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x200D);
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F467); // 👧
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x200D);
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F466); // 👦
+    try std.testing.expect(result.?.is_break); // break
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == '_');
+    try std.testing.expect(result.?.is_break); // break
+}
+
+test "long emoji zwj sequences with emoji modifiers" {
+    // 👨🏻‍❤️‍💋‍👨🏿 Kiss: man, man, light skin tone, dark skin tone
+    // Sequence: Man, Light Skin Tone, ZWJ, Heart, VS16, ZWJ, Kiss Mark, ZWJ, Man, Dark Skin Tone
+    var it = utf8Iterator("\u{1F468}\u{1F3FB}\u{200D}\u{2764}\u{FE0F}\u{200D}\u{1F48B}\u{200D}\u{1F468}\u{1F3FF}_");
+
+    var result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F468); // Man
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F3FB); // Light Skin Tone
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x200D); // ZWJ
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x2764); // Heart
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0xFE0F); // VS16
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x200D); // ZWJ
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F48B); // Kiss Mark
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x200D); // ZWJ
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F468); // Man
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F3FF); // Dark Skin Tone
+    try std.testing.expect(result.?.is_break); // break
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == '_');
+    try std.testing.expect(result.?.is_break); // break
+}

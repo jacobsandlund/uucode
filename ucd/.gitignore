@@ -71,7 +71,7 @@ emoji/ReadMe.txt
 emoji/emoji-sequences.txt
 emoji/emoji-test.txt
 # emoji/emoji-variation-sequences.txt (used)
-emoji/emoji-zwj-sequences.txt
+# emoji/emoji-zwj-sequences.txt (for reference)
 # extracted/DerivedBidiClass.txt (used)
 extracted/DerivedBinaryProperties.txt
 extracted/DerivedCombiningClass.txt
