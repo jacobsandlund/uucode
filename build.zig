@@ -160,6 +160,12 @@ pub fn build(b: *std.Build) void {
         "Path to built tables source file",
     );
 
+    const test_filters = b.option(
+        []const []const u8,
+        "test-filter",
+        "Filter for test. Only applies to Zig tests.",
+    ) orelse &[0][]const u8{};
+
     const build_config_path = build_config_path_opt orelse blk: {
         const build_config_zig = build_config_zig_opt orelse buildBuildConfig(
             b.allocator,
@@ -219,10 +225,12 @@ pub fn build(b: *std.Build) void {
 
     const src_tests = b.addTest(.{
         .root_module = test_mod.lib,
+        .filters = test_filters,
     });
 
     const build_tables_tests = b.addTest(.{
         .root_module = test_mod.build_tables.?,
+        .filters = test_filters,
     });
 
     const build_tests = b.addTest(.{
@@ -231,6 +239,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         }),
+        .filters = test_filters,
     });
 
     const run_src_tests = b.addRunArtifact(src_tests);

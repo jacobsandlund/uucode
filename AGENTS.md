@@ -13,6 +13,7 @@ The architecture works in a few layers:
 ## Build & Commands
 
 * Build and test with: `zig build test`
+* Run a single test: `zig build test -Dtest-filter="test name"`
 * Format code with: `zig fmt`
 
 Always `zig build test` to check that changes still pass.
