@@ -660,7 +660,6 @@ test "long emoji zwj sequences" {
 
 test "long emoji zwj sequences with emoji modifiers" {
     // 👨🏻‍❤️‍💋‍👨🏿 Kiss: man, man, light skin tone, dark skin tone
-    // Sequence: Man, Light Skin Tone, ZWJ, Heart, VS16, ZWJ, Kiss Mark, ZWJ, Man, Dark Skin Tone
     var it = utf8Iterator("\u{1F468}\u{1F3FB}\u{200D}\u{2764}\u{FE0F}\u{200D}\u{1F48B}\u{200D}\u{1F468}\u{1F3FF}_");
 
     var result = it.nextCodePoint();
@@ -701,6 +700,43 @@ test "long emoji zwj sequences with emoji modifiers" {
 
     result = it.nextCodePoint();
     try std.testing.expect(result.?.code_point == 0x1F3FF); // Dark Skin Tone
+    try std.testing.expect(result.?.is_break); // break
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == '_');
+    try std.testing.expect(result.?.is_break); // break
+}
+
+test "sequence of regional indicators" {
+    // 🇺🇸🇦🇹🇼_🇳_
+    var it = utf8Iterator("\u{1F1FA}\u{1F1F8}\u{1F1E6}\u{1F1F9}\u{1F1FC}_\u{1F1F3}_");
+
+    var result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F1FA); // U
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F1F8); // S
+    try std.testing.expect(result.?.is_break); // break
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F1E6); // A
+    try std.testing.expect(!result.?.is_break);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F1F9); // T
+    try std.testing.expect(result.?.is_break); // break
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F1FC); // W
+    try std.testing.expect(result.?.is_break); // break
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == '_');
+    try std.testing.expect(result.?.is_break); // break
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F1F3); // N
     try std.testing.expect(result.?.is_break); // break
 
     result = it.nextCodePoint();
