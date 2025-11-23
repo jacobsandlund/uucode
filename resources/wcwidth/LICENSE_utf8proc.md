@@ -1,4 +1,4 @@
-<!-- copyv: track https://github.com/JuliaStrings/utf8proc/blob/96e9b86dc73ecf49fc548b9e6fd9a27839d0f842/LICENSE.md?plain=1#L1-L93 -->
+<!-- copyv: track https://github.com/JuliaStrings/utf8proc/blob/90daf9f396cfec91668758eb9cc54bd5248a6b89/LICENSE.md?plain=1#L1-L93 -->
 ## utf8proc license ##
 
 **utf8proc** is a software package originally developed
