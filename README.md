@@ -91,7 +91,7 @@ uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
 
 cp1 = cp2;
 cp2 = 0x1F680; // 🚀
-// The combined grapheme cluster is 👩‍🍼 (woman astronaut)
+// The combined grapheme cluster is 👩🏽‍🚀 (woman astronaut)
 uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
 
 cp1 = cp2;
