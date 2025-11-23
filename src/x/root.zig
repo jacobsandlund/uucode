@@ -3,6 +3,10 @@ pub const types_x = @import("types.x.zig");
 pub const grapheme = @import("grapheme.zig");
 const testing = std.testing;
 
+test {
+    std.testing.refAllDeclsRecursive(@This());
+}
+
 // wcwidth tests
 
 test "wcwidth_standalone control characters are width 0" {

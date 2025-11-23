@@ -41,10 +41,6 @@ const std = @import("std");
 const uucode = @import("../root.zig");
 const types_x = @import("types.x.zig");
 
-fn isExtendedPictographic(gb: uucode.types.GraphemeBreak) bool {
-    return gb == .extended_pictographic or gb == .emoji_modifier_base;
-}
-
 // This calculates the width of just a single grapheme, advancing the iterator.
 // See `wcwidth` for a version that doesn't advance the iterator (accepting a
 // constant iterator), and `wcwidthRemaining` for a version that calculates the
@@ -306,4 +302,441 @@ test "wcwidth Devanagari 3 consonants" {
     // 1 + 0 + 1 + 0 + 1 = 3
     const it = uucode.grapheme.utf8Iterator("\u{0915}\u{094D}\u{0915}\u{094D}\u{0915}");
     try std.testing.expectEqual(@as(u2, 3), wcwidth(it));
+}
+
+pub fn IteratorNoControl(comptime CodePointIterator: type) type {
+    return uucode.grapheme.CustomIterator(
+        CodePointIterator,
+        types_x.GraphemeBreakNoControl,
+        uucode.grapheme.BreakState,
+        .grapheme_break_no_control,
+        precomputedGraphemeBreakNoControl,
+    );
+}
+
+pub fn utf8IteratorNoControl(bytes: []const u8) IteratorNoControl(uucode.utf8.Iterator) {
+    return IteratorNoControl(uucode.utf8.Iterator).init(.init(bytes));
+}
+
+test "IteratorNoControl nextCodePoint/peekCodePoint" {
+    const str = "👩🏽‍🚀🇨🇭";
+    var it = utf8IteratorNoControl(str);
+    try std.testing.expect(it.i == 0);
+
+    var result = it.peekCodePoint();
+    try std.testing.expect(it.i == 0);
+    try std.testing.expect(result.?.code_point == 0x1F469); // 👩
+    try std.testing.expect(result.?.is_break == false);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(it.i == 4);
+    try std.testing.expect(result.?.code_point == 0x1F469); // 👩
+    try std.testing.expect(result.?.is_break == false);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F3FD); // 🏽
+    try std.testing.expect(result.?.is_break == false);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x200D); // Zero width joiner
+    try std.testing.expect(result.?.is_break == false);
+
+    result = it.peekCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F680); // 🚀
+    try std.testing.expect(result.?.is_break == true);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(it.i == 15);
+    try std.testing.expect(result.?.code_point == 0x1F680); // 🚀
+    try std.testing.expect(result.?.is_break == true);
+    try std.testing.expect(std.mem.eql(u8, str[0..it.i], "👩🏽‍🚀"));
+
+    result = it.nextCodePoint();
+    try std.testing.expect(result.?.code_point == 0x1F1E8); // Regional Indicator "C"
+    try std.testing.expect(result.?.is_break == false);
+
+    result = it.nextCodePoint();
+    try std.testing.expect(it.i == str.len);
+    try std.testing.expect(result.?.code_point == 0x1F1ED); // Regional Indicator "H"
+    try std.testing.expect(result.?.is_break == true);
+
+    try std.testing.expect(it.peekCodePoint() == null);
+    try std.testing.expect(it.nextCodePoint() == null);
+    try std.testing.expect(it.nextCodePoint() == null);
+}
+
+// This is a copy of `computeGraphemeBreak` from `src/grapheme.zig` but with
+// the rules for `control`, `cr`, and `lf` ignored, since
+// `grapheme_break_no_control` maps them to `other` as these are assumed to
+// have been been handled prior or stripped from the input.
+pub fn computeGraphemeBreakNoControl(
+    gb1: types_x.GraphemeBreakNoControl,
+    gb2: types_x.GraphemeBreakNoControl,
+    state: *uucode.grapheme.BreakState,
+) bool {
+    // Set state back to default when `gb1` or `gb2` is not expected in sequence.
+    switch (state.*) {
+        .regional_indicator => {
+            if (gb1 != .regional_indicator or gb2 != .regional_indicator) {
+                state.* = .default;
+            }
+        },
+        .extended_pictographic => {
+            switch (gb1) {
+                // Keep state if in possibly valid sequence
+                .indic_conjunct_break_extend, // extend
+                .indic_conjunct_break_linker, // extend
+                .zwnj, // extend
+                .zwj,
+                .extended_pictographic,
+                .emoji_modifier_base,
+                .emoji_modifier,
+                => {},
+
+                else => state.* = .default,
+            }
+
+            switch (gb2) {
+                // Keep state if in possibly valid sequence
+                .indic_conjunct_break_extend, // extend
+                .indic_conjunct_break_linker, // extend
+                .zwnj, // extend
+                .zwj,
+                .extended_pictographic,
+                .emoji_modifier_base,
+                .emoji_modifier,
+                => {},
+
+                else => state.* = .default,
+            }
+        },
+        .indic_conjunct_break_consonant, .indic_conjunct_break_linker => {
+            switch (gb1) {
+                // Keep state if in possibly valid sequence
+                .indic_conjunct_break_consonant,
+                .indic_conjunct_break_linker,
+                .indic_conjunct_break_extend,
+                .zwj, // indic_conjunct_break_extend
+                => {},
+
+                else => state.* = .default,
+            }
+
+            switch (gb2) {
+                // Keep state if in possibly valid sequence
+                .indic_conjunct_break_consonant,
+                .indic_conjunct_break_linker,
+                .indic_conjunct_break_extend,
+                .zwj, // indic_conjunct_break_extend
+                => {},
+
+                else => state.* = .default,
+            }
+        },
+        .default => {},
+    }
+
+    // GB3: CR x LF
+    //if (gb1 == .cr and gb2 == .lf) return false;
+
+    // GB4: Control
+    //if (gb1 == .control or gb1 == .cr or gb1 == .lf) return true;
+
+    // GB5: Control
+    //if (gb2 == .control or gb2 == .cr or gb2 == .lf) return true;
+
+    // GB6: L x (L | V | LV | VT)
+    if (gb1 == .l) {
+        if (gb2 == .l or
+            gb2 == .v or
+            gb2 == .lv or
+            gb2 == .lvt) return false;
+    }
+
+    // GB7: (LV | V) x (V | T)
+    if (gb1 == .lv or gb1 == .v) {
+        if (gb2 == .v or gb2 == .t) return false;
+    }
+
+    // GB8: (LVT | T) x T
+    if (gb1 == .lvt or gb1 == .t) {
+        if (gb2 == .t) return false;
+    }
+
+    // Handle GB9 (Extend | ZWJ) later, since it can also match the start of
+    // GB9c (Indic) and GB11 (Emoji ZWJ)
+
+    // GB9a: SpacingMark
+    if (gb2 == .spacing_mark) return false;
+
+    // GB9b: Prepend
+    if (gb1 == .prepend) return false;
+
+    // GB9c: Indic
+    if (gb1 == .indic_conjunct_break_consonant) {
+        // start of sequence:
+
+        // In normal operation, we'll be in this state, but
+        // buildGraphemeBreakTable iterates all states.
+        //std.debug.assert(state.* == .default);
+
+        if (isIndicConjunctBreakExtend(gb2)) {
+            state.* = .indic_conjunct_break_consonant;
+            return false;
+        } else if (gb2 == .indic_conjunct_break_linker) {
+            // jump straight to linker state
+            state.* = .indic_conjunct_break_linker;
+            return false;
+        }
+        // else, not an Indic sequence
+
+    } else if (state.* == .indic_conjunct_break_consonant) {
+        // consonant state:
+
+        if (gb2 == .indic_conjunct_break_linker) {
+            // consonant -> linker transition
+            state.* = .indic_conjunct_break_linker;
+            return false;
+        } else if (isIndicConjunctBreakExtend(gb2)) {
+            // continue [extend]* sequence
+            return false;
+        } else {
+            // Not a valid Indic sequence
+            state.* = .default;
+        }
+    } else if (state.* == .indic_conjunct_break_linker) {
+        // linker state:
+
+        if (gb2 == .indic_conjunct_break_linker or
+            isIndicConjunctBreakExtend(gb2))
+        {
+            // continue [extend linker]* sequence
+            return false;
+        } else if (gb2 == .indic_conjunct_break_consonant) {
+            // linker -> end of sequence
+            state.* = .default;
+            return false;
+        } else {
+            // Not a valid Indic sequence
+            state.* = .default;
+        }
+    }
+
+    // GB11: Emoji ZWJ sequence and Emoji modifier sequence
+    if (isExtendedPictographic(gb1)) {
+        // start of sequence:
+
+        // In normal operation, we'll be in this state, but
+        // buildGraphemeBreakTable iterates all states.
+        // std.debug.assert(state.* == .default);
+
+        if (isExtend(gb2) or gb2 == .zwj) {
+            state.* = .extended_pictographic;
+            return false;
+        }
+
+        // The `emoji_modifier_sequence` case is described in the comment for
+        // `isExtend` above, from UTS #51.
+        if (gb1 == .emoji_modifier_base and gb2 == .emoji_modifier) {
+            state.* = .extended_pictographic;
+            return false;
+        }
+
+        // else, not an Emoji ZWJ sequence
+    } else if (state.* == .extended_pictographic) {
+        // continue or end sequence:
+
+        if ((isExtend(gb1) or gb1 == .emoji_modifier) and
+            (isExtend(gb2) or gb2 == .zwj))
+        {
+            // continue extend* ZWJ sequence
+            return false;
+        } else if (gb1 == .zwj and isExtendedPictographic(gb2)) {
+            // ZWJ -> end of sequence
+            state.* = .default;
+            return false;
+        } else {
+            // Not a valid Emoji ZWJ sequence
+            state.* = .default;
+        }
+    }
+
+    // GB12 and GB13: Regional Indicator
+    if (gb1 == .regional_indicator and gb2 == .regional_indicator) {
+        if (state.* == .default) {
+            state.* = .regional_indicator;
+            return false;
+        } else {
+            state.* = .default;
+            return true;
+        }
+    }
+
+    // GB9: x (Extend | ZWJ)
+    if (isExtend(gb2) or gb2 == .zwj) return false;
+
+    // GB999: Otherwise, break everywhere
+    return true;
+}
+
+fn isIndicConjunctBreakExtend(gb: types_x.GraphemeBreakNoControl) bool {
+    return gb == .indic_conjunct_break_extend or gb == .zwj;
+}
+
+// Despite `emoji_modifier` being `extend` according to
+// GraphemeBreakProperty.txt and UAX #29 (in addition to tests in
+// GraphemeBreakTest.txt), UTS #51 states: `emoji_modifier_sequence :=
+// emoji_modifier_base emoji_modifier` in ED-13 (emoji modifier sequence) under
+// 1.4.4 (Emoji Modifiers), and: "When used alone, the default representation
+// of these modifier characters is a color swatch... To have an effect on an
+// emoji, an emoji modifier must immediately follow that base emoji
+// character." in 2.4 (Diversity). Additionally it states "Skin tone
+// modifiers and hair components should be
+// displayed even in isolation" in ED-20 (basic emoji set) under 1.4.6 (Emoji
+// Sets). See this revision of UAX #29 when the grapheme cluster break
+// properties were simplified to remove `E_Base` and `E_Modifier`:
+// http://www.unicode.org/reports/tr29/tr29-32.html
+// Here we decide to diverge from the grapheme break spec, which is allowed
+// under "tailored" grapheme clusters.
+fn isExtend(gb: types_x.GraphemeBreakNoControl) bool {
+    return gb == .zwnj or
+        gb == .indic_conjunct_break_extend or
+        gb == .indic_conjunct_break_linker;
+}
+
+fn isExtendedPictographic(gb: types_x.GraphemeBreakNoControl) bool {
+    return gb == .extended_pictographic or gb == .emoji_modifier_base;
+}
+
+fn testGraphemeBreakNoControl(getActualIsBreak: fn (cp1: u21, cp2: u21, state: *uucode.grapheme.BreakState) bool) !void {
+    const Ucd = @import("../build/Ucd.zig");
+
+    const trim = Ucd.trim;
+    const parseCp = Ucd.parseCp;
+
+    const allocator = std.testing.allocator;
+    const file_path = "ucd/auxiliary/GraphemeBreakTest.txt";
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 10);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    var success = true;
+
+    var line_num: usize = 1;
+
+    line_loop: while (lines.next()) |line| : (line_num += 1) {
+        const trimmed = trim(line);
+        if (trimmed.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, trimmed, ' ');
+        const start = parts.next().?;
+        try std.testing.expect(std.mem.eql(u8, start, "÷"));
+
+        var state: uucode.grapheme.BreakState = .default;
+        var cp1 = try parseCp(parts.next().?);
+        var expected_str = parts.next().?;
+        var cp2 = try parseCp(parts.next().?);
+
+        const original_gb1 = uucode.get(.grapheme_break, cp1);
+        var original_gb2 = uucode.get(.grapheme_break, cp2);
+        if (original_gb1 == .control or
+            original_gb1 == .cr or
+            original_gb1 == .lf or
+            original_gb2 == .control or
+            original_gb2 == .cr or
+            original_gb2 == .lf) continue :line_loop;
+
+        var gb1 = uucode.get(.grapheme_break_no_control, cp1);
+        var gb2 = uucode.get(.grapheme_break_no_control, cp2);
+        var next_expected_str = parts.next().?;
+
+        while (true) {
+            var expected_is_break = std.mem.eql(u8, expected_str, "÷");
+            const actual_is_break = getActualIsBreak(cp1, cp2, &state);
+            try std.testing.expect(expected_is_break or std.mem.eql(u8, expected_str, "×"));
+            // GraphemeBreakTest.txt has tests for UAX #29 treating emoji
+            // modifier as extend, always, but we diverge from that (see
+            // comment above `isExtend`).
+            if (gb2 == .emoji_modifier and gb1 != .emoji_modifier_base) {
+                std.debug.assert(!expected_is_break);
+                expected_is_break = true;
+            }
+            if (actual_is_break != expected_is_break) {
+                std.log.err("line={d} cp1={x}, cp2={x}: gb1={}, gb2={}, state={}, expected={}, actual={}", .{
+                    line_num,
+                    cp1,
+                    cp2,
+                    gb1,
+                    gb2,
+                    state,
+                    expected_is_break,
+                    actual_is_break,
+                });
+                success = false;
+            }
+
+            if (parts.peek() == null) break;
+
+            cp1 = cp2;
+            gb1 = gb2;
+            expected_str = next_expected_str;
+            cp2 = try parseCp(parts.next().?);
+            original_gb2 = uucode.get(.grapheme_break, cp2);
+            if (original_gb2 == .control or
+                original_gb2 == .cr or
+                original_gb2 == .lf) continue :line_loop;
+
+            gb2 = uucode.get(.grapheme_break_no_control, cp2);
+            next_expected_str = parts.next().?;
+        }
+
+        try std.testing.expect(std.mem.eql(u8, next_expected_str, "÷"));
+    }
+
+    try std.testing.expect(success);
+}
+
+fn testGetActualComputedGraphemeBreakNoControl(cp1: u21, cp2: u21, state: *uucode.grapheme.BreakState) bool {
+    const gb1 = uucode.get(.grapheme_break_no_control, cp1);
+    const gb2 = uucode.get(.grapheme_break_no_control, cp2);
+    return computeGraphemeBreakNoControl(gb1, gb2, state);
+}
+
+test "GraphemeBreakTest.txt - x.computeGraphemeBreakNoControl" {
+    try testGraphemeBreakNoControl(testGetActualComputedGraphemeBreakNoControl);
+}
+
+pub fn precomputedGraphemeBreakNoControl(
+    gb1: types_x.GraphemeBreakNoControl,
+    gb2: types_x.GraphemeBreakNoControl,
+    state: *uucode.grapheme.BreakState,
+) bool {
+    const table = comptime uucode.grapheme.buildGraphemeBreakTable(
+        types_x.GraphemeBreakNoControl,
+        uucode.grapheme.BreakState,
+        computeGraphemeBreakNoControl,
+    );
+    // 5 BreakState fields x (17 GraphemeBreak fields)^2 = 1445
+    std.debug.assert(@sizeOf(@TypeOf(table)) == 1445);
+    const result = table.get(gb1, gb2, state.*);
+    state.* = result.state;
+    return result.result;
+}
+
+pub fn isBreakNoControl(
+    cp1: u21,
+    cp2: u21,
+    state: *uucode.grapheme.BreakState,
+) bool {
+    const gb1 = uucode.get(.grapheme_break_no_control, cp1);
+    const gb2 = uucode.get(.grapheme_break_no_control, cp2);
+    return precomputedGraphemeBreakNoControl(gb1, gb2, state);
+}
+
+test "GraphemeBreakTest.txt - x.isBreakNoControl" {
+    try testGraphemeBreakNoControl(isBreakNoControl);
 }

@@ -201,35 +201,8 @@ pub const BreakState = enum(u3) {
     indic_conjunct_break_linker,
 };
 
-fn isIndicConjunctBreakExtend(gb: types.GraphemeBreak) bool {
-    return gb == .indic_conjunct_break_extend or gb == .zwj;
-}
-
-// Despite `emoji_modifier` being `extend` according to
-// GraphemeBreakProperty.txt and UAX #29 (in addition to tests in
-// GraphemeBreakTest.txt), UTS #51 states: `emoji_modifier_sequence :=
-// emoji_modifier_base emoji_modifier` in ED-13 (emoji modifier sequence) under
-// 1.4.4 (Emoji Modifiers), and: "When used alone, the default representation
-// of these modifier characters is a color swatch... To have an effect on an
-// emoji, an emoji modifier must immediately follow that base emoji
-// character." in 2.4 (Diversity). Additionally it states "Skin tone
-// modifiers and hair components should be
-// displayed even in isolation" in ED-20 (basic emoji set) under 1.4.6 (Emoji
-// Sets). See this revision of UAX #29 when the grapheme cluster break
-// properties were simplified to remove `E_Base` and `E_Modifier`:
-// http://www.unicode.org/reports/tr29/tr29-32.html
-// Here we decide to diverge from the grapheme break spec, which is allowed
-// under "tailored" grapheme clusters.
-fn isExtend(gb: types.GraphemeBreak) bool {
-    return gb == .zwnj or
-        gb == .indic_conjunct_break_extend or
-        gb == .indic_conjunct_break_linker;
-}
-
-fn isExtendedPictographic(gb: types.GraphemeBreak) bool {
-    return gb == .extended_pictographic or gb == .emoji_modifier_base;
-}
-
+// Note: this should be kept in sync with `src/x/grapheme.zig`
+// `computeGraphemeBreakNoControl`
 pub fn computeGraphemeBreak(
     gb1: types.GraphemeBreak,
     gb2: types.GraphemeBreak,
@@ -440,6 +413,35 @@ pub fn computeGraphemeBreak(
     return true;
 }
 
+fn isIndicConjunctBreakExtend(gb: types.GraphemeBreak) bool {
+    return gb == .indic_conjunct_break_extend or gb == .zwj;
+}
+
+// Despite `emoji_modifier` being `extend` according to
+// GraphemeBreakProperty.txt and UAX #29 (in addition to tests in
+// GraphemeBreakTest.txt), UTS #51 states: `emoji_modifier_sequence :=
+// emoji_modifier_base emoji_modifier` in ED-13 (emoji modifier sequence) under
+// 1.4.4 (Emoji Modifiers), and: "When used alone, the default representation
+// of these modifier characters is a color swatch... To have an effect on an
+// emoji, an emoji modifier must immediately follow that base emoji
+// character." in 2.4 (Diversity). Additionally it states "Skin tone
+// modifiers and hair components should be
+// displayed even in isolation" in ED-20 (basic emoji set) under 1.4.6 (Emoji
+// Sets). See this revision of UAX #29 when the grapheme cluster break
+// properties were simplified to remove `E_Base` and `E_Modifier`:
+// http://www.unicode.org/reports/tr29/tr29-32.html
+// Here we decide to diverge from the grapheme break spec, which is allowed
+// under "tailored" grapheme clusters.
+fn isExtend(gb: types.GraphemeBreak) bool {
+    return gb == .zwnj or
+        gb == .indic_conjunct_break_extend or
+        gb == .indic_conjunct_break_linker;
+}
+
+fn isExtendedPictographic(gb: types.GraphemeBreak) bool {
+    return gb == .extended_pictographic or gb == .emoji_modifier_base;
+}
+
 fn testGraphemeBreak(getActualIsBreak: fn (cp1: u21, cp2: u21, state: *BreakState) bool) !void {
     const Ucd = @import("build/Ucd.zig");
 
@@ -547,7 +549,7 @@ pub fn GraphemeBreakTable(comptime GB: type, comptime State: type) type {
     return struct {
         data: [n]Result,
 
-        fn index(gb1: GB, gb2: GB, state: State) usize {
+        inline fn index(gb1: GB, gb2: GB, state: State) usize {
             return @intFromEnum(state) * n_gb_2 + @intFromEnum(gb1) * n_gb + @intFromEnum(gb2);
         }
 

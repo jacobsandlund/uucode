@@ -378,15 +378,17 @@ pub const tables = [_]config.Table{
         .name = "needed_for_tests_and_build_build_config",
         .extensions = &.{
             config_x.wcwidth,
+            config_x.grapheme_break_no_control,
         },
         .fields = &config._resolveFields(
             config_x,
             &.{
                 "wcwidth_standalone",
                 "wcwidth_zero_in_grapheme",
+                "grapheme_break_no_control",
                 "special_casing_condition",
             },
-            &.{"wcwidth"},
+            &.{ "wcwidth", "grapheme_break_no_control" },
         ),
     },
 };
