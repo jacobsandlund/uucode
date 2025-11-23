@@ -36,6 +36,19 @@
 //!
 //! * Regional indicator sequences are given a width of 2.
 //!
+//! * In contrast to `resources/wcwidth/unicode_width.rs`, this implementation
+//!   does not include a large number of exceptions, in order to keep the
+//!   complexity down.
+//!
+//!   While the Unicode General Punctuation doc
+//!   (https://www.unicode.org/charts/PDF/Unicode-17.0/U170-2000.pdf) notes
+//!   that U+2018, U+2019, U+201C and U+201D followed by U+FE02 (VS-2) should
+//!   be fullwidth (width 2), we treat them as width 1 for simplicity.
+//!
+//!   Rather than treat CJK contexts differently, we always choose East Asian
+//!   Width (UAX #11) Ambiguous width (A) as width 1. See
+//!   `src/x/config_x/wcwidth.zig` for more info.
+//!
 
 const std = @import("std");
 const uucode = @import("../root.zig");
