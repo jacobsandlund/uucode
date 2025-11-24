@@ -97,6 +97,23 @@ uucode.grapheme.isBreak(cp1, cp2, &break_state); // false
 cp1 = cp2;
 cp2 = 0x1F468; // 👨
 uucode.grapheme.isBreak(cp1, cp2, &break_state); // true
+
+//////////////////////
+// x.grapheme.wcwidth{,Next,Remaining} / x.grapheme.utf8Wcwidth
+
+const str = "ò👨🏻‍❤️‍👨🏿_";
+var it = uucode.grapheme.utf8Iterator(str);
+
+// Requires the `wcwidth` builtin extension (see below)
+uucode.x.grapheme.wcwidth(it); // 1 for 'ò'
+
+uucode.x.grapheme.wcwidthNext(&it); // 1 for 'ò'
+const result = it.peekGrapheme();
+str[result.?.start..result.?.end]; // "👨🏻‍❤️‍👨🏿"
+
+uucode.x.grapheme.wcwidthRemaining(&it); // 3 for "👨🏻‍❤️‍👨🏿_"
+
+uucode.x.grapheme.utf8Wcwidth(str); // 4 for the whole string
 ```
 
 See [src/config.zig](./src/config.zig) for the names of all fields.
@@ -164,6 +181,7 @@ if (b.lazyDependency("uucode", .{
     .fields = @as([]const []const u8, &.{
         // Make sure to also include the extension's fields here:
         "wcwidth_standalone",
+        "wcwidth_zero_in_grapheme",
         ...
         "general_category",
     }),
@@ -271,6 +289,7 @@ pub const tables = [_]config.Table{
             // Don't forget to include the extension's fields here.
             emoji_odd_or_even.field("emoji_odd_or_even"),
             wcwidth.field("wcwidth_standalone"),
+            wcwidth.field("wcwidth_zero_in_grapheme"),
 
             // See `src/config.zig` for everything that can be overriden.
             // In this example, we're embedding 15 bytes into the `stage3` data,

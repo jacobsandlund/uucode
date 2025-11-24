@@ -180,6 +180,22 @@ test "utf8Wcwidth" {
     try std.testing.expectEqual(@as(usize, 2), utf8Wcwidth("A\u{0300}B"));
 }
 
+test "wcwidth{,Next,Remaining} README example" {
+    const str = "ò👨🏻‍❤️‍👨🏿_";
+    var it = uucode.grapheme.utf8Iterator(str);
+
+    // Requires the `wcwidth` builtin extension (see below)
+    try std.testing.expectEqual(1, uucode.x.grapheme.wcwidth(it)); // 1 for 'ò'
+
+    try std.testing.expectEqual(1, uucode.x.grapheme.wcwidthNext(&it)); // 1 for 'ò'
+    const result = it.peekGrapheme();
+    try std.testing.expectEqualStrings("👨🏻‍❤️‍👨🏿", str[result.?.start..result.?.end]);
+
+    try std.testing.expectEqual(3, uucode.x.grapheme.wcwidthRemaining(&it)); // 3 for "👨🏻‍❤️‍👨🏿_"
+
+    try std.testing.expectEqual(4, uucode.x.grapheme.utf8Wcwidth(str));
+}
+
 test "wcwidth ascii" {
     const it1 = uucode.grapheme.utf8Iterator("A");
     try std.testing.expectEqual(@as(u2, 1), wcwidth(it1));
