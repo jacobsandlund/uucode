@@ -661,7 +661,7 @@ test "long emoji zwj sequences" {
 }
 
 test "long emoji zwj sequences with emoji modifiers" {
-    // 👨🏻‍❤️‍💋‍👨🏿 Kiss: man, man, light skin tone, dark skin tone
+    // 👨🏻‍❤️‍👨🏿 Kiss: man, man, light skin tone, dark skin tone
     var it = utf8Iterator("\u{1F468}\u{1F3FB}\u{200D}\u{2764}\u{FE0F}\u{200D}\u{1F48B}\u{200D}\u{1F468}\u{1F3FF}_");
 
     var result = it.nextCodePoint();
