@@ -1,6 +1,6 @@
-//! This `x.grapheme.wcwidth` and `x.grapheme.wcwidthRemaining` are the full
-//! grapheme cluster calculation of the expected width in cells of a monospaced
-//! font. It is not part of the Unicode standard.
+//! This `x.grapheme.wcwidth` (and `wcwidthRemaining`/`utf8Wcwidth`) are the
+//! full grapheme cluster calculation of the expected width in cells of a
+//! monospaced font. It is not part of the Unicode standard.
 //!
 //! See `src/x/config_x/wcwidth.zig` for the logic determining the width of a
 //! single code point standing alone, as well as a number of notes describing
@@ -56,8 +56,9 @@ const types_x = @import("types.x.zig");
 
 // This calculates the width of just a single grapheme, advancing the iterator.
 // See `wcwidth` for a version that doesn't advance the iterator (accepting a
-// constant iterator), and `wcwidthRemaining` for a version that calculates the
-// width of the remaining graphemes in the iterator.
+// constant iterator), `wcwidthRemaining` for a version that calculates the
+// width of the remaining graphemes in the iterator, and `utf8Wcwidth` for the
+// width of a string.
 pub fn wcwidthNext(it: anytype) u2 {
     std.debug.assert(@typeInfo(@TypeOf(it)) == .pointer);
 
@@ -132,6 +133,51 @@ pub fn wcwidthRemaining(it: anytype) usize {
         width += wcwidthNext(it);
     }
     return width;
+}
+
+pub fn utf8Wcwidth(s: []const u8) usize {
+    var it = uucode.grapheme.utf8Iterator(s);
+    return wcwidthRemaining(&it);
+}
+
+test "wcwidthNext iterator state" {
+    const str = "A\u{0300}B";
+    var it = uucode.grapheme.utf8Iterator(str);
+
+    // First grapheme: A + Combining Grave
+    const w1 = wcwidthNext(&it);
+    try std.testing.expectEqual(@as(u2, 1), w1);
+    try std.testing.expectEqual(3, it.i); // 'A' (1) + 0x0300 (2) = 3 bytes
+
+    // Second grapheme: B
+    const w2 = wcwidthNext(&it);
+    try std.testing.expectEqual(@as(u2, 1), w2);
+    try std.testing.expectEqual(4, it.i); // + 'B' (1) = 4 bytes
+
+    try std.testing.expect(it.peekCodePoint() == null);
+}
+
+test "wcwidthRemaining" {
+    var it1 = uucode.grapheme.utf8Iterator("A\u{0300}B");
+    try std.testing.expectEqual(@as(usize, 2), wcwidthRemaining(&it1));
+
+    var it2 = uucode.grapheme.utf8Iterator("ABC");
+    try std.testing.expectEqual(@as(usize, 3), wcwidthRemaining(&it2));
+
+    var it3 = uucode.grapheme.utf8Iterator("😀AB");
+    try std.testing.expectEqual(@as(usize, 4), wcwidthRemaining(&it3)); // 2 + 1 + 1
+
+    var it4 = uucode.grapheme.utf8Iterator("");
+    try std.testing.expectEqual(@as(usize, 0), wcwidthRemaining(&it4));
+
+    // Test partial consumption
+    var it5 = uucode.grapheme.utf8Iterator("ABC");
+    _ = wcwidthNext(&it5); // Consume 'A'
+    try std.testing.expectEqual(@as(usize, 2), wcwidthRemaining(&it5)); // Remaining "BC"
+}
+
+test "utf8Wcwidth" {
+    try std.testing.expectEqual(@as(usize, 2), utf8Wcwidth("A\u{0300}B"));
 }
 
 test "wcwidth ascii" {
@@ -246,42 +292,6 @@ test "wcwidth sequence emoji zwj long with emoji modifiers" {
     // 👨🏻‍❤️‍💋‍👨🏿 Kiss: man, man, light skin tone, dark skin tone
     const it = uucode.grapheme.utf8Iterator("\u{1F468}\u{1F3FB}\u{200D}\u{2764}\u{FE0F}\u{200D}\u{1F48B}\u{200D}\u{1F468}\u{1F3FF}_");
     try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
-}
-
-test "wcwidthNext iterator state" {
-    const str = "A\u{0300}B";
-    var it = uucode.grapheme.utf8Iterator(str);
-
-    // First grapheme: A + Combining Grave
-    const w1 = wcwidthNext(&it);
-    try std.testing.expectEqual(@as(u2, 1), w1);
-    try std.testing.expectEqual(3, it.i); // 'A' (1) + 0x0300 (2) = 3 bytes
-
-    // Second grapheme: B
-    const w2 = wcwidthNext(&it);
-    try std.testing.expectEqual(@as(u2, 1), w2);
-    try std.testing.expectEqual(4, it.i); // + 'B' (1) = 4 bytes
-
-    try std.testing.expect(it.peekCodePoint() == null);
-}
-
-test "wcwidthRemaining" {
-    var it1 = uucode.grapheme.utf8Iterator("A\u{0300}B");
-    try std.testing.expectEqual(@as(usize, 2), wcwidthRemaining(&it1));
-
-    var it2 = uucode.grapheme.utf8Iterator("ABC");
-    try std.testing.expectEqual(@as(usize, 3), wcwidthRemaining(&it2));
-
-    var it3 = uucode.grapheme.utf8Iterator("😀AB");
-    try std.testing.expectEqual(@as(usize, 4), wcwidthRemaining(&it3)); // 2 + 1 + 1
-
-    var it4 = uucode.grapheme.utf8Iterator("");
-    try std.testing.expectEqual(@as(usize, 0), wcwidthRemaining(&it4));
-
-    // Test partial consumption
-    var it5 = uucode.grapheme.utf8Iterator("ABC");
-    _ = wcwidthNext(&it5); // Consume 'A'
-    try std.testing.expectEqual(@as(usize, 2), wcwidthRemaining(&it5)); // Remaining "BC"
 }
 
 test "wcwidth Hangul L+V" {
