@@ -249,7 +249,6 @@ pub const default = Table{
         // emoji-variation-sequences.txt counts the number of sequences as one
         // per base code point, rather than counting the "emoji style" and
         // "text style" lines separately.
-        //
         .{ .name = "is_emoji_vs_base", .type = bool },
         .{ .name = "is_emoji_vs_text", .type = bool },
         .{ .name = "is_emoji_vs_emoji", .type = bool },
