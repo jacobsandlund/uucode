@@ -141,26 +141,31 @@ test "wcwidth ascii" {
     try std.testing.expectEqual(@as(u2, 1), wcwidth(it2));
 }
 
-test "wcwidth control, format, surrogate" {
+test "wcwidth control" {
     const it1 = uucode.grapheme.utf8Iterator("\x00");
     try std.testing.expectEqual(@as(u2, 0), wcwidth(it1));
     const it2 = uucode.grapheme.utf8Iterator("\x7F");
     try std.testing.expectEqual(@as(u2, 0), wcwidth(it2));
-    const it3 = uucode.grapheme.utf8Iterator("\u{200B}"); // ZWSP
-    try std.testing.expectEqual(@as(u2, 0), wcwidth(it3));
 }
 
-test "wcwidth marks" {
+test "wcwidth default ignorable" {
+    const it1 = uucode.grapheme.utf8Iterator("\u{200B}"); // ZWSP
+    try std.testing.expectEqual(@as(u2, 0), wcwidth(it1));
+    const it2 = uucode.grapheme.utf8Iterator("\u{3164}"); // Hangul Filler
+    try std.testing.expectEqual(@as(u2, 0), wcwidth(it2));
+}
+
+test "wcwidth marks standing alone" {
     const it = uucode.grapheme.utf8Iterator("\u{0300}"); // Mn
     try std.testing.expectEqual(@as(u2, 1), wcwidth(it));
 }
 
-test "wcwidth keycap" {
+test "wcwidth keycap standing alone" {
     const it = uucode.grapheme.utf8Iterator("\u{20E3}");
     try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
 }
 
-test "wcwidth regional indicator standalone" {
+test "wcwidth regional indicator standing alone" {
     const it = uucode.grapheme.utf8Iterator("\u{1F1E6}");
     try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
 }
