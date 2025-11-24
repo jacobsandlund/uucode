@@ -124,6 +124,11 @@
 //!   present in a grapheme cluster where the other code points contribute to
 //!   the width.
 //!
+//! * Grapheme_Cluster_Break=Prepend characters (e.g., Indic Rephas) are treated
+//!   as width 1 when standing alone, but join with subsequent code points and
+//!   are `wcwidth_zero_in_grapheme` true. Note that none of the Prepend
+//!   characters are default-ignorable.
+//!
 //! * Surrogates (General_Category=Cs, U+D800..U+DFFF) are treated as width 0.
 //!   They are not Unicode scalar values (Core Spec 3.9,
 //!   https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-3/#G25539)
@@ -197,7 +202,8 @@ fn compute(
             gc == .mark_nonspacing or
             gc == .mark_enclosing or // Including keycap
             data.grapheme_break == .v or // Hangul Jamo and Kirat Rai vowels
-            data.grapheme_break == .t // Hangul trailing consonants
+            data.grapheme_break == .t or // Hangul trailing consonants
+            data.grapheme_break == .prepend // e.g. Indic Rephas
         ) {
             data.wcwidth_zero_in_grapheme = true;
         } else {

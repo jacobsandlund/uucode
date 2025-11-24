@@ -133,6 +133,23 @@ test "wcwidth_standalone format characters non-DI are width 1" {
     try testing.expectEqual(@as(u2, 1), get(.wcwidth_standalone, 0x0600)); // ARABIC NUMBER SIGN (Cf, not DI)
 }
 
+test "wcwidth_zero_in_grapheme format characters non-DI is true" {
+    const get = @import("get.zig").get;
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x0600)); // ARABIC NUMBER SIGN (Cf, not DI)
+}
+
+test "wcwidth_standalone prepend characters are width 1" {
+    const get = @import("get.zig").get;
+    // Lo Prepend (0D4E)
+    try testing.expectEqual(@as(u2, 1), get(.wcwidth_standalone, 0x0D4E));
+}
+
+test "wcwidth_zero_in_grapheme prepend characters are true" {
+    const get = @import("get.zig").get;
+    // Lo Prepend (0D4E)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x0D4E));
+}
+
 test "wcwidth_standalone emoji_modifier is 2" {
     const get = @import("get.zig").get;
     try testing.expectEqual(@as(u2, 2), get(.wcwidth_standalone, 0x1F3FB)); // 🏻 EMOJI MODIFIER FITZPATRICK TYPE-1-2
