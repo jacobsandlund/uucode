@@ -245,7 +245,11 @@ pub const default = Table{
         // dated 2011-11-10), until present, there has never been an emoji
         // variation sequence that isn't also a valid text variation sequence,
         // and vice versa, so the recommendation is to just use
-        // `is_emoji_vs_base`.
+        // `is_emoji_vs_base`. Also the "Total sequences" comment at the end of
+        // emoji-variation-sequences.txt counts the number of sequences as one
+        // per base code point, rather than counting the "emoji style" and
+        // "text style" lines separately.
+        //
         .{ .name = "is_emoji_vs_base", .type = bool },
         .{ .name = "is_emoji_vs_text", .type = bool },
         .{ .name = "is_emoji_vs_emoji", .type = bool },
