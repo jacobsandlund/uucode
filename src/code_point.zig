@@ -48,3 +48,75 @@ test "Iterator for emoji code points" {
     try std.testing.expectEqual(null, it.next());
     try std.testing.expectEqual(4, it.i);
 }
+
+/// Returns a custom iterator for a given Context type.
+///
+/// The Context must have the following methods:
+///
+/// * len(self: *Context) usize
+/// * get(self: *Context, i: usize) u21
+///
+pub fn CustomIterator(comptime Context: type) type {
+    return struct {
+        // This "i" is part of the documented API of this iterator, pointing to the
+        // current location of the iterator in `code_points`.
+        i: usize = 0,
+        ctx: Context,
+
+        const Self = @This();
+
+        pub fn init(ctx: Context) Self {
+            return .{
+                .ctx = ctx,
+            };
+        }
+
+        pub fn next(self: *Self) ?u21 {
+            if (self.i >= self.ctx.len()) return null;
+            defer self.i += 1;
+            return self.ctx.get(self.i);
+        }
+
+        pub fn peek(self: Self) ?u21 {
+            if (self.i >= self.ctx.len()) return null;
+            return self.ctx.get(self.i);
+        }
+    };
+}
+
+test "CustomIterator for emoji code points" {
+    const Wrapper = struct {
+        cp: u21,
+    };
+
+    const code_points = &[_]Wrapper{
+        .{ .cp = 0x1F600 }, // 😀
+        .{ .cp = 0x1F605 }, // 😅
+        .{ .cp = 0x1F63B }, // 😻
+        .{ .cp = 0x1F47A }, // 👺
+    };
+
+    var it = CustomIterator(struct {
+        points: []const Wrapper,
+
+        pub fn len(self: @This()) usize {
+            return self.points.len;
+        }
+
+        pub fn get(self: @This(), i: usize) u21 {
+            return self.points[i].cp;
+        }
+    }).init(.{ .points = code_points });
+    try std.testing.expectEqual(0x1F600, it.next());
+    try std.testing.expectEqual(1, it.i);
+    try std.testing.expectEqual(0x1F605, it.peek());
+    try std.testing.expectEqual(1, it.i);
+    try std.testing.expectEqual(0x1F605, it.next());
+    try std.testing.expectEqual(2, it.i);
+    try std.testing.expectEqual(0x1F63B, it.next());
+    try std.testing.expectEqual(3, it.i);
+    try std.testing.expectEqual(0x1F47A, it.next());
+    try std.testing.expectEqual(4, it.i);
+    try std.testing.expectEqual(null, it.next());
+    try std.testing.expectEqual(4, it.i);
+}
