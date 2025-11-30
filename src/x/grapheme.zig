@@ -252,12 +252,12 @@ test "wcwidth soft hyphen" {
     try std.testing.expectEqual(@as(u2, 1), wcwidth(it));
 }
 
-test "wcwidth sequence base + Mn" {
+test "wcwidth sequence base + nonspacing marks" {
     const it = uucode.grapheme.utf8Iterator("A\u{0300}");
     try std.testing.expectEqual(@as(u2, 1), wcwidth(it));
 }
 
-test "wcwidth sequence base + Mc" {
+test "wcwidth sequence base + spacing marks" {
     const it = uucode.grapheme.utf8Iterator("\u{0905}\u{0903}"); // A + Visarga
     try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
 }

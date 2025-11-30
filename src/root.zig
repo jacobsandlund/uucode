@@ -4,6 +4,7 @@ pub const config = @import("config.zig");
 pub const types = @import("types.zig");
 pub const ascii = @import("ascii.zig");
 pub const grapheme = @import("grapheme.zig");
+pub const code_point = @import("code_point.zig");
 pub const utf8 = @import("utf8.zig");
 pub const x = @import("x/root.zig");
 const testing = std.testing;

@@ -99,6 +99,8 @@ test "Iterator for emoji" {
     var it = Iterator.init("😀😅😻👺");
     try std.testing.expectEqual(0x1F600, it.next());
     try std.testing.expectEqual(4, it.i);
+    try std.testing.expectEqual(0x1F605, it.peek());
+    try std.testing.expectEqual(4, it.i);
     try std.testing.expectEqual(0x1F605, it.next());
     try std.testing.expectEqual(8, it.i);
     try std.testing.expectEqual(0x1F63B, it.next());
