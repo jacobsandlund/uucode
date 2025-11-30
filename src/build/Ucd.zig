@@ -278,18 +278,18 @@ fn parseRange(str: []const u8) !struct { start: u21, end: u21 } {
 }
 
 test "parseCp" {
-    try std.testing.expectEqual(@as(u21, 0x0000), try parseCp("0000"));
-    try std.testing.expectEqual(@as(u21, 0x1F600), try parseCp("1F600"));
+    try std.testing.expectEqual(0x0000, try parseCp("0000"));
+    try std.testing.expectEqual(0x1F600, try parseCp("1F600"));
 }
 
 test "parseRange" {
     const range = try parseRange("0030..0039");
-    try std.testing.expectEqual(@as(u21, 0x0030), range.start);
-    try std.testing.expectEqual(@as(u21, 0x0039), range.end);
+    try std.testing.expectEqual(0x0030, range.start);
+    try std.testing.expectEqual(0x0039, range.end);
 
     const single = try parseRange("1F600");
-    try std.testing.expectEqual(@as(u21, 0x1F600), single.start);
-    try std.testing.expectEqual(@as(u21, 0x1F600), single.end);
+    try std.testing.expectEqual(0x1F600, single.start);
+    try std.testing.expectEqual(0x1F600, single.end);
 }
 
 // Public for GraphemeBreakTest in src/grapheme.zig

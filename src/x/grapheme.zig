@@ -17,7 +17,7 @@
 //!   considerations determining this value.
 //!
 //! * The general calculation of the width of a grapheme cluster is the sum of
-//!   the widths of the individual code points (clamped to 3), using
+//!   the widths of the individual code points, using
 //!   `wcwidth_zero_in_grapheme` to treat a code point as width 0 in a multi-
 //!   code-point grapheme cluster, otherwise using `wcwidth_standalone` for the
 //!   widths of the code points.
@@ -59,7 +59,7 @@ const types_x = @import("types.x.zig");
 // constant iterator), `wcwidthRemaining` for a version that calculates the
 // width of the remaining graphemes in the iterator, and `utf8Wcwidth` for the
 // width of a string.
-pub fn wcwidthNext(it: anytype) u2 {
+pub fn wcwidthNext(it: anytype) usize {
     std.debug.assert(@typeInfo(@TypeOf(it)) == .pointer);
 
     const first = it.nextCodePoint() orelse return 0;
@@ -69,7 +69,7 @@ pub fn wcwidthNext(it: anytype) u2 {
 
     if (first.is_break) return standalone;
 
-    var width: u2 = if (uucode.get(.wcwidth_zero_in_grapheme, prev_cp))
+    var width: usize = if (uucode.get(.wcwidth_zero_in_grapheme, prev_cp))
         0
     else
         standalone;
@@ -104,12 +104,7 @@ pub fn wcwidthNext(it: anytype) u2 {
             width = 2;
         } else {
             if (!uucode.get(.wcwidth_zero_in_grapheme, cp)) {
-                const added_width = uucode.get(.wcwidth_standalone, cp);
-                if (@as(usize, added_width) + @as(usize, width) > 3) {
-                    width = 3;
-                } else {
-                    width += added_width;
-                }
+                width += uucode.get(.wcwidth_standalone, cp);
             }
         }
 
@@ -122,7 +117,7 @@ pub fn wcwidthNext(it: anytype) u2 {
     return width;
 }
 
-pub fn wcwidth(const_it: anytype) u2 {
+pub fn wcwidth(const_it: anytype) usize {
     var it = const_it;
     return wcwidthNext(&it);
 }
@@ -146,12 +141,12 @@ test "wcwidthNext iterator state" {
 
     // First grapheme: A + Combining Grave
     const w1 = wcwidthNext(&it);
-    try std.testing.expectEqual(@as(u2, 1), w1);
+    try std.testing.expectEqual(1, w1);
     try std.testing.expectEqual(3, it.i); // 'A' (1) + 0x0300 (2) = 3 bytes
 
     // Second grapheme: B
     const w2 = wcwidthNext(&it);
-    try std.testing.expectEqual(@as(u2, 1), w2);
+    try std.testing.expectEqual(1, w2);
     try std.testing.expectEqual(4, it.i); // + 'B' (1) = 4 bytes
 
     try std.testing.expect(it.peekCodePoint() == null);
@@ -159,25 +154,25 @@ test "wcwidthNext iterator state" {
 
 test "wcwidthRemaining" {
     var it1 = uucode.grapheme.utf8Iterator("A\u{0300}B");
-    try std.testing.expectEqual(@as(usize, 2), wcwidthRemaining(&it1));
+    try std.testing.expectEqual(2, wcwidthRemaining(&it1));
 
     var it2 = uucode.grapheme.utf8Iterator("ABC");
-    try std.testing.expectEqual(@as(usize, 3), wcwidthRemaining(&it2));
+    try std.testing.expectEqual(3, wcwidthRemaining(&it2));
 
     var it3 = uucode.grapheme.utf8Iterator("😀AB");
-    try std.testing.expectEqual(@as(usize, 4), wcwidthRemaining(&it3)); // 2 + 1 + 1
+    try std.testing.expectEqual(4, wcwidthRemaining(&it3)); // 2 + 1 + 1
 
     var it4 = uucode.grapheme.utf8Iterator("");
-    try std.testing.expectEqual(@as(usize, 0), wcwidthRemaining(&it4));
+    try std.testing.expectEqual(0, wcwidthRemaining(&it4));
 
     // Test partial consumption
     var it5 = uucode.grapheme.utf8Iterator("ABC");
     _ = wcwidthNext(&it5); // Consume 'A'
-    try std.testing.expectEqual(@as(usize, 2), wcwidthRemaining(&it5)); // Remaining "BC"
+    try std.testing.expectEqual(2, wcwidthRemaining(&it5)); // Remaining "BC"
 }
 
 test "utf8Wcwidth" {
-    try std.testing.expectEqual(@as(usize, 2), utf8Wcwidth("A\u{0300}B"));
+    try std.testing.expectEqual(2, utf8Wcwidth("A\u{0300}B"));
 }
 
 test "wcwidth{,Next,Remaining} README example" {
@@ -198,141 +193,141 @@ test "wcwidth{,Next,Remaining} README example" {
 
 test "wcwidth ascii" {
     const it1 = uucode.grapheme.utf8Iterator("A");
-    try std.testing.expectEqual(@as(u2, 1), wcwidth(it1));
+    try std.testing.expectEqual(1, wcwidth(it1));
     const it2 = uucode.grapheme.utf8Iterator("1");
-    try std.testing.expectEqual(@as(u2, 1), wcwidth(it2));
+    try std.testing.expectEqual(1, wcwidth(it2));
 }
 
 test "wcwidth control" {
     const it1 = uucode.grapheme.utf8Iterator("\x00");
-    try std.testing.expectEqual(@as(u2, 0), wcwidth(it1));
+    try std.testing.expectEqual(0, wcwidth(it1));
     const it2 = uucode.grapheme.utf8Iterator("\x7F");
-    try std.testing.expectEqual(@as(u2, 0), wcwidth(it2));
+    try std.testing.expectEqual(0, wcwidth(it2));
 }
 
 test "wcwidth default ignorable" {
     const it1 = uucode.grapheme.utf8Iterator("\u{200B}"); // ZWSP
-    try std.testing.expectEqual(@as(u2, 0), wcwidth(it1));
+    try std.testing.expectEqual(0, wcwidth(it1));
     const it2 = uucode.grapheme.utf8Iterator("\u{3164}"); // Hangul Filler
-    try std.testing.expectEqual(@as(u2, 0), wcwidth(it2));
+    try std.testing.expectEqual(0, wcwidth(it2));
 }
 
 test "wcwidth marks standing alone" {
     const it = uucode.grapheme.utf8Iterator("\u{0300}"); // Mn
-    try std.testing.expectEqual(@as(u2, 1), wcwidth(it));
+    try std.testing.expectEqual(1, wcwidth(it));
 }
 
 test "wcwidth keycap standing alone" {
     const it = uucode.grapheme.utf8Iterator("\u{20E3}");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth regional indicator standing alone" {
     const it = uucode.grapheme.utf8Iterator("\u{1F1E6}");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth emoji" {
     const it = uucode.grapheme.utf8Iterator("😀");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth ambiguous" {
     const it = uucode.grapheme.utf8Iterator("\u{00A1}");
-    try std.testing.expectEqual(@as(u2, 1), wcwidth(it));
+    try std.testing.expectEqual(1, wcwidth(it));
 }
 
 test "wcwidth fullwidth" {
     const it = uucode.grapheme.utf8Iterator("\u{3000}");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth soft hyphen" {
     const it = uucode.grapheme.utf8Iterator("\u{00AD}");
-    try std.testing.expectEqual(@as(u2, 1), wcwidth(it));
+    try std.testing.expectEqual(1, wcwidth(it));
 }
 
 test "wcwidth sequence base + nonspacing marks" {
     const it = uucode.grapheme.utf8Iterator("A\u{0300}");
-    try std.testing.expectEqual(@as(u2, 1), wcwidth(it));
+    try std.testing.expectEqual(1, wcwidth(it));
 }
 
 test "wcwidth sequence base + spacing marks" {
     const it = uucode.grapheme.utf8Iterator("\u{0905}\u{0903}"); // A + Visarga
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth sequence emoji + modifier" {
     // Boy + Light Skin Tone
     const it = uucode.grapheme.utf8Iterator("\u{1F466}\u{1F3FB}");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth sequence emoji + VS16" {
     // ☁️ (Cloud + VS16)
     const it = uucode.grapheme.utf8Iterator("\u{2601}\u{FE0F}");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth sequence emoji + VS15" {
     // ☁︎ (Cloud + VS15)
     const it = uucode.grapheme.utf8Iterator("\u{2601}\u{FE0E}");
-    try std.testing.expectEqual(@as(u2, 1), wcwidth(it));
+    try std.testing.expectEqual(1, wcwidth(it));
 }
 
 test "wcwidth sequence keycap" {
     // 1️⃣
     const it = uucode.grapheme.utf8Iterator("1\u{FE0F}\u{20E3}");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth sequence regional indicator full" {
     // 🇺🇸
     const it = uucode.grapheme.utf8Iterator("\u{1F1FA}\u{1F1F8}");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth sequence emoji zwj" {
     // 👨‍🌾 (Farmer)
     const it = uucode.grapheme.utf8Iterator("\u{1F468}\u{200D}\u{1F33E}_");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth sequence emoji zwj long" {
     // 👩‍👩‍👧‍👦 (family: woman, woman, girl, boy)
     const it = uucode.grapheme.utf8Iterator("\u{1F469}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}_");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth sequence emoji zwj long with emoji modifiers" {
     // 👨🏻‍❤️‍💋‍👨🏿 Kiss: man, man, light skin tone, dark skin tone
     const it = uucode.grapheme.utf8Iterator("\u{1F468}\u{1F3FB}\u{200D}\u{2764}\u{FE0F}\u{200D}\u{1F48B}\u{200D}\u{1F468}\u{1F3FF}_");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth Hangul L+V" {
     // ᄀ (U+1100) + ᅡ (U+1161)
     const it = uucode.grapheme.utf8Iterator("\u{1100}\u{1161}");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth Hangul L+V+T" {
     // ᄀ (U+1100) + ᅡ (U+1161) + ᆨ (U+11A8)
     const it = uucode.grapheme.utf8Iterator("\u{1100}\u{1161}\u{11A8}");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth Hangul L+L+V" {
     // ᄀ (U+1100) + ᄀ (U+1100) + ᅡ (U+1161)
-    // This is an archaic/complex sequence. 2 + 2 + 0 = 4 -> 3.
+    // This is an archaic/complex sequence. 2 + 2 + 0 = 4
     const it = uucode.grapheme.utf8Iterator("\u{1100}\u{1100}\u{1161}");
-    try std.testing.expectEqual(@as(u2, 3), wcwidth(it));
+    try std.testing.expectEqual(4, wcwidth(it));
 }
 
 test "wcwidth Hangul LV+T" {
     // 가 (U+AC00) + ᆨ (U+11A8)
     const it = uucode.grapheme.utf8Iterator("\u{AC00}\u{11A8}");
-    try std.testing.expectEqual(@as(u2, 2), wcwidth(it));
+    try std.testing.expectEqual(2, wcwidth(it));
 }
 
 test "wcwidth Devanagari with ZWJ" {
@@ -345,7 +340,7 @@ test "wcwidth Devanagari 3 consonants" {
     // Ka + Virama + Ka + Virama + Ka
     // 1 + 0 + 1 + 0 + 1 = 3
     const it = uucode.grapheme.utf8Iterator("\u{0915}\u{094D}\u{0915}\u{094D}\u{0915}");
-    try std.testing.expectEqual(@as(u2, 3), wcwidth(it));
+    try std.testing.expectEqual(3, wcwidth(it));
 }
 
 pub fn IteratorNoControl(comptime CodePointIterator: type) type {
