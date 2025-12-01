@@ -54,8 +54,11 @@ test "Iterator for emoji code points" {
 /// The Context must have the following methods:
 ///
 /// * len(self: *Context) usize
-/// * get(self: *Context, i: usize) u21
+/// * get(self: *Context, i: usize) ?u21
 ///
+/// Even if `i` is less than the result of `len`, this still allows the
+/// possibility of `get` returning null. The `len` just protects from
+/// calling `get` with an `i` equal or greater the result of `len`.
 pub fn CustomIterator(comptime Context: type) type {
     return struct {
         // This "i" is part of the documented API of this iterator, pointing to the
