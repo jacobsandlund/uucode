@@ -54,11 +54,12 @@ test "Iterator for emoji code points" {
 /// The Context must have the following methods:
 ///
 /// * len(self: *Context) usize
-/// * get(self: *Context, i: usize) ?u21
+/// * get(self: *Context, i: usize) ?u21 // or u21
 ///
-/// Even if `i` is less than the result of `len`, this still allows the
-/// possibility of `get` returning null. The `len` just protects from
-/// calling `get` with an `i` equal or greater the result of `len`.
+/// If `get` returns null, the code continues incrementing `i` until it returns
+/// a non-null result or `len` is reached, with `len` being called every
+/// iteration to allow for `Context` to end early. If instead `get` has a
+/// return type of non-optional `u21`, we don't loop.
 pub fn CustomIterator(comptime Context: type) type {
     return struct {
         // This "i" is part of the documented API of this iterator, pointing to the
@@ -75,14 +76,29 @@ pub fn CustomIterator(comptime Context: type) type {
         }
 
         pub fn next(self: *Self) ?u21 {
-            if (self.i >= self.ctx.len()) return null;
-            defer self.i += 1;
-            return self.ctx.get(self.i);
+            const getFn = @typeInfo(@TypeOf(@TypeOf(self.ctx).get)).@"fn";
+            if (comptime getFn.return_type.? == ?u21) {
+                while (self.i < self.ctx.len()) : (self.i += 1) {
+                    const value = self.ctx.get(self.i);
+                    if (value) |cp| {
+                        @branchHint(.likely);
+                        self.i += 1;
+                        return cp;
+                    }
+                }
+            } else {
+                if (self.i < self.ctx.len()) {
+                    defer self.i += 1;
+                    return self.ctx.get(self.i);
+                }
+            }
+
+            return null;
         }
 
         pub fn peek(self: Self) ?u21 {
-            if (self.i >= self.ctx.len()) return null;
-            return self.ctx.get(self.i);
+            var it = self;
+            return it.next();
         }
     };
 }
@@ -122,4 +138,44 @@ test "CustomIterator for emoji code points" {
     try std.testing.expectEqual(4, it.i);
     try std.testing.expectEqual(null, it.next());
     try std.testing.expectEqual(4, it.i);
+}
+
+test "CustomIterator for emoji code points with gaps and optional get" {
+    const Wrapper = struct {
+        cp: ?u21,
+    };
+
+    const code_points = &[_]Wrapper{
+        .{ .cp = 0x1F600 }, // 😀
+        .{ .cp = null },
+        .{ .cp = 0x1F605 }, // 😅
+        .{ .cp = 0x1F63B }, // 😻
+        .{ .cp = 0x1F47A }, // 👺
+        .{ .cp = null },
+        .{ .cp = null },
+    };
+
+    var it = CustomIterator(struct {
+        points: []const Wrapper,
+
+        pub fn len(self: @This()) usize {
+            return self.points.len;
+        }
+
+        pub fn get(self: @This(), i: usize) ?u21 {
+            return self.points[i].cp;
+        }
+    }).init(.{ .points = code_points });
+    try std.testing.expectEqual(0x1F600, it.next());
+    try std.testing.expectEqual(1, it.i);
+    try std.testing.expectEqual(0x1F605, it.peek());
+    try std.testing.expectEqual(1, it.i);
+    try std.testing.expectEqual(0x1F605, it.next());
+    try std.testing.expectEqual(3, it.i);
+    try std.testing.expectEqual(0x1F63B, it.next());
+    try std.testing.expectEqual(4, it.i);
+    try std.testing.expectEqual(0x1F47A, it.next());
+    try std.testing.expectEqual(5, it.i);
+    try std.testing.expectEqual(null, it.next());
+    try std.testing.expectEqual(7, it.i);
 }
