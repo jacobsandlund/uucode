@@ -150,6 +150,12 @@ test "wcwidth_zero_in_grapheme prepend characters are true" {
     try testing.expect(get(.wcwidth_zero_in_grapheme, 0x0D4E));
 }
 
+test "wcwidth_standalone emoji with default text presentation is 1" {
+    const get = @import("get.zig").get;
+    // weight lifter
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x1F3CB));
+}
+
 test "wcwidth_standalone emoji_modifier is 2" {
     const get = @import("get.zig").get;
     try testing.expectEqual(2, get(.wcwidth_standalone, 0x1F3FB)); // 🏻 EMOJI MODIFIER FITZPATRICK TYPE-1-2

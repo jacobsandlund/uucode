@@ -31,6 +31,9 @@
 //! * Valid emoji sequences with VS16 (U+FEOF) return width 2, while
 //!   valid text sequences with VS15 (U+FE0E) return width 1.
 //!
+//! * Emoji modifiers following an emoji modifier base force an emoji
+//!   presentation, so the width will be 2.
+//!
 //! * Emoji ZWJ (zero-width joiner) sequences are a special case and the width
 //!   of the emoji code points following the ZWJ are not added to the sum.
 //!
@@ -77,40 +80,53 @@ pub fn wcwidthNext(it: anytype) usize {
     var prev_state: uucode.grapheme.BreakState = it.state;
     std.debug.assert(it.peekCodePoint() != null);
 
-    while (it.nextCodePoint()) |result| {
-        var cp = result.code_point;
-        if (cp == 0xFE0F) {
-            // Emoji presentation selector. Only apply to base code points from
-            // emoji variation sequences.
-            if (uucode.get(.is_emoji_vs_base, prev_cp)) {
+    code_points: while (it.nextCodePoint()) |result| {
+        switch (result.code_point) {
+            0xFE0F => {
+                // Emoji presentation selector. Only apply to base code points from
+                // emoji variation sequences.
+                if (uucode.get(.is_emoji_vs_base, prev_cp)) {
+                    width = 2;
+                }
+                // else, VS16 is zero width, so don't do anything
+            },
+            0xFE0E => {
+                // Text presentation selector. Only apply to base code points from
+                // emoji variation sequences.
+                if (uucode.get(.is_emoji_vs_base, prev_cp)) {
+                    width = 1;
+                }
+                // else, VS15 is zero width, so don't do anything
+            },
+            0x200D => { // Zero width joiner
+                if (prev_state == .extended_pictographic and
+                    !result.is_break)
+                {
+                    // Make sure Emoji ZWJ sequences collapse to a single emoji by
+                    // skipping the next emoji base code point.
+                    const next = it.nextCodePoint() orelse unreachable;
+                    if (next.is_break) break;
+                    prev_cp = next.code_point;
+                    prev_state = it.state;
+                    continue :code_points;
+                }
+                // else, ZWJ is zero width, so don't do anything
+            },
+            0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF => { // Emoji modifier
                 width = 2;
-            }
-        } else if (cp == 0xFE0E) {
-            // Text presentation selector. Only apply to base code points from
-            // emoji variation sequences.
-            if (uucode.get(.is_emoji_vs_base, prev_cp)) {
-                width = 1;
-            }
-        } else if (cp == uucode.config.zero_width_joiner and
-            prev_state == .extended_pictographic and
-            !result.is_break)
-        {
-            // Make sure Emoji ZWJ sequences collapse to a single emoji by
-            // skipping the next emoji base code point.
-            const next = it.nextCodePoint() orelse unreachable;
-            if (next.is_break) break;
-            cp = next.code_point;
-        } else if (prev_state == .regional_indicator) {
-            width = 2;
-        } else {
-            if (!uucode.get(.wcwidth_zero_in_grapheme, cp)) {
-                width += uucode.get(.wcwidth_standalone, cp);
-            }
+            },
+            else => {
+                if (prev_state == .regional_indicator) {
+                    width = 2;
+                } else if (!uucode.get(.wcwidth_zero_in_grapheme, result.code_point)) {
+                    width += uucode.get(.wcwidth_standalone, result.code_point);
+                }
+            },
         }
 
         if (result.is_break) break;
 
-        prev_cp = cp;
+        prev_cp = result.code_point;
         prev_state = it.state;
     }
 
@@ -263,15 +279,55 @@ test "wcwidth sequence emoji + modifier" {
     try std.testing.expectEqual(2, wcwidth(it));
 }
 
-test "wcwidth sequence emoji + VS16" {
+test "wcwidth sequence emoji with default text presentation + modifier" {
+    // weight lifter + skin tone 5
+    const it = uucode.grapheme.utf8Iterator("\u{1F3CB}\u{1F3FE}");
+    try std.testing.expectEqual(2, wcwidth(it));
+}
+
+test "wcwidth sequence emoji with default text presentation + VS16" {
     // ☁️ (Cloud + VS16)
     const it = uucode.grapheme.utf8Iterator("\u{2601}\u{FE0F}");
     try std.testing.expectEqual(2, wcwidth(it));
 }
 
-test "wcwidth sequence emoji + VS15" {
+test "wcwidth sequence emoji with default text presentation + VS15" {
     // ☁︎ (Cloud + VS15)
     const it = uucode.grapheme.utf8Iterator("\u{2601}\u{FE0E}");
+    try std.testing.expectEqual(1, wcwidth(it));
+}
+
+test "wcwidth sequence emoji with default emoji presentation + VS16" {
+    // ⏰ (Alarm Clock + VS16)
+    const it = uucode.grapheme.utf8Iterator("\u{23F0}\u{FE0F}");
+    try std.testing.expectEqual(2, wcwidth(it));
+}
+
+test "wcwidth sequence emoji not in emoji-variation-sequences + VS16" {
+    // 🗿 (Moai + VS16)
+    const it = uucode.grapheme.utf8Iterator("\u{1F5FF}\u{FE0F}");
+    try std.testing.expectEqual(2, wcwidth(it));
+}
+
+test "wcwidth sequence emoji not in emoji-variation-sequences + VS15" {
+    // 🗿 (Moai + VS15)
+    const it = uucode.grapheme.utf8Iterator("\u{1F5FF}\u{FE0E}");
+    try std.testing.expectEqual(2, wcwidth(it)); // still 2
+}
+
+test "wcwidth sequence text not in emoji-variation-sequences + VS16" {
+    const it = uucode.grapheme.utf8Iterator("V\u{FE0F}");
+    try std.testing.expectEqual(1, wcwidth(it)); // still 1
+}
+
+test "wcwidth sequence text not in emoji-variation-sequences + VS15" {
+    const it = uucode.grapheme.utf8Iterator("V\u{FE0E}");
+    try std.testing.expectEqual(1, wcwidth(it));
+}
+
+test "wcwidth sequence emoji with default emoji presentation + VS15" {
+    // Alarm Clock + VS15
+    const it = uucode.grapheme.utf8Iterator("\u{23F0}\u{FE0E}");
     try std.testing.expectEqual(1, wcwidth(it));
 }
 

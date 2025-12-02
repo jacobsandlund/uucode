@@ -715,10 +715,12 @@ test "sequence of regional indicators" {
 
     var result = it.nextCodePoint();
     try std.testing.expect(result.?.code_point == 0x1F1FA); // U
+    try std.testing.expect(it.state == .regional_indicator);
     try std.testing.expect(!result.?.is_break);
 
     result = it.nextCodePoint();
     try std.testing.expect(result.?.code_point == 0x1F1F8); // S
+    try std.testing.expect(it.state == .default);
     try std.testing.expect(result.?.is_break); // break
 
     result = it.nextCodePoint();
