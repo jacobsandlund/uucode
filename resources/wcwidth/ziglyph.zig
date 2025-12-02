@@ -1,4 +1,4 @@
-//! copyv: track https://codeberg.org/dude_the_builder/ziglyph/src/commit/29760d237219cc4d486f5cd654262d7b0d62d511/src/display_width.zig#L15-L124
+//! cpv: track https://codeberg.org/dude_the_builder/ziglyph/src/commit/29760d237219cc4d486f5cd654262d7b0d62d511/src/display_width.zig#L15-L124
 fn isAsciiStr(str: []const u8) bool {
     return for (str) |b| {
         if (b > 127) break false;
@@ -109,4 +109,4 @@ pub fn strWidth(str: []const u8, am_width: AmbiguousWidth) !usize {
 
     return if (total > 0) @intCast(total) else 0;
 }
-// copyv: end
+// cpv: end

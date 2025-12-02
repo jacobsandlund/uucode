@@ -1,4 +1,4 @@
-//! copyv: track https://github.com/unicode-rs/unicode-width/blob/9d98411769fe13c7c18cab0b3fbbab29ba8350ea/src/lib.rs#L11-L169
+//! cpv: track https://github.com/unicode-rs/unicode-width/blob/9d98411769fe13c7c18cab0b3fbbab29ba8350ea/src/lib.rs#L11-L169
 //! Determine displayed width of `char` and `str` types according to
 //! [Unicode Standard Annex #11](http://www.unicode.org/reports/tr11/)
 //! and other portions of the Unicode standard.
@@ -158,9 +158,9 @@
 //! ## Canonical equivalence
 //!
 //! Canonically equivalent strings are assigned the same width (CJK and non-CJK).
-// copyv: end
+// cpv: end
 
-// copyv: track https://github.com/unicode-rs/unicode-width/blob/9d98411769fe13c7c18cab0b3fbbab29ba8350ea/src/tables.rs#L1-L944
+// cpv: track https://github.com/unicode-rs/unicode-width/blob/9d98411769fe13c7c18cab0b3fbbab29ba8350ea/src/tables.rs#L1-L944
 // Copyright 2012-2025 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
@@ -1105,4 +1105,4 @@ pub fn is_emoji_modifier_base(c: char) -> bool {
     })
     .is_ok()
 }
-// copyv: end
+// cpv: end

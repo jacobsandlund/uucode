@@ -1,5 +1,5 @@
 /*
- * TODO: add ability to track arbitrary url files in `copyv`
+ * TODO: add ability to track arbitrary url files in `cpv`
  * From: https://www.cl.cam.ac.uk/~mgk25/ucs/wcwidth.c
  *
  * This is an implementation of wcwidth() and wcswidth() (defined in

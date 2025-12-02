@@ -1,4 +1,4 @@
-# copyv: track https://github.com/unicode-rs/unicode-width/blob/9d98411769fe13c7c18cab0b3fbbab29ba8350ea/LICENSE-MIT#L1-L25
+# cpv: track https://github.com/unicode-rs/unicode-width/blob/9d98411769fe13c7c18cab0b3fbbab29ba8350ea/LICENSE-MIT#L1-L25
 Copyright (c) 2015 The Rust Project Developers
 
 Permission is hereby granted, free of charge, to any
@@ -24,4 +24,4 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
-# copyv: end
+# cpv: end

@@ -1,4 +1,4 @@
-// copyv: track https://codeberg.org/atman/zg/src/commit/9427a9e53aaa29ee071f4dcb35b809a699d75aa9/codegen/dwp.zig#L31-L223
+// cpv: track https://codeberg.org/atman/zg/src/commit/9427a9e53aaa29ee071f4dcb35b809a699d75aa9/codegen/dwp.zig#L31-L223
 var flat_map = std.AutoHashMap(u21, i4).init(allocator);
 defer flat_map.deinit();
 
@@ -192,9 +192,9 @@ for (0..0x110000) |i| {
     try stage1.append(gop.value_ptr.*);
     block_len = 0;
 }
-// copyv: end
+// cpv: end
 
-/// copyv: track https://codeberg.org/atman/zg/src/commit/9427a9e53aaa29ee071f4dcb35b809a699d75aa9/src/DisplayWidth.zig#L105-L145
+/// cpv: track https://codeberg.org/atman/zg/src/commit/9427a9e53aaa29ee071f4dcb35b809a699d75aa9/src/DisplayWidth.zig#L105-L145
 /// strWidth returns the total display width of `str` as the number of cells
 /// required in a fixed-pitch font (i.e. a terminal screen).
 pub fn strWidth(dw: DisplayWidth, str: []const u8) usize {
@@ -236,4 +236,4 @@ pub fn strWidth(dw: DisplayWidth, str: []const u8) usize {
 
     return @intCast(@max(0, total));
 }
-// copyv: end
+// cpv: end
