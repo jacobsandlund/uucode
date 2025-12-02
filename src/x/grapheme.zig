@@ -56,6 +56,7 @@
 const std = @import("std");
 const uucode = @import("../root.zig");
 const types_x = @import("types.x.zig");
+const inlineAssert = @import("config.zig").quirks.inlineAssert;
 
 // This calculates the width of just a single grapheme, advancing the iterator.
 // See `wcwidth` for a version that doesn't advance the iterator (accepting a
@@ -63,7 +64,7 @@ const types_x = @import("types.x.zig");
 // width of the remaining graphemes in the iterator, and `utf8Wcwidth` for the
 // width of a string.
 pub fn wcwidthNext(it: anytype) usize {
-    std.debug.assert(@typeInfo(@TypeOf(it)) == .pointer);
+    inlineAssert(@typeInfo(@TypeOf(it)) == .pointer);
 
     const first = it.nextCodePoint() orelse return 0;
 
@@ -78,7 +79,7 @@ pub fn wcwidthNext(it: anytype) usize {
         standalone;
 
     var prev_state: uucode.grapheme.BreakState = it.state;
-    std.debug.assert(it.peekCodePoint() != null);
+    inlineAssert(it.peekCodePoint() != null);
 
     code_points: while (it.nextCodePoint()) |result| {
         switch (result.code_point) {
@@ -573,7 +574,7 @@ pub fn computeGraphemeBreakNoControl(
 
         // In normal operation, we'll be in this state, but
         // buildGraphemeBreakTable iterates all states.
-        //std.debug.assert(state.* == .default);
+        //inlineAssert(state.* == .default);
 
         if (isIndicConjunctBreakExtend(gb2)) {
             state.* = .indic_conjunct_break_consonant;
@@ -623,7 +624,7 @@ pub fn computeGraphemeBreakNoControl(
 
         // In normal operation, we'll be in this state, but
         // buildGraphemeBreakTable iterates all states.
-        // std.debug.assert(state.* == .default);
+        // inlineAssert(state.* == .default);
 
         if (isExtend(gb2) or gb2 == .zwj) {
             state.* = .extended_pictographic;
@@ -757,7 +758,7 @@ fn testGraphemeBreakNoControl(getActualIsBreak: fn (cp1: u21, cp2: u21, state: *
             // modifier as extend, always, but we diverge from that (see
             // comment above `isExtend`).
             if (gb2 == .emoji_modifier and gb1 != .emoji_modifier_base) {
-                std.debug.assert(!expected_is_break);
+                inlineAssert(!expected_is_break);
                 expected_is_break = true;
             }
             if (actual_is_break != expected_is_break) {
@@ -816,7 +817,7 @@ pub fn precomputedGraphemeBreakNoControl(
         computeGraphemeBreakNoControl,
     );
     // 5 BreakState fields x (17 GraphemeBreak fields)^2 = 1445
-    std.debug.assert(@sizeOf(@TypeOf(table)) == 1445);
+    inlineAssert(@sizeOf(@TypeOf(table)) == 1445);
     const result = table.get(gb1, gb2, state.*);
     state.* = result.state;
     return result.result;

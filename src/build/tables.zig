@@ -3,6 +3,7 @@ const Ucd = @import("Ucd.zig");
 const types = @import("types.zig");
 const config = @import("config.zig");
 const build_config = @import("build_config");
+const inlineAssert = config.quirks.inlineAssert;
 
 pub const std_options: std.Options = .{
     .log_level = if (@hasDecl(build_config, "log_level"))
@@ -191,7 +192,7 @@ fn DataMap(comptime Data: type) type {
 const block_size = 256;
 
 fn Block(comptime T: type) type {
-    std.debug.assert(T == u16 or @typeInfo(T) == .@"struct");
+    inlineAssert(T == u16 or @typeInfo(T) == .@"struct");
     return [block_size]T;
 }
 
@@ -529,7 +530,7 @@ pub fn writeTableData(
             }
             if (@hasField(AllData, "bidi_class")) {
                 const derived_bidi_class = ucd.derived_bidi_class[cp];
-                std.debug.assert(unicode_data.bidi_class == null or unicode_data.bidi_class.? == derived_bidi_class);
+                inlineAssert(unicode_data.bidi_class == null or unicode_data.bidi_class.? == derived_bidi_class);
                 a.bidi_class = derived_bidi_class;
             }
             if (@hasField(AllData, "decomposition_type")) {
@@ -926,7 +927,7 @@ pub fn writeTableData(
             const emoji_vs = &ucd.emoji_vs[cp];
 
             if (@hasField(AllData, "is_emoji_vs_base")) {
-                std.debug.assert(emoji_vs.is_text == emoji_vs.is_emoji);
+                inlineAssert(emoji_vs.is_text == emoji_vs.is_emoji);
                 a.is_emoji_vs_base = emoji_vs.is_text;
             }
             if (@hasField(AllData, "is_emoji_vs_text")) {
@@ -955,16 +956,16 @@ pub fn writeTableData(
             const derived_core_properties = &ucd.derived_core_properties[cp];
 
             if (emoji_data.is_emoji_modifier) {
-                std.debug.assert(original_grapheme_break == .extend);
-                std.debug.assert(!emoji_data.is_extended_pictographic and
+                inlineAssert(original_grapheme_break == .extend);
+                inlineAssert(!emoji_data.is_extended_pictographic and
                     emoji_data.is_emoji_component);
                 a.grapheme_break = .emoji_modifier;
             } else if (emoji_data.is_emoji_modifier_base) {
-                std.debug.assert(original_grapheme_break == .other);
-                std.debug.assert(emoji_data.is_extended_pictographic);
+                inlineAssert(original_grapheme_break == .other);
+                inlineAssert(emoji_data.is_extended_pictographic);
                 a.grapheme_break = .emoji_modifier_base;
             } else if (emoji_data.is_extended_pictographic) {
-                std.debug.assert(original_grapheme_break == .other);
+                inlineAssert(original_grapheme_break == .other);
                 a.grapheme_break = .extended_pictographic;
             } else {
                 switch (derived_core_properties.indic_conjunct_break) {
@@ -993,19 +994,19 @@ pub fn writeTableData(
                     },
                     .extend => {
                         if (cp == config.zero_width_joiner) {
-                            std.debug.assert(original_grapheme_break == .zwj);
+                            inlineAssert(original_grapheme_break == .zwj);
                             a.grapheme_break = .zwj;
                         } else {
-                            std.debug.assert(original_grapheme_break == .extend);
+                            inlineAssert(original_grapheme_break == .extend);
                             a.grapheme_break = .indic_conjunct_break_extend;
                         }
                     },
                     .linker => {
-                        std.debug.assert(original_grapheme_break == .extend);
+                        inlineAssert(original_grapheme_break == .extend);
                         a.grapheme_break = .indic_conjunct_break_linker;
                     },
                     .consonant => {
-                        std.debug.assert(original_grapheme_break == .other);
+                        inlineAssert(original_grapheme_break == .other);
                         a.grapheme_break = .indic_conjunct_break_consonant;
                     },
                 }
@@ -1056,7 +1057,7 @@ pub fn writeTableData(
         }
     }
 
-    std.debug.assert(block_len == 0);
+    inlineAssert(block_len == 0);
 
     std.log.debug("Getting data time: {d}ms", .{get_data_time / std.time.ns_per_ms});
 

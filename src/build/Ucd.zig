@@ -6,6 +6,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const types = @import("types.zig");
 const config = @import("config.zig");
+const inlineAssert = config.quirks.inlineAssert;
 
 const n = config.max_code_point + 1;
 
@@ -338,7 +339,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
         if (range_data != null) {
             // We're in a range, so the next entry marks the last, with the same
             // information.
-            std.debug.assert(std.mem.endsWith(u8, parts.next().?, "Last>"));
+            inlineAssert(std.mem.endsWith(u8, parts.next().?, "Last>"));
             unicode_data[next_cp] = range_data.?;
             range_data = null;
             next_cp = cp + 1;
@@ -576,19 +577,19 @@ fn parseCaseFolding(
 
         switch (status) {
             'S' => {
-                std.debug.assert(mapping_len == 1);
+                inlineAssert(mapping_len == 1);
                 case_folding[cp].case_folding_simple_only = mapping[0];
             },
             'C' => {
-                std.debug.assert(mapping_len == 1);
+                inlineAssert(mapping_len == 1);
                 case_folding[cp].case_folding_common_only = mapping[0];
             },
             'T' => {
-                std.debug.assert(mapping_len == 1);
+                inlineAssert(mapping_len == 1);
                 case_folding[cp].case_folding_turkish_only = mapping[0];
             },
             'F' => {
-                std.debug.assert(mapping_len > 1);
+                inlineAssert(mapping_len > 1);
                 case_folding[cp].case_folding_full_only = try allocator.dupe(
                     u21,
                     mapping[0..mapping_len],

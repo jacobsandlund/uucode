@@ -3,6 +3,7 @@ const std = @import("std");
 const types = @import("types.zig");
 const getpkg = @import("get.zig");
 const utf8 = @import("utf8.zig");
+const inlineAssert = @import("config.zig").quirks.inlineAssert;
 const get = getpkg.get;
 const FieldEnum = getpkg.FieldEnum;
 
@@ -312,7 +313,7 @@ pub fn computeGraphemeBreak(
 
         // In normal operation, we'll be in this state, but
         // buildGraphemeBreakTable iterates all states.
-        //std.debug.assert(state.* == .default);
+        //inlineAssert(state.* == .default);
 
         if (isIndicConjunctBreakExtend(gb2)) {
             state.* = .indic_conjunct_break_consonant;
@@ -362,7 +363,7 @@ pub fn computeGraphemeBreak(
 
         // In normal operation, we'll be in this state, but
         // buildGraphemeBreakTable iterates all states.
-        // std.debug.assert(state.* == .default);
+        // inlineAssert(state.* == .default);
 
         if (isExtend(gb2) or gb2 == .zwj) {
             state.* = .extended_pictographic;
@@ -486,7 +487,7 @@ fn testGraphemeBreak(getActualIsBreak: fn (cp1: u21, cp2: u21, state: *BreakStat
             // modifier as extend, always, but we diverge from that (see
             // comment above `isExtend`).
             if (gb2 == .emoji_modifier and gb1 != .emoji_modifier_base) {
-                std.debug.assert(!expected_is_break);
+                inlineAssert(!expected_is_break);
                 expected_is_break = true;
             }
             if (actual_is_break != expected_is_break) {
@@ -543,8 +544,8 @@ pub fn GraphemeBreakTable(comptime GB: type, comptime State: type) type {
 
     // Assert that these are simple enums (this isn't a full assertion, but
     // likely good enough.)
-    std.debug.assert(gb_fields[gb_fields.len - 1].value == n_gb - 1);
-    std.debug.assert(state_fields[state_fields.len - 1].value == n_state - 1);
+    inlineAssert(gb_fields[gb_fields.len - 1].value == n_gb - 1);
+    inlineAssert(state_fields[state_fields.len - 1].value == n_state - 1);
 
     return struct {
         data: [n]Result,
@@ -604,7 +605,7 @@ pub fn precomputedGraphemeBreak(
         computeGraphemeBreak,
     );
     // 5 BreakState fields x (20 GraphemeBreak fields)^2 = 2000
-    std.debug.assert(@sizeOf(@TypeOf(table)) == 2000);
+    inlineAssert(@sizeOf(@TypeOf(table)) == 2000);
     const result = table.get(gb1, gb2, state.*);
     state.* = result.state;
     return result.result;

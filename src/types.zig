@@ -1,5 +1,6 @@
 const std = @import("std");
 const config = @import("config.zig");
+const inlineAssert = config.quirks.inlineAssert;
 
 const Allocator = std.mem.Allocator;
 
@@ -1009,7 +1010,7 @@ pub fn SliceTracking(comptime T: type, comptime max_len: usize) type {
                 }
             }
 
-            std.debug.assert(current_max_offset == self.max_offset);
+            inlineAssert(current_max_offset == self.max_offset);
 
             return c.override(.{
                 .shift_low = actual.shift_low,
@@ -1116,7 +1117,7 @@ pub fn PackedOptional(comptime c: config.Field) type {
                     .bool => @intFromBool(value),
                     else => unreachable,
                 };
-                std.debug.assert(d != null_data);
+                inlineAssert(d != null_data);
                 return .{ .data = d };
             } else {
                 return .null;
@@ -1291,7 +1292,7 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
     const info = @typeInfo(c.type).@"union";
     const Tag = info.tag_type.?;
     const Int = @typeInfo(Tag).@"enum".tag_type;
-    std.debug.assert(Int == std.meta.Int(.unsigned, @bitSizeOf(Tag)));
+    inlineAssert(Int == std.meta.Int(.unsigned, @bitSizeOf(Tag)));
 
     const ShiftMember = if (c.cp_packing == .shift) Shift(c, packing) else void;
 
