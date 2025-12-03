@@ -115,6 +115,10 @@ pub fn wcwidthNext(it: anytype) usize {
             },
             0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF => { // Emoji modifier
                 width = 2;
+                inlineAssert(
+                    (comptime !uucode.hasField("is_emoji_modifier_base")) or
+                        uucode.get(.is_emoji_modifier_base, prev_cp),
+                );
             },
             else => {
                 if (prev_state == .regional_indicator) {

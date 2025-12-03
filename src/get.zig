@@ -23,6 +23,16 @@ fn tableInfoFor(comptime field: []const u8) std.builtin.Type.StructField {
     @compileError("Table not found for field: " ++ field);
 }
 
+pub fn hasField(comptime field: []const u8) bool {
+    inline for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
+        if (@hasField(TableData(tableInfo.type), field)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 fn getTableInfo(comptime table_name: []const u8) std.builtin.Type.StructField {
     inline for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
         if (std.mem.eql(u8, tableInfo.name, table_name)) {

@@ -14,6 +14,7 @@ pub const TypeOf = getpkg.TypeOf;
 pub const TypeOfAll = getpkg.TypeOfAll;
 pub const get = getpkg.get;
 pub const getAll = getpkg.getAll;
+pub const hasField = getpkg.hasField;
 
 test {
     std.testing.refAllDeclsRecursive(@This());

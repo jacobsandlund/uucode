@@ -14,7 +14,6 @@ var cp: u21 = undefined;
 
 cp = 0x2200; // ∀
 uucode.get(.general_category, cp) // .symbol_math
-uucode.TypeOf(.general_category) // uucode.types.GeneralCategory
 
 cp = 0x03C2; // ς
 uucode.get(.simple_uppercase_mapping, cp) // U+03A3 == Σ
@@ -37,7 +36,6 @@ const data = uucode.getAll("0", cp);
 
 data.simple_uppercase_mapping // U+03A3 == Σ
 data.general_category // .letter_lowercase
-@TypeOf(data) == uucode.TypeOfAll("0")
 
 //////////////////////
 // utf8.Iterator
@@ -114,6 +112,13 @@ str[result.?.start..result.?.end]; // "👨🏻‍❤️‍👨🏿"
 uucode.x.grapheme.wcwidthRemaining(&it); // 3 for "👨🏻‍❤️‍👨🏿_"
 
 uucode.x.grapheme.utf8Wcwidth(str); // 4 for the whole string
+
+//////////////////////
+// TypeOf / TypeOfAll / hasField
+
+uucode.TypeOf(.general_category)  // uucode.types.GeneralCategory
+uucode.TypeOfAll("0")             // @TypeOf(uucode.getAll("0"))
+uucode.hasField("is_emoji")       // true if `is_emoji` is in one of your tables
 ```
 
 See [src/config.zig](./src/config.zig) for the names of all fields.
