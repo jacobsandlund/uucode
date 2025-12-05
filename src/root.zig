@@ -103,6 +103,10 @@ test "get union packed, direct" {
     try testing.expectEqual(.none, get(.bidi_paired_bracket_direct, 0x4000));
 }
 
+test "get bidi_class" {
+    try testing.expectEqual(.arabic_number, get(.bidi_class, 0x0600));
+}
+
 test "special_casing_condition" {
     const conditions1 = get(.special_casing_condition, 65); // 'A'
     try testing.expectEqual(0, conditions1.len);

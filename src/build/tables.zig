@@ -528,11 +528,6 @@ pub fn writeTableData(
             if (@hasField(AllData, "canonical_combining_class")) {
                 a.canonical_combining_class = unicode_data.canonical_combining_class;
             }
-            if (@hasField(AllData, "bidi_class")) {
-                const derived_bidi_class = ucd.derived_bidi_class[cp];
-                inlineAssert(unicode_data.bidi_class == null or unicode_data.bidi_class.? == derived_bidi_class);
-                a.bidi_class = derived_bidi_class;
-            }
             if (@hasField(AllData, "decomposition_type")) {
                 a.decomposition_type = unicode_data.decomposition_type;
             }
@@ -608,6 +603,15 @@ pub fn writeTableData(
                     unicode_data.simple_titlecase_mapping,
                 );
             }
+        }
+
+        // BidiClass
+        if (@hasField(AllData, "bidi_class")) {
+            comptime inlineAssert(Ucd.needsSection(table_config, .derived_bidi_class));
+            const derived_bidi_class = ucd.derived_bidi_class[cp];
+            inlineAssert((comptime !Ucd.needsSection(table_config, .unicode_data)) or
+                (ucd.unicode_data[cp].bidi_class == null or ucd.unicode_data[cp].bidi_class.? == derived_bidi_class));
+            a.bidi_class = derived_bidi_class;
         }
 
         if (comptime Ucd.needsSection(table_config, .case_folding)) {
