@@ -73,10 +73,10 @@ pub fn wcwidthNext(it: anytype) usize {
 
     if (first.is_break) return standalone;
 
-    var width: usize = if (uucode.get(.wcwidth_zero_in_grapheme, prev_cp))
+    var width: f32 = if (uucode.get(.wcwidth_zero_in_grapheme, prev_cp))
         0
     else
-        standalone;
+        @floatFromInt(standalone);
 
     var prev_state: uucode.grapheme.BreakState = it.state;
     inlineAssert(it.peekCodePoint() != null);
@@ -87,7 +87,7 @@ pub fn wcwidthNext(it: anytype) usize {
                 // Emoji presentation selector. Only apply to base code points from
                 // emoji variation sequences.
                 if (uucode.get(.is_emoji_vs_base, prev_cp)) {
-                    width = 2;
+                    width = 2.0;
                 }
                 // else, VS16 is zero width, so don't do anything
             },
@@ -95,7 +95,7 @@ pub fn wcwidthNext(it: anytype) usize {
                 // Text presentation selector. Only apply to base code points from
                 // emoji variation sequences.
                 if (uucode.get(.is_emoji_vs_base, prev_cp)) {
-                    width = 1;
+                    width = 1.0;
                 }
                 // else, VS15 is zero width, so don't do anything
             },
@@ -114,7 +114,7 @@ pub fn wcwidthNext(it: anytype) usize {
                 // else, ZWJ is zero width, so don't do anything
             },
             0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF => { // Emoji modifier
-                width = 2;
+                width = 2.0;
                 inlineAssert(
                     (comptime !uucode.hasField("is_emoji_modifier_base")) or
                         uucode.get(.is_emoji_modifier_base, prev_cp),
@@ -122,9 +122,16 @@ pub fn wcwidthNext(it: anytype) usize {
             },
             else => {
                 if (prev_state == .regional_indicator) {
-                    width = 2;
+                    width = 2.0;
                 } else if (!uucode.get(.wcwidth_zero_in_grapheme, result.code_point)) {
-                    width += uucode.get(.wcwidth_standalone, result.code_point);
+                    const new_standalone: f32 = @floatFromInt(
+                        uucode.get(.wcwidth_standalone, result.code_point),
+                    );
+                    if (width == 0.0) {
+                        width = new_standalone;
+                    } else {
+                        width += new_standalone / 2.0;
+                    }
                 }
             },
         }
@@ -135,7 +142,7 @@ pub fn wcwidthNext(it: anytype) usize {
         prev_state = it.state;
     }
 
-    return width;
+    return @intFromFloat(@ceil(width));
 }
 
 pub fn wcwidth(const_it: anytype) usize {
