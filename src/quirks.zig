@@ -1,4 +1,4 @@
-//! cpv: track https://github.com/ghostty-org/ghostty/blob/5714ed07a1012573261b7b7e3ed2add9c1504496/src/quirks.zig#L1-L7
+//! cpv: track https://github.com/ghostty-org/ghostty/blob/cf06417b7dfbd0daeb58a9143f9b6ee194cbce26/src/quirks.zig#L1-L7
 //! Inspired by WebKit's quirks.cpp[1], this file centralizes all our
 //! sad environment-specific hacks that we have to do to make things work.
 //! This is a last resort; if we can find a general solution to a problem,
@@ -8,7 +8,7 @@
 //! [1]: https://github.com/WebKit/WebKit/blob/main/Source/WebCore/page/Quirks.cpp
 // cpv: end
 
-/// cpv: track https://github.com/ghostty-org/ghostty/blob/5714ed07a1012573261b7b7e3ed2add9c1504496/src/quirks.zig#L31-L46
+/// cpv: track https://github.com/ghostty-org/ghostty/blob/cf06417b7dfbd0daeb58a9143f9b6ee194cbce26/src/quirks.zig#L32-L57
 /// We use our own assert function instead of `std.debug.assert`.
 ///
 /// The only difference between this and the one in
@@ -22,7 +22,17 @@
 /// is negligible, but we have some asserts inside tight loops and hotpaths
 /// that cause significant overhead (as much as 15-20%) when they don't get
 /// optimized out.
-pub inline fn inlineAssert(ok: bool) void {
-    if (!ok) unreachable;
-}
+pub const inlineAssert = switch (builtin.mode) {
+    // In debug builds we just use std.debug.assert because this
+    // fixes up stack traces. `inline` causes broken stack traces. This
+    // is probably a Zig compiler bug but until it is fixed we have to
+    // do this for development sanity.
+    .Debug => std.debug.assert,
+
+    .ReleaseSmall, .ReleaseSafe, .ReleaseFast => (struct {
+        inline fn assert(ok: bool) void {
+            if (!ok) unreachable;
+        }
+    }).assert,
+};
 // cpv: end
