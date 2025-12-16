@@ -1,4 +1,4 @@
-//! cpv: track https://github.com/ghostty-org/ghostty/blob/cf06417b7dfbd0daeb58a9143f9b6ee194cbce26/src/quirks.zig#L1-L7
+//! cpv: track https://github.com/ghostty-org/ghostty/blob/cb45410dccc381b0dab54110b841dd216eb86d66/src/quirks.zig#L1-L10
 //! Inspired by WebKit's quirks.cpp[1], this file centralizes all our
 //! sad environment-specific hacks that we have to do to make things work.
 //! This is a last resort; if we can find a general solution to a problem,
@@ -6,9 +6,12 @@
 //! just broken or weird and we have to work around it.
 //!
 //! [1]: https://github.com/WebKit/WebKit/blob/main/Source/WebCore/page/Quirks.cpp
+
+const std = @import("std");
+const builtin = @import("builtin");
 // cpv: end
 
-/// cpv: track https://github.com/ghostty-org/ghostty/blob/cf06417b7dfbd0daeb58a9143f9b6ee194cbce26/src/quirks.zig#L32-L57
+/// cpv: track https://github.com/ghostty-org/ghostty/blob/cb45410dccc381b0dab54110b841dd216eb86d66/src/quirks.zig#L32-L57
 /// We use our own assert function instead of `std.debug.assert`.
 ///
 /// The only difference between this and the one in

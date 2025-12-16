@@ -117,8 +117,14 @@ const updating_ucd_fields = brk: {
 
     for (d.fields, 0..) |f, i| {
         switch (f.kind()) {
-            .basic, .optional => {
+            .basic => {
                 fields[i] = f;
+            },
+            .optional => {
+                fields[i] = f.override(.{
+                    .min_value = std.math.minInt(isize),
+                    .max_value = std.math.maxInt(isize) - 1,
+                });
             },
             .shift, .@"union" => {
                 fields[i] = f.override(.{
@@ -391,6 +397,7 @@ fn TableTracking(comptime Struct: type) type {
                     i += 1;
                 }
             },
+            else => {},
         }
     }
 
@@ -407,6 +414,7 @@ fn TableTracking(comptime Struct: type) type {
 fn maybePackedInit(
     comptime field: []const u8,
     data: anytype,
+    tracking: anytype,
     d: anytype,
 ) void {
     const Field = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
@@ -414,6 +422,10 @@ fn maybePackedInit(
         @field(data, field) = .init(d);
     } else {
         @field(data, field) = d;
+    }
+    const Tracking = @typeInfo(@TypeOf(tracking)).pointer.child;
+    if (@hasField(Tracking, field)) {
+        @field(tracking, field).track(d);
     }
 }
 
@@ -445,7 +457,7 @@ pub fn writeTableData(
     const Data = types.Data(table_config);
     const AllData = TableAllData(table_config);
     const Backing = types.StructFromDecls(AllData, "MutableBackingBuffer");
-    const Tracking = types.StructFromDecls(AllData, "Tracking");
+    const Tracking = TableTracking(AllData);
 
     var backing = blk: {
         var b: Backing = undefined;
@@ -547,6 +559,7 @@ pub fn writeTableData(
                 maybePackedInit(
                     "numeric_value_decimal",
                     &a,
+                    &tracking,
                     unicode_data.numeric_value_decimal,
                 );
             }
@@ -554,6 +567,7 @@ pub fn writeTableData(
                 maybePackedInit(
                     "numeric_value_digit",
                     &a,
+                    &tracking,
                     unicode_data.numeric_value_digit,
                 );
             }
@@ -974,6 +988,7 @@ pub fn writeTableData(
             } else {
                 switch (derived_core_properties.indic_conjunct_break) {
                     .none => {
+                        @setEvalBranchQuota(50_000);
                         a.grapheme_break = switch (original_grapheme_break) {
                             .extend => blk: {
                                 if (cp == config.zero_width_non_joiner) {
@@ -1094,6 +1109,7 @@ pub fn writeTableData(
             if (config.is_updating_ucd) {
                 const min_config = t.minBitsConfig(r);
                 if (!config.default.field(f.name).runtime().eql(min_config)) {
+                    std.debug.print("Unequal!\n", .{});
                     var buffer: [4096]u8 = undefined;
                     var stderr_writer = std.fs.File.stderr().writer(&buffer);
                     var w = &stderr_writer.interface;
