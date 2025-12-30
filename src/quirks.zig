@@ -1,4 +1,4 @@
-//! cpv: track https://github.com/ghostty-org/ghostty/blob/cb45410dccc381b0dab54110b841dd216eb86d66/src/quirks.zig#L1-L10
+//! copyv: track https://github.com/ghostty-org/ghostty/blob/1fa6641a6adf3936f6c8c81e14b5821d2de1a81b/src/quirks.zig#L1-L10
 //! Inspired by WebKit's quirks.cpp[1], this file centralizes all our
 //! sad environment-specific hacks that we have to do to make things work.
 //! This is a last resort; if we can find a general solution to a problem,
@@ -9,9 +9,9 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-// cpv: end
+// copyv: end
 
-/// cpv: track https://github.com/ghostty-org/ghostty/blob/cb45410dccc381b0dab54110b841dd216eb86d66/src/quirks.zig#L32-L57
+/// copyv: track https://github.com/ghostty-org/ghostty/blob/1fa6641a6adf3936f6c8c81e14b5821d2de1a81b/src/quirks.zig#L32-L57
 /// We use our own assert function instead of `std.debug.assert`.
 ///
 /// The only difference between this and the one in
@@ -38,4 +38,4 @@ pub const inlineAssert = switch (builtin.mode) {
         }
     }).assert,
 };
-// cpv: end
+// copyv: end

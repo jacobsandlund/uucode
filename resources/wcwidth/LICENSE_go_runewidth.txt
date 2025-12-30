@@ -1,4 +1,4 @@
-# cpv: track https://github.com/mattn/go-runewidth/blob/7770d045cdc691f0fcb87b0364a83f0de2d1a421/LICENSE#L1-L21
+# copyv: track https://github.com/mattn/go-runewidth/blob/7770d045cdc691f0fcb87b0364a83f0de2d1a421/LICENSE#L1-L21
 The MIT License (MIT)
 
 Copyright (c) 2016 Yasuhiro Matsumoto
@@ -20,4 +20,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-# cpv: end
+# copyv: end

@@ -1,16 +1,12 @@
-// cpv: track https://codeberg.org/atman/zg/src/commit/9427a9e53aaa29ee071f4dcb35b809a699d75aa9/codegen/dwp.zig#L31-L223
+// copyv: track https://codeberg.org/atman/zg/src/commit/d9f596626e8ec05a9f3e47f7bc83aedd5bd2f989/codegen/dwp.zig#L31-L226
 var flat_map = std.AutoHashMap(u21, i4).init(allocator);
 defer flat_map.deinit();
 
-var line_buf: [4096]u8 = undefined;
-
 // Process DerivedEastAsianWidth.txt
-var deaw_file = try std.fs.cwd().openFile("data/unicode/extracted/DerivedEastAsianWidth.txt", .{});
-defer deaw_file.close();
-var deaw_buf = std.io.bufferedReader(deaw_file.reader());
-const deaw_reader = deaw_buf.reader();
+var deaw_reader = std.io.Reader.fixed(@embedFile("DerivedEastAsianWidth.txt"));
 
-while (try deaw_reader.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
+while (deaw_reader.takeDelimiterInclusive('\n')) |took| {
+    const line = std.mem.trimRight(u8, took, "\n");
     if (line.len == 0) continue;
 
     // @missing ranges
@@ -59,15 +55,17 @@ while (try deaw_reader.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
             else => {},
         }
     }
+} else |err| switch (err) {
+    error.EndOfStream => {},
+    else => {
+        return err;
+    },
 }
-
 // Process DerivedGeneralCategory.txt
-var dgc_file = try std.fs.cwd().openFile("data/unicode/extracted/DerivedGeneralCategory.txt", .{});
-defer dgc_file.close();
-var dgc_buf = std.io.bufferedReader(dgc_file.reader());
-const dgc_reader = dgc_buf.reader();
+var dgc_reader = std.io.Reader.fixed(@embedFile("DerivedGeneralCategory.txt"));
 
-while (try dgc_reader.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
+while (dgc_reader.takeDelimiterInclusive('\n')) |took| {
+    const line = std.mem.trimRight(u8, took, "\n");
     if (line.len == 0 or line[0] == '#') continue;
     const no_comment = if (std.mem.indexOfScalar(u8, line, '#')) |octo| line[0..octo] else line;
 
@@ -110,15 +108,20 @@ while (try dgc_reader.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
             else => {},
         }
     }
+} else |err| switch (err) {
+    error.EndOfStream => {},
+    else => {
+        return err;
+    },
 }
 
 var blocks_map = BlockMap.init(allocator);
 defer blocks_map.deinit();
 
-var stage1 = std.ArrayList(u16).init(allocator);
+var stage1 = std.array_list.Managed(u16).init(allocator);
 defer stage1.deinit();
 
-var stage2 = std.ArrayList(i4).init(allocator);
+var stage2 = std.array_list.Managed(i4).init(allocator);
 defer stage2.deinit();
 
 var block: Block = [_]i4{0} ** block_size;
@@ -192,9 +195,9 @@ for (0..0x110000) |i| {
     try stage1.append(gop.value_ptr.*);
     block_len = 0;
 }
-// cpv: end
+// copyv: end
 
-/// cpv: track https://codeberg.org/atman/zg/src/commit/9427a9e53aaa29ee071f4dcb35b809a699d75aa9/src/DisplayWidth.zig#L105-L145
+/// copyv: track https://codeberg.org/atman/zg/src/commit/d9f596626e8ec05a9f3e47f7bc83aedd5bd2f989/src/DisplayWidth.zig#L103-L145
 /// strWidth returns the total display width of `str` as the number of cells
 /// required in a fixed-pitch font (i.e. a terminal screen).
 pub fn strWidth(dw: DisplayWidth, str: []const u8) usize {
@@ -221,6 +224,8 @@ pub fn strWidth(dw: DisplayWidth, str: []const u8) usize {
                     // emoji text sequence.
                     if (ncp.code == 0xFE0E) w = 1;
                     if (ncp.code == 0xFE0F) w = 2;
+                    // Skin tones
+                    if (0x1F3FB <= ncp.code and ncp.code <= 0x1F3FF) w = 2;
                 }
 
                 // Only adding width of first non-zero-width code point.
@@ -236,4 +241,4 @@ pub fn strWidth(dw: DisplayWidth, str: []const u8) usize {
 
     return @intCast(@max(0, total));
 }
-// cpv: end
+// copyv: end

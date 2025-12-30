@@ -1,4 +1,4 @@
-# cpv: track https://github.com/JuliaStrings/utf8proc/blob/90daf9f396cfec91668758eb9cc54bd5248a6b89/data/data_generator.jl#L202-L249
+# copyv: track https://github.com/JuliaStrings/utf8proc/blob/a36778dbe37f8fc86aae5ca37b68564f8f54353c/data/data_generator.jl#L202-L249
 let ea_widths = read_east_asian_widths("EastAsianWidth.txt")
     # Following work by @jiahao, we compute character widths using a combination of
     #   * character category
@@ -47,4 +47,4 @@ let ea_widths = read_east_asian_widths("EastAsianWidth.txt")
         return get(ea_widths, code, 0) < 0
     end
 end
-# cpv: end
+# copyv: end
