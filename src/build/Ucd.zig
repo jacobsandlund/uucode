@@ -126,64 +126,64 @@ fn fieldNeedsSection(comptime field: []const u8, comptime ucd_section: UcdSectio
     return std.mem.indexOfScalar(UcdSection, sections, ucd_section) != null;
 }
 
-pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config.Table) !Self {
+pub fn init(allocator: std.mem.Allocator, io: std.Io, comptime table_configs: []const config.Table) !Self {
     const start = try std.time.Instant.now();
 
     var self: Self = .{};
 
     if (comptime needsSectionAny(table_configs, .unicode_data)) {
         self.unicode_data = try allocator.alloc(UnicodeData, n);
-        try parseUnicodeData(allocator, self.unicode_data);
+        try parseUnicodeData(allocator, io, self.unicode_data);
     }
 
     if (comptime needsSectionAny(table_configs, .case_folding)) {
         self.case_folding = try allocator.alloc(CaseFolding, n);
-        try parseCaseFolding(allocator, self.case_folding);
+        try parseCaseFolding(allocator, io, self.case_folding);
     }
 
     if (comptime needsSectionAny(table_configs, .special_casing)) {
         self.special_casing = try allocator.alloc(SpecialCasing, n);
-        try parseSpecialCasing(allocator, self.special_casing);
+        try parseSpecialCasing(allocator, io, self.special_casing);
     }
 
     if (comptime needsSectionAny(table_configs, .derived_core_properties)) {
         self.derived_core_properties = try allocator.alloc(DerivedCoreProperties, n);
-        try parseDerivedCoreProperties(allocator, self.derived_core_properties);
+        try parseDerivedCoreProperties(allocator, io, self.derived_core_properties);
     }
 
     if (comptime needsSectionAny(table_configs, .derived_bidi_class)) {
         self.derived_bidi_class = try allocator.alloc(types.BidiClass, n);
-        try parseDerivedBidiClass(allocator, self.derived_bidi_class);
+        try parseDerivedBidiClass(allocator, io, self.derived_bidi_class);
     }
 
     if (comptime needsSectionAny(table_configs, .east_asian_width)) {
         self.east_asian_width = try allocator.alloc(types.EastAsianWidth, n);
-        try parseEastAsianWidth(allocator, self.east_asian_width);
+        try parseEastAsianWidth(allocator, io, self.east_asian_width);
     }
 
     if (comptime needsSectionAny(table_configs, .original_grapheme_break)) {
         self.original_grapheme_break = try allocator.alloc(types.OriginalGraphemeBreak, n);
-        try parseGraphemeBreak(allocator, self.original_grapheme_break);
+        try parseGraphemeBreak(allocator, io, self.original_grapheme_break);
     }
 
     if (comptime needsSectionAny(table_configs, .emoji_data)) {
         self.emoji_data = try allocator.alloc(EmojiData, n);
-        try parseEmojiData(allocator, self.emoji_data);
+        try parseEmojiData(allocator, io, self.emoji_data);
     }
 
     if (comptime needsSectionAny(table_configs, .emoji_vs)) {
         self.emoji_vs = try allocator.alloc(EmojiVariationSequence, n);
-        try parseEmojiVariationSequences(allocator, self.emoji_vs);
+        try parseEmojiVariationSequences(allocator, io, self.emoji_vs);
     }
 
     if (comptime needsSectionAny(table_configs, .bidi_paired_bracket)) {
         self.bidi_paired_bracket = try allocator.alloc(types.BidiPairedBracket, n);
-        try parseBidiBrackets(allocator, self.bidi_paired_bracket);
+        try parseBidiBrackets(allocator, io, self.bidi_paired_bracket);
     }
 
     if (comptime needsSectionAny(table_configs, .blocks)) {
         self.blocks = try allocator.alloc(types.Block, n);
-        try parseBlocks(allocator, self.blocks);
+        try parseBlocks(allocator, io, self.blocks);
     }
 
     const end = try std.time.Instant.now();
@@ -301,7 +301,11 @@ pub fn trim(line: []const u8) []const u8 {
     return std.mem.trim(u8, line, " \t");
 }
 
-fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !void {
+fn parseUnicodeData(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    unicode_data: []UnicodeData,
+) !void {
     const file_path = "ucd/UnicodeData.txt";
 
     // TODO: look for defaults in the Derived Extracted properties files:
@@ -313,10 +317,12 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
     // definitive. However, for default values of properties, the extracted
     // data files are definitive.
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 10);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024 * 10));
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -538,16 +544,19 @@ const bidi_longform_map = std.StaticStringMap(types.BidiClass).initComptime(.{
 
 fn parseCaseFolding(
     allocator: std.mem.Allocator,
+    io: std.Io,
     case_folding: []CaseFolding,
 ) !void {
     @memset(case_folding, .{});
 
     const file_path = "ucd/CaseFolding.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -602,16 +611,19 @@ fn parseCaseFolding(
 
 fn parseSpecialCasing(
     allocator: std.mem.Allocator,
+    io: std.Io,
     special_casing: []SpecialCasing,
 ) !void {
     @memset(special_casing, .{});
 
     const file_path = "ucd/SpecialCasing.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -709,16 +721,19 @@ const special_casing_condition_map = std.StaticStringMap(types.SpecialCasingCond
 
 fn parseDerivedCoreProperties(
     allocator: std.mem.Allocator,
+    io: std.Io,
     derived_core_properties: []DerivedCoreProperties,
 ) !void {
     @memset(derived_core_properties, .{});
 
     const file_path = "ucd/DerivedCoreProperties.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024 * 2));
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -758,16 +773,19 @@ fn parseDerivedCoreProperties(
 
 fn parseBidiBrackets(
     allocator: std.mem.Allocator,
+    io: std.Io,
     bidi_paired_bracket: []types.BidiPairedBracket,
 ) !void {
     @memset(bidi_paired_bracket, .none);
 
     const file_path = "ucd/BidiBrackets.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024 * 2));
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -824,16 +842,19 @@ const indic_conjunct_break_map = std.StaticStringMap(types.IndicConjunctBreak).i
 
 fn parseDerivedBidiClass(
     allocator: std.mem.Allocator,
+    io: std.Io,
     derived_bidi_class: []types.BidiClass,
 ) !void {
     @memset(derived_bidi_class, .left_to_right);
 
     const file_path = "ucd/extracted/DerivedBidiClass.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024 * 2));
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -891,16 +912,19 @@ fn parseDerivedBidiClass(
 
 fn parseEastAsianWidth(
     allocator: std.mem.Allocator,
+    io: std.Io,
     east_asian_width: []types.EastAsianWidth,
 ) !void {
     @memset(east_asian_width, .neutral);
 
     const file_path = "ucd/extracted/DerivedEastAsianWidth.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -967,16 +991,19 @@ const east_asian_width_map = std.StaticStringMap(types.EastAsianWidth).initCompt
 
 fn parseGraphemeBreak(
     allocator: std.mem.Allocator,
+    io: std.Io,
     grapheme_break: []types.OriginalGraphemeBreak,
 ) !void {
     @memset(grapheme_break, .other);
 
     const file_path = "ucd/auxiliary/GraphemeBreakProperty.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1017,16 +1044,19 @@ const grapheme_break_property_map = std.StaticStringMap(types.OriginalGraphemeBr
 
 fn parseEmojiData(
     allocator: std.mem.Allocator,
+    io: std.Io,
     emoji_data: []EmojiData,
 ) !void {
     @memset(emoji_data, .{});
 
     const file_path = "ucd/emoji/emoji-data.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1067,15 +1097,19 @@ const emoji_data_property_map = std.StaticStringMap(std.meta.FieldEnum(EmojiData
 
 fn parseEmojiVariationSequences(
     allocator: std.mem.Allocator,
+    io: std.Io,
     emoji_vs: []EmojiVariationSequence,
 ) !void {
     @memset(emoji_vs, .{});
 
     const file_path = "ucd/emoji/emoji-variation-sequences.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
+
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1099,16 +1133,19 @@ fn parseEmojiVariationSequences(
 
 fn parseBlocks(
     allocator: std.mem.Allocator,
+    io: std.Io,
     blocks: []types.Block,
 ) !void {
     @memset(blocks, .no_block);
 
     const file_path = "ucd/Blocks.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
