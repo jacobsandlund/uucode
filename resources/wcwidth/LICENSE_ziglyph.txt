@@ -1,4 +1,4 @@
-# copyv: track https://codeberg.org/dude_the_builder/ziglyph/src/commit/29760d237219cc4d486f5cd654262d7b0d62d511/LICENSE#L1-L21
+# copyv: https://codeberg.org/dude_the_builder/ziglyph/src/commit/29760d237219cc4d486f5cd654262d7b0d62d511/LICENSE#L1-L21 begin
 MIT License
 
 Copyright (c) 2021 Jose Colon Rodriguez

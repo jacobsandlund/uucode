@@ -1,4 +1,4 @@
-// copyv: track https://github.com/mattn/go-runewidth/blob/7770d045cdc691f0fcb87b0364a83f0de2d1a421/runewidth.go#L115-L156
+// copyv: https://github.com/mattn/go-runewidth/blob/7770d045cdc691f0fcb87b0364a83f0de2d1a421/runewidth.go#L115-L156 begin
 // RuneWidth returns the number of cells in r.
 // See http://www.unicode.org/reports/tr11/
 func (c *Condition) RuneWidth(r rune) int {
@@ -43,7 +43,7 @@ func (c *Condition) RuneWidth(r rune) int {
 }
 // copyv: end
 
-// copyv: track https://github.com/mattn/go-runewidth/blob/7770d045cdc691f0fcb87b0364a83f0de2d1a421/runewidth.go#L179-L193
+// copyv: https://github.com/mattn/go-runewidth/blob/7770d045cdc691f0fcb87b0364a83f0de2d1a421/runewidth.go#L179-L193 begin
 // StringWidth return width as you can see
 func (c *Condition) StringWidth(s string) (width int) {
 	g := graphemes.FromString(s)

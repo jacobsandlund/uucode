@@ -1,4 +1,4 @@
-# copyv: track https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/LICENSE#L1-L27
+# copyv: https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/LICENSE#L1-L27 begin
 The MIT License (MIT)
 
 Copyright (c) 2014 Jeff Quast <contact@jeffquast.com>

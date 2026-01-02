@@ -1,4 +1,4 @@
-# copyv: track https://github.com/JuliaStrings/utf8proc/blob/e5e799221b45bbb90f5fdc5c69b6b8dfbf017e78/data/data_generator.jl#L202-L249
+# copyv: https://github.com/JuliaStrings/utf8proc/blob/e5e799221b45bbb90f5fdc5c69b6b8dfbf017e78/data/data_generator.jl#L202-L249 begin
 let ea_widths = read_east_asian_widths("EastAsianWidth.txt")
     # Following work by @jiahao, we compute character widths using a combination of
     #   * character category

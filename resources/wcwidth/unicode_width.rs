@@ -1,4 +1,4 @@
-//! copyv: track https://github.com/unicode-rs/unicode-width/blob/b10a4d5fbefe3f3dddd5e59cae2b889083ca58e7/src/lib.rs#L11-L169
+//! copyv: https://github.com/unicode-rs/unicode-width/blob/b10a4d5fbefe3f3dddd5e59cae2b889083ca58e7/src/lib.rs#L11-L169 begin
 //! Determine displayed width of `char` and `str` types according to
 //! [Unicode Standard Annex #11](http://www.unicode.org/reports/tr11/)
 //! and other portions of the Unicode standard.
@@ -160,7 +160,7 @@
 //! Canonically equivalent strings are assigned the same width (CJK and non-CJK).
 // copyv: end
 
-// copyv: track https://github.com/unicode-rs/unicode-width/blob/b10a4d5fbefe3f3dddd5e59cae2b889083ca58e7/src/tables.rs#L1-L944
+// copyv: https://github.com/unicode-rs/unicode-width/blob/b10a4d5fbefe3f3dddd5e59cae2b889083ca58e7/src/tables.rs#L1-L944 begin
 // Copyright 2012-2025 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
