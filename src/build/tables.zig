@@ -20,7 +20,11 @@ pub fn main() !void {
     defer ucd_arena.deinit();
     const ucd_allocator = ucd_arena.allocator();
 
-    const ucd = try Ucd.init(ucd_allocator, table_configs);
+    var threaded = std.Io.Threaded.init(ucd_allocator, .{});
+    defer threaded.deinit();
+    const ucd_io = threaded.io();
+
+    const ucd = try Ucd.init(ucd_allocator, ucd_io, table_configs);
 
     var args_iter = try std.process.argsWithAllocator(ucd_allocator);
     _ = args_iter.skip(); // Skip program name
@@ -32,10 +36,10 @@ pub fn main() !void {
 
     std.log.debug("Writing to file: {s}", .{output_path});
 
-    var out_file = try std.fs.cwd().createFile(output_path, .{});
-    defer out_file.close();
+    var out_file = try std.Io.Dir.cwd().createFile(ucd_io, output_path, .{});
+    defer out_file.close(ucd_io);
     var buffer: [4096]u8 = undefined;
-    var file_writer = out_file.writer(&buffer);
+    var file_writer = out_file.writer(ucd_io, &buffer);
     var writer = &file_writer.interface;
 
     try writer.writeAll(
@@ -260,7 +264,9 @@ fn TableAllData(comptime c: config.Table) type {
         }
     }
 
-    var fields: [fields_len_bound]std.builtin.Type.StructField = undefined;
+    var field_names: [fields_len_bound][]const u8 = undefined;
+    var field_types: [fields_len_bound]type = undefined;
+    var field_attrs: [fields_len_bound]std.builtin.Type.StructField.Attributes = undefined;
     var i: usize = 0;
 
     // Add Data fields:
@@ -288,12 +294,12 @@ fn TableAllData(comptime c: config.Table) type {
         }
 
         const F = types.Field(cf, c.packing);
-        fields[i] = .{
-            .name = cf.name,
-            .type = F,
+        field_names[i] = cf.name;
+        field_types[i] = F;
+        field_attrs[i] = .{
+            .@"comptime" = false,
+            .@"align" = @alignOf(F),
             .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(F),
         };
         i += 1;
     }
@@ -301,8 +307,8 @@ fn TableAllData(comptime c: config.Table) type {
     // Add extension inputs:
     for (c.extensions) |x| {
         loop_inputs: for (x.inputs) |input| {
-            for (fields[0..i]) |existing| {
-                if (std.mem.eql(u8, existing.name, input)) {
+            for (field_names[0..i]) |existing_name| {
+                if (std.mem.eql(u8, existing_name, input)) {
                     continue :loop_inputs;
                 }
             }
@@ -322,26 +328,28 @@ fn TableAllData(comptime c: config.Table) type {
             }
 
             const F = types.Field(cf, .unpacked);
-            fields[i] = .{
-                .name = input,
-                .type = F,
+            field_names[i] = input;
+            field_types[i] = F;
+            field_attrs[i] = .{
+                .@"comptime" = false,
+                .@"align" = @alignOf(F),
                 .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = @alignOf(F),
             };
             i += 1;
         }
     }
 
-    const all_fields = fields[0..i];
+    const all_field_names = field_names[0..i];
+    const all_field_types = field_types[0..i];
+    const all_field_attrs = field_attrs[0..i];
 
     // We sanity check here that at least one field from every extension is
     // present in AllData, otherwise it's a configuration error, and we want to
     // avoid running an extension that won't be used.
     loop_extensions: for (c.extensions) |x| {
         for (x.fields) |xf| {
-            for (all_fields) |f| {
-                if (std.mem.eql(u8, xf.name, f.name)) {
+            for (all_field_names) |name| {
+                if (std.mem.eql(u8, xf.name, name)) {
                     continue :loop_extensions;
                 }
             }
@@ -354,19 +362,20 @@ fn TableAllData(comptime c: config.Table) type {
         }
     }
 
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = all_fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(
+        .auto,
+        null,
+        all_field_names,
+        all_field_types,
+        all_field_attrs,
+    );
 }
 
 fn TableTracking(comptime Struct: type) type {
     const fields = @typeInfo(Struct).@"struct".fields;
-    var tracking_fields: [fields.len]std.builtin.Type.StructField = undefined;
+    var tracking_field_names: [fields.len][]const u8 = undefined;
+    var tracking_field_types: [fields.len]type = undefined;
+    var tracking_field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
     var i: usize = 0;
 
     for (@typeInfo(Struct).@"struct".fields) |f| {
@@ -374,12 +383,12 @@ fn TableTracking(comptime Struct: type) type {
             .@"struct", .@"union" => {
                 if (@hasDecl(f.type, "Tracking") and f.type.Tracking != void) {
                     const T = @field(f.type, "Tracking");
-                    tracking_fields[i] = .{
-                        .name = f.name,
-                        .type = T,
+                    tracking_field_names[i] = f.name;
+                    tracking_field_types[i] = T;
+                    tracking_field_attrs[i] = .{
+                        .@"comptime" = false,
+                        .@"align" = @alignOf(T),
                         .default_value_ptr = null, // TODO: can we set this?
-                        .is_comptime = false,
-                        .alignment = @alignOf(T),
                     };
                     i += 1;
                 }
@@ -387,12 +396,12 @@ fn TableTracking(comptime Struct: type) type {
             .optional => |optional| {
                 if (config.isPackable(optional.child)) {
                     const T = types.OptionalTracking(f.type);
-                    tracking_fields[i] = .{
-                        .name = f.name,
-                        .type = T,
+                    tracking_field_names[i] = f.name;
+                    tracking_field_types[i] = T;
+                    tracking_field_attrs[i] = .{
+                        .@"comptime" = false,
+                        .@"align" = @alignOf(T),
                         .default_value_ptr = null,
-                        .is_comptime = false,
-                        .alignment = @alignOf(T),
                     };
                     i += 1;
                 }
@@ -401,14 +410,13 @@ fn TableTracking(comptime Struct: type) type {
         }
     }
 
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = tracking_fields[0..i],
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(
+        .auto,
+        null,
+        tracking_field_names[0..i],
+        tracking_field_types[0..i],
+        tracking_field_attrs[0..i],
+    );
 }
 
 fn maybePackedInit(

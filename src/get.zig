@@ -97,27 +97,20 @@ pub const FieldEnum = blk: {
         fields_len += @typeInfo(TableData(tableInfo.type)).@"struct".fields.len;
     }
 
-    var fields: [fields_len]std.builtin.Type.EnumField = undefined;
+    const TagInt = std.math.IntFittingRange(0, fields_len - 1);
+    var field_names: [fields_len][]const u8 = undefined;
+    var field_values: [fields_len]TagInt = undefined;
     var i: usize = 0;
 
     for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
         for (@typeInfo(TableData(tableInfo.type)).@"struct".fields) |f| {
-            fields[i] = .{
-                .name = f.name,
-                .value = i,
-            };
+            field_names[i] = f.name;
+            field_values[i] = i;
             i += 1;
         }
     }
 
-    break :blk @Type(.{
-        .@"enum" = .{
-            .tag_type = std.math.IntFittingRange(0, fields_len - 1),
-            .fields = &fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_exhaustive = true,
-        },
-    });
+    break :blk @Enum(TagInt, .exhaustive, &field_names, &field_values);
 };
 
 fn DataField(comptime field: []const u8) type {
