@@ -16,30 +16,28 @@ pub fn main() !void {
     const total_start = try std.time.Instant.now();
     const table_configs: []const config.Table = if (config.is_updating_ucd) &.{updating_ucd} else &build_config.tables;
 
-    var ucd_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer ucd_arena.deinit();
-    const ucd_allocator = ucd_arena.allocator();
+    var main_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer main_arena.deinit();
+    const main_allocator = main_arena.allocator();
 
-    var threaded = std.Io.Threaded.init(ucd_allocator, .{});
+    var threaded = std.Io.Threaded.init(main_allocator, .{});
     defer threaded.deinit();
-    const ucd_io = threaded.io();
+    const io = threaded.io();
 
-    const ucd = try Ucd.init(ucd_allocator, ucd_io, table_configs);
+    const ucd = try Ucd.init(main_allocator, io, table_configs);
 
-    var args_iter = try std.process.argsWithAllocator(ucd_allocator);
+    var args_iter = try std.process.argsWithAllocator(main_allocator);
     _ = args_iter.skip(); // Skip program name
 
     // Get output path (only argument now)
     const output_path = args_iter.next() orelse std.debug.panic("No output file arg!", .{});
 
-    std.log.debug("Ucd arena end capacity: {d}", .{ucd_arena.queryCapacity()});
-
     std.log.debug("Writing to file: {s}", .{output_path});
 
-    var out_file = try std.Io.Dir.cwd().createFile(ucd_io, output_path, .{});
-    defer out_file.close(ucd_io);
+    var out_file = try std.Io.Dir.cwd().createFile(io, output_path, .{});
+    defer out_file.close(io);
     var buffer: [4096]u8 = undefined;
-    var file_writer = out_file.writer(ucd_io, &buffer);
+    var file_writer = out_file.writer(io, &buffer);
     var writer = &file_writer.interface;
 
     try writer.writeAll(
@@ -54,9 +52,9 @@ pub fn main() !void {
         \\
     );
 
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const arena_alloc = arena.allocator();
+    var table_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer table_arena.deinit();
+    const table_allocator = table_arena.allocator();
 
     comptime var resolved_tables: [table_configs.len]config.Table = undefined;
     inline for (table_configs, 0..) |table_config, i| {
@@ -69,13 +67,13 @@ pub fn main() !void {
         try writeTableData(
             resolved_table,
             i,
-            arena_alloc,
+            table_allocator,
             &ucd,
             writer,
         );
 
-        std.log.debug("Arena end capacity: {d}", .{arena.queryCapacity()});
-        _ = arena.reset(.retain_capacity);
+        std.log.debug("Arena end capacity: {d}", .{table_arena.queryCapacity()});
+        _ = table_arena.reset(.retain_capacity);
 
         const end = try std.time.Instant.now();
         std.log.debug("`writeTableData` for table_config {d} time: {d}ms", .{ i, end.since(start) / std.time.ns_per_ms });
@@ -91,7 +89,7 @@ pub fn main() !void {
         try writeTable(
             resolved_table,
             i,
-            arena_alloc,
+            table_allocator,
             writer,
         );
     }
@@ -103,6 +101,8 @@ pub fn main() !void {
     );
 
     try writer.flush();
+
+    std.log.debug("Main arena end capacity: {d}", .{main_arena.queryCapacity()});
 
     const total_end = try std.time.Instant.now();
     std.log.debug("Total time: {d}ms", .{total_end.since(total_start) / std.time.ns_per_ms});
