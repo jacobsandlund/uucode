@@ -322,7 +322,7 @@ fn parseUnicodeData(
 
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
-    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024 * 10));
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -556,7 +556,7 @@ fn parseCaseFolding(
 
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
-    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -623,7 +623,7 @@ fn parseSpecialCasing(
 
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
-    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -733,7 +733,7 @@ fn parseDerivedCoreProperties(
 
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
-    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024 * 2));
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -785,7 +785,7 @@ fn parseBidiBrackets(
 
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
-    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024 * 2));
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -854,7 +854,7 @@ fn parseDerivedBidiClass(
 
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
-    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024 * 2));
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -924,7 +924,7 @@ fn parseEastAsianWidth(
 
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
-    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1003,7 +1003,7 @@ fn parseGraphemeBreak(
 
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
-    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1056,7 +1056,7 @@ fn parseEmojiData(
 
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
-    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1109,7 +1109,7 @@ fn parseEmojiVariationSequences(
 
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
-    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1145,7 +1145,7 @@ fn parseBlocks(
 
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
-    const content = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
