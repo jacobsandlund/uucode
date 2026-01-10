@@ -21,6 +21,7 @@ emoji_data: []EmojiData = undefined,
 emoji_vs: []EmojiVariationSequence = undefined,
 bidi_paired_bracket: []types.BidiPairedBracket = undefined,
 blocks: []types.Block = undefined,
+scripts: []types.Script = undefined,
 
 const Self = @This();
 
@@ -115,6 +116,7 @@ const field_to_sections = std.StaticStringMap([]const UcdSection).initComptime(.
     .{ "is_emoji_vs_emoji", &.{.emoji_vs} },
     .{ "bidi_paired_bracket", &.{.bidi_paired_bracket} },
     .{ "block", &.{.blocks} },
+    .{ "script", &.{.scripts} },
     .{ "lowercase_mapping", &.{ .special_casing, .unicode_data } },
     .{ "titlecase_mapping", &.{ .special_casing, .unicode_data } },
     .{ "uppercase_mapping", &.{ .special_casing, .unicode_data } },
@@ -184,6 +186,11 @@ pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config
     if (comptime needsSectionAny(table_configs, .blocks)) {
         self.blocks = try allocator.alloc(types.Block, n);
         try parseBlocks(allocator, self.blocks);
+    }
+
+    if (comptime needsSectionAny(table_configs, .scripts)) {
+        self.scripts = try allocator.alloc(types.Script, n);
+        try parseScripts(allocator, self.scripts);
     }
 
     const end = try std.time.Instant.now();
@@ -1474,3 +1481,39 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Zanabazar Square", .zanabazar_square },
     .{ "Znamenny Musical Notation", .znamenny_musical_notation },
 });
+
+fn parseScripts(
+    allocator: std.mem.Allocator,
+    scripts: []types.Script,
+) !void {
+    @memset(scripts, .Unknown);
+
+    const file_path = "ucd/Scripts.txt";
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = trim(line);
+        if (trimmed.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, trimmed, ';');
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const script_name = std.mem.trim(u8, parts.next().?, " \t");
+
+        const range = try parseRange(cp_str);
+        const script = std.meta.stringToEnum(types.Script, script_name) orelse {
+            std.log.err("Unknwon script name: {s}", .{script_name});
+            unreachable;
+        };
+
+        var cp: u21 = range.start;
+        while (cp <= range.end) : (cp += 1) {
+            scripts[cp] = script;
+        }
+    }
+}
