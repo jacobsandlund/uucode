@@ -1,4 +1,4 @@
-<!-- cpv: track https://github.com/JuliaStrings/utf8proc/blob/90daf9f396cfec91668758eb9cc54bd5248a6b89/LICENSE.md?plain=1#L1-L93 -->
+<!-- copyv: https://github.com/JuliaStrings/utf8proc/blob/e5e799221b45bbb90f5fdc5c69b6b8dfbf017e78/LICENSE.md?plain=1#L1-L93 begin -->
 ## utf8proc license ##
 
 **utf8proc** is a software package originally developed
@@ -92,4 +92,4 @@ authorization of the copyright holder.
 Unicode and the Unicode logo are trademarks of Unicode, Inc., and may be
 registered in some jurisdictions. All other trademarks and registered
 trademarks mentioned herein are the property of their respective owners.
-<!-- cpv: end -->
+<!-- copyv: end -->

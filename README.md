@@ -146,7 +146,7 @@ if (b.lazyDependency("uucode", .{
 
 ### Multiple tables
 
-Fields can be split into multiple tables using `field_0` through `fields_9`, to optimize how fields are stored and accessed (with no code changes needed).
+Fields can be split into multiple tables using `fields_0` through `fields_9`, to optimize how fields are stored and accessed (with no code changes needed).
 
 
 ``` zig

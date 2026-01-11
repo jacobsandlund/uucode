@@ -1,4 +1,4 @@
-# cpv: track https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/LICENSE#L1-L27
+# copyv: https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/LICENSE#L1-L27 begin
 The MIT License (MIT)
 
 Copyright (c) 2014 Jeff Quast <contact@jeffquast.com>
@@ -26,4 +26,4 @@ Markus Kuhn -- 2007-05-26 (Unicode 5.0)
 Permission to use, copy, modify, and distribute this software
 for any purpose and without fee is hereby granted. The author
 disclaims all warranties with regard to this software.
-# cpv: end
+# copyv: end

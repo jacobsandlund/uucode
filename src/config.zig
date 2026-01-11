@@ -31,8 +31,18 @@ pub const default = Table{
             .embedded_len = 0,
         },
         .{ .name = "numeric_type", .type = types.NumericType },
-        .{ .name = "numeric_value_decimal", .type = ?u4 },
-        .{ .name = "numeric_value_digit", .type = ?u4 },
+        .{
+            .name = "numeric_value_decimal",
+            .type = ?u4,
+            .min_value = 0,
+            .max_value = 9,
+        },
+        .{
+            .name = "numeric_value_digit",
+            .type = ?u4,
+            .min_value = 0,
+            .max_value = 9,
+        },
         .{
             .name = "numeric_value_numeric",
             .type = []const u8,
@@ -525,9 +535,9 @@ pub const Field = struct {
                 std.mem.eql(u8, f.name, "type") or
                 std.mem.eql(u8, f.name, "shift_low") or
                 std.mem.eql(u8, f.name, "shift_high") or
-                std.mem.eql(u8, f.name, "max_len")) or
+                std.mem.eql(u8, f.name, "max_len") or
                 std.mem.eql(u8, f.name, "min_value") or
-                std.mem.eql(u8, f.name, "max_value"))
+                std.mem.eql(u8, f.name, "max_value")))
             {
                 @compileError("Cannot override field '" ++ f.name ++ "'");
             }

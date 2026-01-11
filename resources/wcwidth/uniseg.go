@@ -1,4 +1,4 @@
-// cpv: track https://github.com/rivo/uniseg/blob/087b3e4194c1feb0856b68d0e7c425c0994829cf/width.go#L3-L61
+// copyv: https://github.com/rivo/uniseg/blob/087b3e4194c1feb0856b68d0e7c425c0994829cf/width.go#L3-L61 begin
 // EastAsianAmbiguousWidth specifies the monospace width for East Asian
 // characters classified as Ambiguous. The default is 1 but some rare fonts
 // render them with a width of 2.
@@ -58,9 +58,9 @@ func StringWidth(s string) (width int) {
 	}
 	return
 }
-// cpv: end
+// copyv: end
 
-// cpv: track https://github.com/rivo/uniseg/blob/087b3e4194c1feb0856b68d0e7c425c0994829cf/grapheme.go#L287-L345
+// copyv: https://github.com/rivo/uniseg/blob/087b3e4194c1feb0856b68d0e7c425c0994829cf/grapheme.go#L287-L345 begin
 // FirstGraphemeClusterInString is like [FirstGraphemeCluster] but its input and
 // outputs are strings.
 func FirstGraphemeClusterInString(str string, state int) (cluster, rest string, width, newState int) {
@@ -120,4 +120,4 @@ func FirstGraphemeClusterInString(str string, state int) (cluster, rest string, 
 		}
 	}
 }
-// cpv: end
+// copyv: end

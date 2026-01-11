@@ -1,4 +1,4 @@
-# cpv: track https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/wcwidth/wcwidth.py#L103-L203
+# copyv: https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/wcwidth/wcwidth.py#L103-L203 begin
 @lru_cache(maxsize=1000)
 def wcwidth(wc, unicode_version='auto'):
     r"""
@@ -100,9 +100,9 @@ def wcswidth(pwcs, n=None, unicode_version='auto'):
         width += wcw
         idx += 1
     return width
-# cpv: end
+# copyv: end
 
-# cpv: track https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/bin/update-tables.py#L122-L160
+# copyv: https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/bin/update-tables.py#L122-L160 begin
 @dataclass(frozen=True)
 class TableEntry:
     """An entry of a unicode table."""
@@ -142,9 +142,9 @@ class TableEntry:
         if self.properties[0] in ('W', 'F'):
             return wide == 2
         return wide == 1
-# cpv: end
+# copyv: end
 
-# cpv: track https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/bin/update-tables.py#L336-L391
+# copyv: https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/bin/update-tables.py#L336-L391 begin
 def fetch_table_wide_data() -> UnicodeTableRenderCtx:
     """Fetch east-asian tables."""
     table: dict[UnicodeVersion, TableDef] = {}
@@ -201,4 +201,4 @@ def fetch_table_zero_data() -> UnicodeTableRenderCtx:
         # versions 0.2.9 - 0.2.13. Fixed in 0.2.14
         table[version].values.discard(0x00AD)  # SOFT HYPHEN
     return UnicodeTableRenderCtx('ZERO_WIDTH', table)
-# cpv: end
+# copyv: end
