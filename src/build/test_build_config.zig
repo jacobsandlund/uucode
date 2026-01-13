@@ -389,6 +389,8 @@ pub const tables = [_]config.Table{
                 "grapheme_break_no_control",
                 "special_casing_condition",
                 "bidi_class",
+                "block",
+                "script",
             },
             &.{ "wcwidth", "grapheme_break_no_control" },
         ),

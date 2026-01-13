@@ -37,7 +37,7 @@ PropertyAliases.txt
 PropertyValueAliases.txt
 ReadMe.txt
 ScriptExtensions.txt
-Scripts.txt
+# Scripts.txt (used)
 # SpecialCasing.txt (used)
 StandardizedVariants.txt
 TangutSources.txt
