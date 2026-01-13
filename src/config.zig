@@ -283,7 +283,7 @@ pub const default = Table{
         // Block
         .{ .name = "block", .type = types.Block },
 
-        // Scipt
+        // Script
         .{ .name = "script", .type = types.Script },
     },
 };

@@ -142,3 +142,16 @@ test "is_emoji_vs_base" {
     try testing.expect(get(.is_emoji_vs_base, 0x1F327)); // 🌧
     try testing.expect(!get(.is_emoji_vs_base, 0x1F46C)); // 👬
 }
+
+test "block" {
+    try testing.expectEqual(.basic_latin, get(.block, 0x0041)); // 'A'
+    try testing.expectEqual(.greek_and_coptic, get(.block, 0x03B1)); // α
+    try testing.expectEqual(.cjk_unified_ideographs, get(.block, 0x4E00)); // 一
+}
+
+test "script" {
+    try testing.expectEqual(.latin, get(.script, 0x0041)); // 'A'
+    try testing.expectEqual(.greek, get(.script, 0x03B1)); // α
+    try testing.expectEqual(.han, get(.script, 0x4E00)); // 一
+    try testing.expectEqual(.arabic, get(.script, 0x0627)); // ا
+}
