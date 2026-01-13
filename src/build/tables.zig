@@ -911,6 +911,12 @@ pub fn writeTableData(
             a.block = block_value;
         }
 
+        // Script
+        if (@hasField(AllData, "script")) {
+            const script_value = ucd.scripts[cp];
+            a.script = script_value;
+        }
+
         // OriginalGraphemeBreak
         if (@hasField(AllData, "original_grapheme_break")) {
             const original_grapheme_break = ucd.original_grapheme_break[cp];

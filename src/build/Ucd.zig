@@ -21,6 +21,7 @@ emoji_data: []EmojiData = undefined,
 emoji_vs: []EmojiVariationSequence = undefined,
 bidi_paired_bracket: []types.BidiPairedBracket = undefined,
 blocks: []types.Block = undefined,
+scripts: []types.Script = undefined,
 
 const Self = @This();
 
@@ -115,6 +116,7 @@ const field_to_sections = std.StaticStringMap([]const UcdSection).initComptime(.
     .{ "is_emoji_vs_emoji", &.{.emoji_vs} },
     .{ "bidi_paired_bracket", &.{.bidi_paired_bracket} },
     .{ "block", &.{.blocks} },
+    .{ "script", &.{.scripts} },
     .{ "lowercase_mapping", &.{ .special_casing, .unicode_data } },
     .{ "titlecase_mapping", &.{ .special_casing, .unicode_data } },
     .{ "uppercase_mapping", &.{ .special_casing, .unicode_data } },
@@ -184,6 +186,11 @@ pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config
     if (comptime needsSectionAny(table_configs, .blocks)) {
         self.blocks = try allocator.alloc(types.Block, n);
         try parseBlocks(allocator, self.blocks);
+    }
+
+    if (comptime needsSectionAny(table_configs, .scripts)) {
+        self.scripts = try allocator.alloc(types.Script, n);
+        try parseScripts(allocator, self.scripts);
     }
 
     const end = try std.time.Instant.now();
@@ -1473,4 +1480,214 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Yijing Hexagram Symbols", .yijing_hexagram_symbols },
     .{ "Zanabazar Square", .zanabazar_square },
     .{ "Znamenny Musical Notation", .znamenny_musical_notation },
+});
+
+fn parseScripts(
+    allocator: std.mem.Allocator,
+    scripts: []types.Script,
+) !void {
+    @memset(scripts, .unknown);
+
+    const file_path = "ucd/Scripts.txt";
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = trim(line);
+        if (trimmed.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, trimmed, ';');
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const script_name = std.mem.trim(u8, parts.next().?, " \t");
+
+        const range = try parseRange(cp_str);
+        const script = script_name_map.get(script_name) orelse {
+            std.log.err("Unknown script name: {s}", .{script_name});
+            unreachable;
+        };
+
+        var cp: u21 = range.start;
+        while (cp <= range.end) : (cp += 1) {
+            scripts[cp] = script;
+        }
+    }
+}
+
+const script_name_map = std.StaticStringMap(types.Script).initComptime(.{
+    .{ "Adlam", .adlam },
+    .{ "Ahom", .ahom },
+    .{ "Anatolian_Hieroglyphs", .anatolian_hieroglyphs },
+    .{ "Arabic", .arabic },
+    .{ "Armenian", .armenian },
+    .{ "Avestan", .avestan },
+    .{ "Balinese", .balinese },
+    .{ "Bamum", .bamum },
+    .{ "Bassa_Vah", .bassa_vah },
+    .{ "Batak", .batak },
+    .{ "Bengali", .bengali },
+    .{ "Bhaiksuki", .bhaiksuki },
+    .{ "Bopomofo", .bopomofo },
+    .{ "Brahmi", .brahmi },
+    .{ "Braille", .braille },
+    .{ "Buginese", .buginese },
+    .{ "Buhid", .buhid },
+    .{ "Canadian_Aboriginal", .canadian_aboriginal },
+    .{ "Carian", .carian },
+    .{ "Caucasian_Albanian", .caucasian_albanian },
+    .{ "Chakma", .chakma },
+    .{ "Cham", .cham },
+    .{ "Cherokee", .cherokee },
+    .{ "Chorasmian", .chorasmian },
+    .{ "Common", .common },
+    .{ "Coptic", .coptic },
+    .{ "Cuneiform", .cuneiform },
+    .{ "Cypriot", .cypriot },
+    .{ "Cypro_Minoan", .cypro_minoan },
+    .{ "Cyrillic", .cyrillic },
+    .{ "Deseret", .deseret },
+    .{ "Devanagari", .devanagari },
+    .{ "Dives_Akuru", .dives_akuru },
+    .{ "Dogra", .dogra },
+    .{ "Duployan", .duployan },
+    .{ "Egyptian_Hieroglyphs", .egyptian_hieroglyphs },
+    .{ "Elbasan", .elbasan },
+    .{ "Elymaic", .elymaic },
+    .{ "Ethiopic", .ethiopic },
+    .{ "Garay", .garay },
+    .{ "Georgian", .georgian },
+    .{ "Glagolitic", .glagolitic },
+    .{ "Gothic", .gothic },
+    .{ "Grantha", .grantha },
+    .{ "Greek", .greek },
+    .{ "Gujarati", .gujarati },
+    .{ "Gunjala_Gondi", .gunjala_gondi },
+    .{ "Gurmukhi", .gurmukhi },
+    .{ "Gurung_Khema", .gurung_khema },
+    .{ "Han", .han },
+    .{ "Hangul", .hangul },
+    .{ "Hanifi_Rohingya", .hanifi_rohingya },
+    .{ "Hanunoo", .hanunoo },
+    .{ "Hatran", .hatran },
+    .{ "Hebrew", .hebrew },
+    .{ "Hiragana", .hiragana },
+    .{ "Imperial_Aramaic", .imperial_aramaic },
+    .{ "Inherited", .inherited },
+    .{ "Inscriptional_Pahlavi", .inscriptional_pahlavi },
+    .{ "Inscriptional_Parthian", .inscriptional_parthian },
+    .{ "Javanese", .javanese },
+    .{ "Kaithi", .kaithi },
+    .{ "Kannada", .kannada },
+    .{ "Katakana", .katakana },
+    .{ "Kawi", .kawi },
+    .{ "Kayah_Li", .kayah_li },
+    .{ "Kharoshthi", .kharoshthi },
+    .{ "Khitan_Small_Script", .khitan_small_script },
+    .{ "Khmer", .khmer },
+    .{ "Khojki", .khojki },
+    .{ "Khudawadi", .khudawadi },
+    .{ "Kirat_Rai", .kirat_rai },
+    .{ "Lao", .lao },
+    .{ "Latin", .latin },
+    .{ "Lepcha", .lepcha },
+    .{ "Limbu", .limbu },
+    .{ "Linear_A", .linear_a },
+    .{ "Linear_B", .linear_b },
+    .{ "Lisu", .lisu },
+    .{ "Lycian", .lycian },
+    .{ "Lydian", .lydian },
+    .{ "Mahajani", .mahajani },
+    .{ "Makasar", .makasar },
+    .{ "Malayalam", .malayalam },
+    .{ "Mandaic", .mandaic },
+    .{ "Manichaean", .manichaean },
+    .{ "Marchen", .marchen },
+    .{ "Masaram_Gondi", .masaram_gondi },
+    .{ "Medefaidrin", .medefaidrin },
+    .{ "Meetei_Mayek", .meetei_mayek },
+    .{ "Mende_Kikakui", .mende_kikakui },
+    .{ "Meroitic_Cursive", .meroitic_cursive },
+    .{ "Meroitic_Hieroglyphs", .meroitic_hieroglyphs },
+    .{ "Miao", .miao },
+    .{ "Modi", .modi },
+    .{ "Mongolian", .mongolian },
+    .{ "Mro", .mro },
+    .{ "Multani", .multani },
+    .{ "Myanmar", .myanmar },
+    .{ "Nabataean", .nabataean },
+    .{ "Nag_Mundari", .nag_mundari },
+    .{ "Nandinagari", .nandinagari },
+    .{ "New_Tai_Lue", .new_tai_lue },
+    .{ "Newa", .newa },
+    .{ "Nko", .nko },
+    .{ "Nushu", .nushu },
+    .{ "Nyiakeng_Puachue_Hmong", .nyiakeng_puachue_hmong },
+    .{ "Ogham", .ogham },
+    .{ "Ol_Chiki", .ol_chiki },
+    .{ "Ol_Onal", .ol_onal },
+    .{ "Old_Hungarian", .old_hungarian },
+    .{ "Old_Italic", .old_italic },
+    .{ "Old_North_Arabian", .old_north_arabian },
+    .{ "Old_Permic", .old_permic },
+    .{ "Old_Persian", .old_persian },
+    .{ "Old_Sogdian", .old_sogdian },
+    .{ "Old_South_Arabian", .old_south_arabian },
+    .{ "Old_Turkic", .old_turkic },
+    .{ "Old_Uyghur", .old_uyghur },
+    .{ "Oriya", .oriya },
+    .{ "Osage", .osage },
+    .{ "Osmanya", .osmanya },
+    .{ "Pahawh_Hmong", .pahawh_hmong },
+    .{ "Palmyrene", .palmyrene },
+    .{ "Pau_Cin_Hau", .pau_cin_hau },
+    .{ "Phags_Pa", .phags_pa },
+    .{ "Phoenician", .phoenician },
+    .{ "Psalter_Pahlavi", .psalter_pahlavi },
+    .{ "Rejang", .rejang },
+    .{ "Runic", .runic },
+    .{ "Samaritan", .samaritan },
+    .{ "Saurashtra", .saurashtra },
+    .{ "Sharada", .sharada },
+    .{ "Shavian", .shavian },
+    .{ "Siddham", .siddham },
+    .{ "SignWriting", .signwriting },
+    .{ "Sinhala", .sinhala },
+    .{ "Sogdian", .sogdian },
+    .{ "Sora_Sompeng", .sora_sompeng },
+    .{ "Soyombo", .soyombo },
+    .{ "Sundanese", .sundanese },
+    .{ "Sunuwar", .sunuwar },
+    .{ "Syloti_Nagri", .syloti_nagri },
+    .{ "Syriac", .syriac },
+    .{ "Tagalog", .tagalog },
+    .{ "Tagbanwa", .tagbanwa },
+    .{ "Tai_Le", .tai_le },
+    .{ "Tai_Tham", .tai_tham },
+    .{ "Tai_Viet", .tai_viet },
+    .{ "Takri", .takri },
+    .{ "Tamil", .tamil },
+    .{ "Tangsa", .tangsa },
+    .{ "Tangut", .tangut },
+    .{ "Telugu", .telugu },
+    .{ "Thaana", .thaana },
+    .{ "Thai", .thai },
+    .{ "Tibetan", .tibetan },
+    .{ "Tifinagh", .tifinagh },
+    .{ "Tirhuta", .tirhuta },
+    .{ "Todhri", .todhri },
+    .{ "Toto", .toto },
+    .{ "Tulu_Tigalari", .tulu_tigalari },
+    .{ "Ugaritic", .ugaritic },
+    .{ "Unknown", .unknown },
+    .{ "Vai", .vai },
+    .{ "Vithkuqi", .vithkuqi },
+    .{ "Wancho", .wancho },
+    .{ "Warang_Citi", .warang_citi },
+    .{ "Yezidi", .yezidi },
+    .{ "Yi", .yi },
+    .{ "Zanabazar_Square", .zanabazar_square },
 });
