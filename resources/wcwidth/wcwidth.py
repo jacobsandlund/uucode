@@ -1,8 +1,8 @@
-# copyv: https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/wcwidth/wcwidth.py#L103-L203 begin
+# copyv: https://github.com/jquast/wcwidth/blob/c563bfb8ddffa88684c7c4ee92ab013d590e5a3f/wcwidth/wcwidth.py#L89-L206 begin
 @lru_cache(maxsize=1000)
 def wcwidth(wc, unicode_version='auto'):
     r"""
-    Given one Unicode character, return its printable length on a terminal.
+    Given one Unicode codepoint, return its printable length on a terminal.
 
     :param str wc: A single Unicode character.
     :param str unicode_version: A Unicode version number, such as
@@ -10,8 +10,18 @@ def wcwidth(wc, unicode_version='auto'):
         is returned by :func:`list_versions`.
 
         Any version string may be specified without error -- the nearest
-        matching version is selected.  When ``latest`` (default), the
-        highest Unicode version level is used.
+        matching version is selected.  When ``'auto'`` (default), the
+        ``UNICODE_VERSION`` environment variable is used if set, otherwise
+        the highest Unicode version level is used.
+
+        .. deprecated:: 0.3.0
+
+            This parameter is deprecated. Empirical data shows that Unicode
+            support in terminals varies not only by unicode version, but
+            by capabilities, Emojis, and specific language support.
+
+            The default ``'auto'`` behavior is recommended for all use cases.
+
     :return: The width, in cells, necessary to display the character of
         Unicode string character, ``wc``.  Returns 0 if the ``wc`` argument has
         no printable effect on a terminal (such as NUL '\0'), -1 if ``wc`` is
@@ -54,10 +64,19 @@ def wcswidth(pwcs, n=None, unicode_version='auto'):
         argument exists only for compatibility with the C POSIX function
         signature. It is suggested instead to use python's string slicing
         capability, ``wcswidth(pwcs[:n])``
-    :param str unicode_version: An explicit definition of the unicode version
-        level to use for determination, may be ``auto`` (default), which uses
-        the Environment Variable, ``UNICODE_VERSION`` if defined, or the latest
-        available unicode version, otherwise.
+    :param str unicode_version: A Unicode version number, such as
+        ``'6.0.0'``, or ``'auto'`` (default) which uses the
+        ``UNICODE_VERSION`` environment variable if defined, or the latest
+        available unicode version otherwise.
+
+        .. deprecated:: 0.3.0
+
+            This parameter is deprecated. Empirical data shows that Unicode
+            support in terminals varies not only by unicode version, but
+            by capabilities, Emojis, and specific language support.
+
+            The default ``'auto'`` behavior is recommended for all use cases.
+
     :rtype: int
     :returns: The width, in cells, needed to display the first ``n`` characters
         of the unicode string ``pwcs``.  Returns ``-1`` for C0 and C1 control
@@ -68,24 +87,24 @@ def wcswidth(pwcs, n=None, unicode_version='auto'):
     # this 'n' argument is a holdover for POSIX function
     _unicode_version = None
     end = len(pwcs) if n is None else n
-    width = 0
+    total_width = 0
     idx = 0
-    last_measured_char = None
+    last_measured_idx = -2  # Track index of last measured char for VS16
     while idx < end:
         char = pwcs[idx]
         if char == '\u200D':
             # Zero Width Joiner, do not measure this or next character
             idx += 2
             continue
-        if char == '\uFE0F' and last_measured_char:
-            # on variation selector 16 (VS16) following another character,
-            # conditionally add '1' to the measured width if that character is
-            # known to be converted from narrow to wide by the VS16 character.
+        if char == '\uFE0F' and last_measured_idx >= 0:
+            # VS16 following a measured character: add 1 if that character is
+            # known to be converted from narrow to wide by VS16.
             if _unicode_version is None:
                 _unicode_version = _wcversion_value(_wcmatch_version(unicode_version))
             if _unicode_version >= (9, 0, 0):
-                width += _bisearch(ord(last_measured_char), VS16_NARROW_TO_WIDE["9.0.0"])
-                last_measured_char = None
+                total_width += _bisearch(ord(pwcs[last_measured_idx]),
+                                         VS16_NARROW_TO_WIDE["9.0.0"])
+            last_measured_idx = -2  # Prevent double application
             idx += 1
             continue
         # measure character at current index
@@ -94,15 +113,13 @@ def wcswidth(pwcs, n=None, unicode_version='auto'):
             # early return -1 on C0 and C1 control characters
             return wcw
         if wcw > 0:
-            # track last character measured to contain a cell, so that
-            # subsequent VS-16 modifiers may be understood
-            last_measured_char = char
-        width += wcw
+            last_measured_idx = idx
+        total_width += wcw
         idx += 1
-    return width
+    return total_width
 # copyv: end
 
-# copyv: https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/bin/update-tables.py#L122-L160 begin
+# copyv: https://github.com/jquast/wcwidth/blob/c563bfb8ddffa88684c7c4ee92ab013d590e5a3f/bin/update-tables.py#L131-L169 begin
 @dataclass(frozen=True)
 class TableEntry:
     """An entry of a unicode table."""
@@ -144,7 +161,7 @@ class TableEntry:
         return wide == 1
 # copyv: end
 
-# copyv: https://github.com/jquast/wcwidth/blob/915166f9453098a56e87a7fb69e697696cefe206/bin/update-tables.py#L336-L391 begin
+# copyv: https://github.com/jquast/wcwidth/blob/c563bfb8ddffa88684c7c4ee92ab013d590e5a3f/bin/update-tables.py#L365-L420 begin
 def fetch_table_wide_data() -> UnicodeTableRenderCtx:
     """Fetch east-asian tables."""
     table: dict[UnicodeVersion, TableDef] = {}

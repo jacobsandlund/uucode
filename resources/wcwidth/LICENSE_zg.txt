@@ -1,4 +1,4 @@
-# copyv: https://codeberg.org/atman/zg/src/commit/d9f596626e8ec05a9f3e47f7bc83aedd5bd2f989/LICENSE#L1-L22 begin
+# copyv: https://codeberg.org/atman/zg/src/commit/d9f596626e8ec05a9f3e47f7bc83aedd5bd2f989/LICENSE begin
 MIT License
 
 Copyright (c) 2021 Jose Colon Rodriguez

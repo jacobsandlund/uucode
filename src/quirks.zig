@@ -1,4 +1,4 @@
-//! copyv: https://github.com/ghostty-org/ghostty/blob/1c2db85aa41c7d929cb23b408229e297dce2758a/src/quirks.zig#L1-L10 begin
+//! copyv: https://github.com/ghostty-org/ghostty/blob/9fb03ba55c9e53901193187d5c43341f5b1b430d/src/quirks.zig#L1-L10 begin
 //! Inspired by WebKit's quirks.cpp[1], this file centralizes all our
 //! sad environment-specific hacks that we have to do to make things work.
 //! This is a last resort; if we can find a general solution to a problem,
@@ -11,7 +11,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 // copyv: end
 
-/// copyv: https://github.com/ghostty-org/ghostty/blob/1c2db85aa41c7d929cb23b408229e297dce2758a/src/quirks.zig#L32-L57 begin
+/// copyv: https://github.com/ghostty-org/ghostty/blob/9fb03ba55c9e53901193187d5c43341f5b1b430d/src/quirks.zig#L32-L57 begin
 /// We use our own assert function instead of `std.debug.assert`.
 ///
 /// The only difference between this and the one in
