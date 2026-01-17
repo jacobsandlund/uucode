@@ -1,4 +1,4 @@
-# copyv: https://github.com/mattn/go-runewidth/blob/7770d045cdc691f0fcb87b0364a83f0de2d1a421/LICENSE#L1-L21 begin
+# copyv: https://github.com/mattn/go-runewidth/blob/7770d045cdc691f0fcb87b0364a83f0de2d1a421/LICENSE begin
 The MIT License (MIT)
 
 Copyright (c) 2016 Yasuhiro Matsumoto
