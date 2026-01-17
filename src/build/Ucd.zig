@@ -190,7 +190,7 @@ pub fn init(allocator: std.mem.Allocator, io: std.Io, comptime table_configs: []
 
     if (comptime needsSectionAny(table_configs, .scripts)) {
         self.scripts = try allocator.alloc(types.Script, n);
-        try parseScripts(allocator, self.scripts);
+        try parseScripts(allocator, io, self.scripts);
     }
 
     const end = try std.time.Instant.now();
@@ -1521,16 +1521,19 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
 
 fn parseScripts(
     allocator: std.mem.Allocator,
+    io: std.Io,
     scripts: []types.Script,
 ) !void {
     @memset(scripts, .unknown);
 
     const file_path = "ucd/Scripts.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
