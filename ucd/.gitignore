@@ -79,7 +79,7 @@ extracted/DerivedDecompositionType.txt
 # extracted/DerivedEastAsianWidth.txt (used)
 # extracted/DerivedGeneralCategory.txt (unused, but useful for reference)
 extracted/DerivedJoiningGroup.txt
-extracted/DerivedJoiningType.txt
+# extracted/DerivedJoiningType.txt (used)
 extracted/DerivedLineBreak.txt
 extracted/DerivedName.txt
 extracted/DerivedNumericType.txt

@@ -1701,3 +1701,12 @@ pub const Script = enum(u8) {
     yi,
     zanabazar_square,
 };
+
+pub const JoiningType = enum(u3) {
+    non_joining,
+    join_causing,
+    dual_joining,
+    right_joining,
+    left_joining,
+    transparent,
+};

@@ -285,6 +285,9 @@ pub const default = Table{
 
         // Script
         .{ .name = "script", .type = types.Script },
+
+        // Joining Type
+        .{ .name = "joining_type", .type = types.JoiningType },
     },
 };
 
