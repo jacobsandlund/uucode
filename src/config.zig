@@ -288,6 +288,9 @@ pub const default = Table{
 
         // Joining Type
         .{ .name = "joining_type", .type = types.JoiningType },
+
+        // Joining Group
+        .{ .name = "joining_group", .type = types.JoiningGroup },
     },
 };
 

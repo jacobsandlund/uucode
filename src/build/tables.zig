@@ -923,6 +923,12 @@ pub fn writeTableData(
             a.joining_type = jt_value;
         }
 
+        // Joining Group
+        if (@hasField(AllData, "joining_group")) {
+            const jg_value = ucd.joining_groups[cp];
+            a.joining_group = jg_value;
+        }
+
         // OriginalGraphemeBreak
         if (@hasField(AllData, "original_grapheme_break")) {
             const original_grapheme_break = ucd.original_grapheme_break[cp];
