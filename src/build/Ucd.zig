@@ -22,6 +22,8 @@ emoji_vs: []EmojiVariationSequence = undefined,
 bidi_paired_bracket: []types.BidiPairedBracket = undefined,
 blocks: []types.Block = undefined,
 scripts: []types.Script = undefined,
+joining_types: []types.JoiningType = undefined,
+joining_groups: []types.JoiningGroup = undefined,
 
 const Self = @This();
 
@@ -121,6 +123,8 @@ const field_to_sections = std.StaticStringMap([]const UcdSection).initComptime(.
     .{ "titlecase_mapping", &.{ .special_casing, .unicode_data } },
     .{ "uppercase_mapping", &.{ .special_casing, .unicode_data } },
     .{ "grapheme_break", &.{ .emoji_data, .original_grapheme_break, .derived_core_properties } },
+    .{ "joining_type", &.{.joining_types} },
+    .{ "joining_group", &.{.joining_groups} },
 });
 
 fn fieldNeedsSection(comptime field: []const u8, comptime ucd_section: UcdSection) bool {
@@ -191,6 +195,16 @@ pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config
     if (comptime needsSectionAny(table_configs, .scripts)) {
         self.scripts = try allocator.alloc(types.Script, n);
         try parseScripts(allocator, self.scripts);
+    }
+
+    if (comptime needsSectionAny(table_configs, .joining_types)) {
+        self.joining_types = try allocator.alloc(types.JoiningType, n);
+        try parseJoiningType(allocator, self.joining_types);
+    }
+
+    if (comptime needsSectionAny(table_configs, .joining_groups)) {
+        self.joining_groups = try allocator.alloc(types.JoiningGroup, n);
+        try parseJoiningGroup(allocator, self.joining_groups);
     }
 
     const end = try std.time.Instant.now();
@@ -1691,3 +1705,85 @@ const script_name_map = std.StaticStringMap(types.Script).initComptime(.{
     .{ "Yi", .yi },
     .{ "Zanabazar_Square", .zanabazar_square },
 });
+
+fn parseJoiningType(
+    allocator: std.mem.Allocator,
+    joining_types: []types.JoiningType,
+) !void {
+    @memset(joining_types, .non_joining);
+
+    const file_path = "ucd/extracted/DerivedJoiningType.txt";
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = trim(line);
+        if (trimmed.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, trimmed, ';');
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const jt_str = std.mem.trim(u8, parts.next().?, " \t");
+
+        const range = try parseRange(cp_str);
+        const jt: types.JoiningType = switch (jt_str[0]) {
+            'C' => .join_causing,
+            'D' => .dual_joining,
+            'R' => .right_joining,
+            'L' => .left_joining,
+            'T' => .transparent,
+            else => {
+                std.log.err("Unknown joining type: {s}", .{jt_str});
+                unreachable;
+            },
+        };
+
+        var cp: u21 = range.start;
+        while (cp <= range.end) : (cp += 1) {
+            joining_types[cp] = jt;
+        }
+    }
+}
+
+fn parseJoiningGroup(
+    allocator: std.mem.Allocator,
+    joining_groups: []types.JoiningGroup,
+) !void {
+    @memset(joining_groups, .no_joining_group);
+
+    const file_path = "ucd/extracted/DerivedJoiningGroup.txt";
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    defer allocator.free(content);
+
+    var lower_case_buffer: [32]u8 = undefined;
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = trim(line);
+        if (trimmed.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, trimmed, ';');
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const jg_str = std.mem.trim(u8, parts.next().?, " \t");
+        const jg_str_lower = std.ascii.lowerString(&lower_case_buffer, jg_str);
+
+        const range = try parseRange(cp_str);
+        const jg = std.meta.stringToEnum(types.JoiningGroup, jg_str_lower) orelse {
+            std.log.err("Unknown joining group: {s}", .{jg_str});
+            unreachable;
+        };
+
+        var cp: u21 = range.start;
+        while (cp <= range.end) : (cp += 1) {
+            joining_groups[cp] = jg;
+        }
+    }
+}
