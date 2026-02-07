@@ -897,7 +897,11 @@ pub fn writeDataField(comptime F: type, writer: *std.Io.Writer, field: F) !void 
             }
         },
         .@"enum" => {
-            try writer.print(".{s}", .{@tagName(field)});
+            if (std.enums.tagName(@TypeOf(field), field)) |name| {
+                try writer.print(".{s}", .{name});
+            } else {
+                try writer.print("@enumFromInt({d})", .{field});
+            }
         },
         .optional => {
             try writer.print("{?}", .{field});
