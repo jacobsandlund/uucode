@@ -4,7 +4,7 @@ pub const grapheme = @import("grapheme.zig");
 const testing = std.testing;
 
 test {
-    std.testing.refAllDeclsRecursive(@This());
+    std.testing.refAllDecls(@This());
 }
 
 // wcwidth tests

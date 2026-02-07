@@ -17,7 +17,7 @@ pub const getAll = getpkg.getAll;
 pub const hasField = getpkg.hasField;
 
 test {
-    std.testing.refAllDeclsRecursive(@This());
+    std.testing.refAllDecls(@This());
 }
 
 test "name" {
