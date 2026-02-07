@@ -13,7 +13,6 @@ pub const std_options: std.Options = .{
 };
 
 pub fn main(init: std.process.Init.Minimal) !void {
-    const total_start = try std.time.Instant.now();
     const table_configs: []const config.Table = if (config.is_updating_ucd) &.{updating_ucd} else &build_config.tables;
 
     var main_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -23,6 +22,8 @@ pub fn main(init: std.process.Init.Minimal) !void {
     var threaded = std.Io.Threaded.init(main_allocator, .{ .environ = init.environ });
     defer threaded.deinit();
     const io = threaded.io();
+
+    const total_start = std.Io.Clock.awake.now(io);
 
     const ucd = try Ucd.init(main_allocator, io, table_configs);
 
@@ -63,12 +64,13 @@ pub fn main(init: std.process.Init.Minimal) !void {
     }
 
     inline for (resolved_tables, 0..) |resolved_table, i| {
-        const start = try std.time.Instant.now();
+        const start = std.Io.Clock.awake.now(io);
 
         try writeTableData(
             resolved_table,
             i,
             table_allocator,
+            io,
             &ucd,
             writer,
         );
@@ -76,8 +78,10 @@ pub fn main(init: std.process.Init.Minimal) !void {
         std.log.debug("Arena end capacity: {d}", .{table_arena.queryCapacity()});
         _ = table_arena.reset(.retain_capacity);
 
-        const end = try std.time.Instant.now();
-        std.log.debug("`writeTableData` for table_config {d} time: {d}ms", .{ i, end.since(start) / std.time.ns_per_ms });
+        const end = std.Io.Clock.awake.now(io);
+        std.log.debug("`writeTableData` for table_config {d} time: {d}ms", .{
+            i, start.durationTo(end).toMilliseconds(),
+        });
     }
 
     try writer.writeAll(
@@ -105,8 +109,8 @@ pub fn main(init: std.process.Init.Minimal) !void {
 
     std.log.debug("Main arena end capacity: {d}", .{main_arena.queryCapacity()});
 
-    const total_end = try std.time.Instant.now();
-    std.log.debug("Total time: {d}ms", .{total_end.since(total_start) / std.time.ns_per_ms});
+    const total_end = std.Io.Clock.awake.now(io);
+    std.log.debug("Total time: {d}ms", .{total_start.durationTo(total_end).toMilliseconds()});
 
     if (config.is_updating_ucd) {
         @panic("Updating Ucd -- tables not configured to actully run. flip `is_updating_ucd` to false and run again");
@@ -460,6 +464,7 @@ pub fn writeTableData(
     comptime table_config: config.Table,
     table_index: usize,
     allocator: std.mem.Allocator,
+    io: std.Io,
     ucd: *const Ucd,
     writer: *std.Io.Writer,
 ) !void {
@@ -520,15 +525,15 @@ pub fn writeTableData(
     var block: B = undefined;
     var block_len: usize = 0;
 
-    const build_data_start = try std.time.Instant.now();
+    const build_data_start = std.Io.Clock.awake.now(io);
     var get_data_time: u64 = 0;
 
     for (0..config.max_code_point + 1) |cp_usize| {
-        const get_data_start = try std.time.Instant.now();
+        const get_data_start = std.Io.Clock.awake.now(io);
         const cp: u21 = @intCast(cp_usize);
 
-        const get_data_end = try std.time.Instant.now();
-        get_data_time += get_data_end.since(get_data_start);
+        const get_data_end = std.Io.Clock.awake.now(io);
+        get_data_time += @intCast(get_data_start.durationTo(get_data_end).toNanoseconds());
 
         var a: AllData = undefined;
 
@@ -1095,8 +1100,8 @@ pub fn writeTableData(
 
     std.log.debug("Getting data time: {d}ms", .{get_data_time / std.time.ns_per_ms});
 
-    const build_data_end = try std.time.Instant.now();
-    std.log.debug("Building data time: {d}ms", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
+    const build_data_end = std.Io.Clock.awake.now(io);
+    std.log.debug("Building data time: {d}ms", .{build_data_start.durationTo(build_data_end).toMilliseconds()});
 
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
 
@@ -1306,5 +1311,5 @@ fn writeTable(
 }
 
 test {
-    std.testing.refAllDeclsRecursive(@This());
+    std.testing.refAllDecls(@This());
 }

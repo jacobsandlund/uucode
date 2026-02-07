@@ -129,7 +129,7 @@ fn fieldNeedsSection(comptime field: []const u8, comptime ucd_section: UcdSectio
 }
 
 pub fn init(allocator: std.mem.Allocator, io: std.Io, comptime table_configs: []const config.Table) !Self {
-    const start = try std.time.Instant.now();
+    const start = std.Io.Clock.awake.now(io);
 
     var self: Self = .{};
 
@@ -193,8 +193,8 @@ pub fn init(allocator: std.mem.Allocator, io: std.Io, comptime table_configs: []
         try parseScripts(allocator, io, self.scripts);
     }
 
-    const end = try std.time.Instant.now();
-    std.log.debug("Ucd init time: {d}ms\n", .{end.since(start) / std.time.ns_per_ms});
+    const end = std.Io.Clock.awake.now(io);
+    std.log.debug("Ucd init time: {d}ms\n", .{start.durationTo(end).toMilliseconds()});
 
     return self;
 }
