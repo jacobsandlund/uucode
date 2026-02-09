@@ -1307,7 +1307,3 @@ fn writeTable(
         \\
     , .{prefix});
 }
-
-test {
-    std.testing.refAllDecls(@This());
-}
