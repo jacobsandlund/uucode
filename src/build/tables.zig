@@ -1309,5 +1309,5 @@ fn writeTable(
 }
 
 test {
-    std.testing.refAllDeclsRecursive(@This());
+    std.testing.refAllDecls(@This());
 }
