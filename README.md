@@ -7,7 +7,7 @@ A fast and flexible unicode library, fully configurable at build time.
 ``` zig
 const uucode = @import("uucode");
 
-var cp: u21 = undefined;
+var cp: u21 = undefined; // A u21 is the type for a Unicode code point
 
 //////////////////////
 // `get` properties
@@ -142,6 +142,14 @@ if (b.lazyDependency("uucode", .{
 })) |dep| {
     step.root_module.addImport("uucode", dep.module("uucode"));
 }
+```
+
+If you forget to add a field you're using, you'll get an error such as:
+
+```
+src/root.zig:36:29: error: enum 'get.FieldEnum__enum_8678' has no member named 'is_not_a_configured_field'
+    try testing.expect(get(.is_not_a_configured_field, 65));
+                           ~^~~~~~~~~~~~~~~~~~~~~~~~~
 ```
 
 ### Multiple tables
@@ -325,13 +333,97 @@ uucode.get(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
 
 ```
 
+For more examples of advanced configuration and extensions, see
+[src/build/test_build_config.zig](./src/build/test_build_config.zig).
+
 ## Code architecture
 
 The architecture works in a few layers:
 
-* Layer 1 (`src/build/Ucd.zig`): Parses the Unicode Character Database (UCD).
-* Layer 2 (`src/build/tables.zig`): Generates table data written to a zig file.
-* Layer 3 (`src/root.zig`): Exposes methods to fetch information from the built tables.
+* Layer 1 - [src/build/Ucd.zig](./src/build/Ucd.zig): Parses the Unicode Character Database (UCD).
+* Layer 2 - [src/build/tables.zig](./src/build/tables.zig): Generates table data written to a zig file.
+* Layer 3 - [src/root.zig](./src/root.zig): Exposes methods to fetch information from the built tables.
+
+Other important files:
+
+* [src/config.zig](./src/config.zig): Includes configuration for all fields and types for table and extension configuration.
+* [src/types.zig](./src/types.zig): Includes special types for handling slice, optional, union, and "shift" types (u21 fields that often map to themselves).
+* [src/get.zig](./src/get.zig): Comptime heavy code to look up properties given a code point.
+* [src/utf8.zig](./src/utf8.zig): Extracts code points from utf-8 text.
+* [src/grapheme.zig](./src/grapheme.zig): Includes grapheme break logic and a grapheme iterator.
+
+### Special types
+
+`uucode` has a number of special types to handle certain unicode fields.
+
+These fields are configured in [src/config.zig](./src/config.zig) with the `Field` struct:
+
+```zig
+pub const Field = struct {
+    name: [:0]const u8,
+    type: type,
+
+    // For Shift + Slice fields
+    cp_packing: CpPacking = .direct,
+    shift_low: isize = 0,
+    shift_high: isize = 0,
+
+    // For Slice fields
+    max_len: usize = 0,
+    max_offset: usize = 0,
+    embedded_len: usize = 0,
+
+    // For PackedOptional fields
+    min_value: isize = 0,
+    max_value: isize = 0,
+
+    ...
+};
+```
+
+The special types are as follows.
+
+#### PackedOptional
+
+This allows for packing an optional field, by fitting the "null" as the `maxInt` of the `IntFittingRange` between the configured `min_value` and `max_value + 1`.
+
+#### Shift
+
+This allows for including `u21` fields without bloating the data required to store the field. A number of unicode fields default to mapping to themselves (e.g. `simple_uppercase_mapping`) or some other code point that might not be too far away in value. The `Shift` type internally stores the _difference_ between the current code point and the `u21` value, and at the time of `get`, adds this difference back to get the actual value.
+
+To use a `Shift` field, the following need to be set:
+
+* `.cp_packing = .shift`
+* `.shift_low`
+* `.shift_high`
+
+Temporarily configure `shift_low` to `-@as(isize, config.max_code_point)` and `shift_high` to `config.max_code_point`, then run the build to get the actual values.
+
+```
+error: Config for field 'uppercase_mapping_first_char' does not match actual. Set .shift_low = -64190, // change from -1114111
+error: Config for field 'uppercase_mapping_first_char' does not match actual. Set .shift_high = 42561, // change from 1114111
+thread 38963456 panic: Table config doesn't match actual. See above for details
+```
+
+#### Union
+
+This allows for including `union` fields in packed tables, or with `shift` fields. No special configuration is needed, unless there is a `shift` field, then the above `shift_low` and `shift_high` need to be set.
+
+#### Slice
+
+This allows for including slice fields (`[]const T`). Unsupported for `packed` tables. This can also include a `shift` for when the slice is `u21`, used only when the length is 1.
+
+A `Slice` field stores its data as a union in either embedded in a fix-sized array (`embedded: [embedded_len]T`), in the `shift` field (for `u21` slice of length 1), or as an `offset: Offset` pointing to a "backing" buffer.
+
+To use a `Slice` field, the following need to be set:
+
+* `.max_len`: The maximum length of the slice across all code points.
+* `.max_offset`: The maximum offset in the `offset` field (technically, the length of the backing buffer after iterating over all code points).
+* `.embedded_len`: The length of the embedded array, defaulting to zero.
+* `.shift_low`: Needs to be configured as in `Shift` above for `u21` element types.
+* `.shift_high`: Needs to be configured as in `Shift` above for `u21` element types.
+
+When using `embedded_len > 0`, the slice will be stored in the `embedded` array if it fits, otherwise in the `backing` buffer.
 
 ## History and acknowledgments
 
