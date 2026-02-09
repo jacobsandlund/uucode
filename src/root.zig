@@ -160,3 +160,14 @@ test "script" {
     try testing.expectEqual(.han, get(.script, 0x4E00)); // 一
     try testing.expectEqual(.arabic, get(.script, 0x0627)); // ا
 }
+
+test "canonical_decomposition" {
+    var buffer: [1]u21 = undefined;
+    // LATIN CAPITAL LETTER A WITH GRAVE
+    var mapping = get(.canonical_decomposition_mapping, 0x00C0).with(&buffer, 0x00C0);
+    try testing.expect(std.mem.eql(u21, mapping, &.{ 0x0041, 0x0300 }));
+
+    // ARABIC LIGATURE KAF WITH MEEM INITIAL FORM
+    mapping = get(.canonical_decomposition_mapping, 0xFCC8).with(&buffer, 0xFCC8);
+    try testing.expectEqual(0, mapping.len);
+}

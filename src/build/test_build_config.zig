@@ -315,6 +315,44 @@ const maybe_bit = config.Extension{
     },
 };
 
+const canonical_decomposition = config.Extension{
+    .inputs = &.{ "decomposition_type", "decomposition_mapping" },
+    .compute = &computeCanonicalDecomposition,
+    .fields = &.{.{
+        .name = "canonical_decomposition_mapping",
+        .type = []const u21,
+        .cp_packing = .shift,
+        .max_len = 2,
+        .max_offset = 2092,
+        .shift_low = -181519,
+        .shift_high = 99324,
+    }},
+};
+
+fn computeCanonicalDecomposition(
+    allocator: std.mem.Allocator,
+    cp: u21,
+    data: anytype,
+    backing: anytype,
+    tracking: anytype,
+) std.mem.Allocator.Error!void {
+    var buffer: [1]u21 = undefined;
+    const mapping = if (data.decomposition_type == .canonical)
+        data.decomposition_mapping.sliceWith(backing.decomposition_mapping, &buffer, cp)
+    else
+        &[_]u21{};
+
+    try types.sliceFieldInit(
+        "canonical_decomposition_mapping",
+        allocator,
+        cp,
+        data,
+        backing,
+        tracking,
+        mapping,
+    );
+}
+
 pub const tables = [_]config.Table{
     .{
         .extensions = &.{
@@ -324,6 +362,7 @@ pub const tables = [_]config.Table{
             next_or_prev,
             next_or_prev_direct,
             bidi_paired_bracket_direct,
+            canonical_decomposition,
         },
         .fields = &.{
             foo.field("foo"),
@@ -340,6 +379,7 @@ pub const tables = [_]config.Table{
             }),
             d.field("grapheme_break"),
             d.field("special_lowercase_mapping"),
+            canonical_decomposition.field("canonical_decomposition_mapping"),
         },
     },
     .{
