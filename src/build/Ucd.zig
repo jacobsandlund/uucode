@@ -24,6 +24,7 @@ blocks: []types.Block = undefined,
 scripts: []types.Script = undefined,
 joining_types: []types.JoiningType = undefined,
 joining_groups: []types.JoiningGroup = undefined,
+composition_exclusions: []bool = undefined,
 
 const Self = @This();
 
@@ -125,6 +126,7 @@ const field_to_sections = std.StaticStringMap([]const UcdSection).initComptime(.
     .{ "grapheme_break", &.{ .emoji_data, .original_grapheme_break, .derived_core_properties } },
     .{ "joining_type", &.{.joining_types} },
     .{ "joining_group", &.{.joining_groups} },
+    .{ "composition_excluded", &.{.composition_exclusions} },
 });
 
 fn fieldNeedsSection(comptime field: []const u8, comptime ucd_section: UcdSection) bool {
@@ -205,6 +207,11 @@ pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config
     if (comptime needsSectionAny(table_configs, .joining_groups)) {
         self.joining_groups = try allocator.alloc(types.JoiningGroup, n);
         try parseJoiningGroup(allocator, self.joining_groups);
+    }
+
+    if (comptime needsSectionAny(table_configs, .composition_exclusions)) {
+        self.composition_exclusions = try allocator.alloc(bool, n);
+        try parseCompositionExclusions(allocator, self.composition_exclusions);
     }
 
     const end = try std.time.Instant.now();
@@ -1786,4 +1793,34 @@ fn parseJoiningGroup(
             joining_groups[cp] = jg;
         }
     }
+}
+
+fn parseCompositionExclusions(
+    allocator: std.mem.Allocator,
+    composition_exclusions: []bool,
+) !void {
+    @memset(composition_exclusions, false);
+
+    const file_path = "ucd/CompositionExclusions.txt";
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = trim(line);
+        if (trimmed.len == 0) continue;
+
+        const cp_str = trimmed;
+        const range = try parseRange(cp_str);
+
+        var cp: u21 = range.start;
+        while (cp <= range.end) : (cp += 1) {
+            composition_exclusions[cp] = true;
+        }
+    }
+    //
 }

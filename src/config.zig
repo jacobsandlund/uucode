@@ -291,6 +291,9 @@ pub const default = Table{
 
         // Joining Group
         .{ .name = "joining_group", .type = types.JoiningGroup },
+
+        // Composition Exclusions
+        .{ .name = "composition_excluded", .type = bool },
     },
 };
 
