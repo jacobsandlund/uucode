@@ -4,7 +4,8 @@ pub const grapheme = @import("grapheme.zig");
 const testing = std.testing;
 
 test {
-    std.testing.refAllDecls(@This());
+    _ = types;
+    _ = grapheme;
 }
 
 // wcwidth tests

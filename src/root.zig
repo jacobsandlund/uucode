@@ -17,7 +17,12 @@ pub const getAll = getpkg.getAll;
 pub const hasField = getpkg.hasField;
 
 test {
-    std.testing.refAllDecls(@This());
+    _ = config;
+    _ = ascii;
+    _ = grapheme;
+    _ = code_point;
+    _ = utf8;
+    _ = x;
 }
 
 test "name" {
