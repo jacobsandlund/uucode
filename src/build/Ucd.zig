@@ -48,7 +48,7 @@ pub fn needsSection(comptime table_config: config.Table, comptime ucd_section: U
 }
 
 fn needsSectionAny(comptime table_configs: []const config.Table, comptime ucd_section: UcdSection) bool {
-    @setEvalBranchQuota(10_000);
+    @setEvalBranchQuota(20_000);
 
     inline for (table_configs) |table_config| {
         if (needsSection(table_config, ucd_section)) {
@@ -361,19 +361,29 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
 
         // Fill ranges or gaps
         while (next_cp < cp) : (next_cp += 1) {
-            unicode_data[next_cp] = range_data orelse .{
-                .decomposition_mapping = try allocator.dupe(u21, &.{next_cp}),
-                .simple_uppercase_mapping = next_cp,
-                .simple_titlecase_mapping = next_cp,
-                .simple_lowercase_mapping = next_cp,
+            var data: UnicodeData = range_data orelse .{
+                .decomposition_mapping = &.{},
+                .simple_uppercase_mapping = 0,
+                .simple_titlecase_mapping = 0,
+                .simple_lowercase_mapping = 0,
             };
+            data.decomposition_mapping = try allocator.dupe(u21, &.{next_cp});
+            data.simple_uppercase_mapping = next_cp;
+            data.simple_titlecase_mapping = next_cp;
+            data.simple_lowercase_mapping = next_cp;
+            unicode_data[next_cp] = data;
         }
 
         if (range_data != null) {
             // We're in a range, so the next entry marks the last, with the same
             // information.
             inlineAssert(std.mem.endsWith(u8, parts.next().?, "Last>"));
-            unicode_data[next_cp] = range_data.?;
+            var data = range_data.?;
+            data.decomposition_mapping = try allocator.dupe(u21, &.{next_cp});
+            data.simple_uppercase_mapping = next_cp;
+            data.simple_titlecase_mapping = next_cp;
+            data.simple_lowercase_mapping = next_cp;
+            unicode_data[next_cp] = data;
             range_data = null;
             next_cp = cp + 1;
             continue;

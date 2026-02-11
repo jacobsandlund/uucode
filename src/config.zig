@@ -62,7 +62,7 @@ pub const default = Table{
             .name = "simple_uppercase_mapping",
             .type = u21,
             .cp_packing = .shift,
-            .shift_low = -65533,
+            .shift_low = -38864,
             .shift_high = 42561,
         },
         .{

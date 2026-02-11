@@ -86,7 +86,7 @@ const info = config.Extension{
             .name = "uppercase_mapping_first_char",
             .type = u21,
             .cp_packing = .shift,
-            .shift_low = -65533,
+            .shift_low = -64190,
             .shift_high = 42561,
         },
         .{ .name = "has_simple_lowercase", .type = bool },

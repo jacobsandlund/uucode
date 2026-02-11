@@ -236,6 +236,7 @@ fn BlockMap(comptime B: type) type {
 }
 
 fn TableAllData(comptime c: config.Table) type {
+    @setEvalBranchQuota(20_000);
     var x_fields_len: usize = 0;
     var fields_len_bound: usize = c.fields.len;
     for (c.extensions) |x| {
@@ -1103,6 +1104,11 @@ pub fn writeTableData(
     inlineAssert(block_len == 0);
 
     std.log.debug("Getting data time: {d}ms", .{get_data_time / std.time.ns_per_ms});
+    std.log.debug("Table stage 1 len: {d}", .{stage1.items.len});
+    std.log.debug("Table stage 2 len: {d} (u{d})", .{ stage2.items.len, 1 + std.math.log2(stage2.items.len) });
+    if (stages == .three) {
+        std.log.debug("Table stage 3 len: {d} (u{d})", .{ stage3.items.len, 1 + std.math.log2(stage3.items.len) });
+    }
 
     const build_data_end = try std.time.Instant.now();
     std.log.debug("Building data time: {d}ms", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
