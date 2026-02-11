@@ -189,3 +189,8 @@ test "canonical_decomposition" {
     mapping = get(.canonical_decomposition_mapping, 0xFCC8).with(&buffer, 0xFCC8);
     try testing.expectEqual(0, mapping.len);
 }
+
+test "is_composition_exclusion" {
+    try testing.expect(get(.is_composition_exclusion, 0x0958));
+    try testing.expect(!get(.is_composition_exclusion, 0x0300));
+}

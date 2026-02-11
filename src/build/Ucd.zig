@@ -24,7 +24,7 @@ blocks: []types.Block = undefined,
 scripts: []types.Script = undefined,
 joining_types: []types.JoiningType = undefined,
 joining_groups: []types.JoiningGroup = undefined,
-composition_exclusions: []bool = undefined,
+is_composition_exclusions: []bool = undefined,
 
 const Self = @This();
 
@@ -126,7 +126,7 @@ const field_to_sections = std.StaticStringMap([]const UcdSection).initComptime(.
     .{ "grapheme_break", &.{ .emoji_data, .original_grapheme_break, .derived_core_properties } },
     .{ "joining_type", &.{.joining_types} },
     .{ "joining_group", &.{.joining_groups} },
-    .{ "composition_excluded", &.{.composition_exclusions} },
+    .{ "is_composition_exclusion", &.{.is_composition_exclusions} },
 });
 
 fn fieldNeedsSection(comptime field: []const u8, comptime ucd_section: UcdSection) bool {
@@ -209,9 +209,9 @@ pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config
         try parseJoiningGroup(allocator, self.joining_groups);
     }
 
-    if (comptime needsSectionAny(table_configs, .composition_exclusions)) {
-        self.composition_exclusions = try allocator.alloc(bool, n);
-        try parseCompositionExclusions(allocator, self.composition_exclusions);
+    if (comptime needsSectionAny(table_configs, .is_composition_exclusions)) {
+        self.is_composition_exclusions = try allocator.alloc(bool, n);
+        try parseCompositionExclusions(allocator, self.is_composition_exclusions);
     }
 
     const end = try std.time.Instant.now();
@@ -1823,9 +1823,9 @@ fn parseJoiningGroup(
 
 fn parseCompositionExclusions(
     allocator: std.mem.Allocator,
-    composition_exclusions: []bool,
+    is_composition_exclusions: []bool,
 ) !void {
-    @memset(composition_exclusions, false);
+    @memset(is_composition_exclusions, false);
 
     const file_path = "ucd/CompositionExclusions.txt";
 
@@ -1845,8 +1845,7 @@ fn parseCompositionExclusions(
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
-            composition_exclusions[cp] = true;
+            is_composition_exclusions[cp] = true;
         }
     }
-    //
 }

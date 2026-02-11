@@ -930,9 +930,9 @@ pub fn writeTableData(
         }
 
         // Composition Exclusions
-        if (@hasField(AllData, "composition_excluded")) {
-            const excluded = ucd.composition_exclusions[cp];
-            a.composition_excluded = excluded;
+        if (@hasField(AllData, "is_composition_exclusion")) {
+            const exclusion = ucd.is_composition_exclusions[cp];
+            a.is_composition_exclusion = exclusion;
         }
 
         // OriginalGraphemeBreak

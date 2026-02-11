@@ -415,6 +415,7 @@ pub const tables = [_]config.Table{
             d.field("is_uppercase"),
             d.field("is_emoji_vs_base"),
             d.field("is_emoji_modifier_base"),
+            d.field("is_composition_exclusion"),
         },
     },
     .{
