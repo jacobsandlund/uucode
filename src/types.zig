@@ -928,23 +928,26 @@ pub fn Backing(comptime D: type) type {
 }
 
 pub fn Table3(
+    comptime Stage1: type,
+    comptime Stage2: type,
     comptime Data_: type,
     comptime Backing_: type,
 ) type {
     return struct {
-        stage1: []const u16,
-        stage2: []const u16,
+        stage1: []const Stage1,
+        stage2: []const Stage2,
         stage3: []const Data_,
         backing: *const Backing_,
     };
 }
 
 pub fn Table2(
+    comptime Stage1: type,
     comptime Data_: type,
     comptime Backing_: type,
 ) type {
     return struct {
-        stage1: []const u16,
+        stage1: []const Stage1,
         stage2: []const Data_,
         backing: *const Backing_,
     };

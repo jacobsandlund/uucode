@@ -219,16 +219,16 @@ const UnicodeData = struct {
     canonical_combining_class: u8 = 0,
     bidi_class: ?types.BidiClass = null,
     decomposition_type: types.DecompositionType = .default,
-    decomposition_mapping: []const u21 = &.{},
+    decomposition_mapping: []const u21,
     numeric_type: types.NumericType = .none,
     numeric_value_decimal: ?u4 = null,
     numeric_value_digit: ?u4 = null,
     numeric_value_numeric: []const u8 = &.{},
     is_bidi_mirrored: bool = false,
     unicode_1_name: []const u8 = &.{},
-    simple_uppercase_mapping: ?u21 = null,
-    simple_lowercase_mapping: ?u21 = null,
-    simple_titlecase_mapping: ?u21 = null,
+    simple_uppercase_mapping: u21,
+    simple_lowercase_mapping: u21,
+    simple_titlecase_mapping: u21,
 };
 
 const CaseFolding = struct {
@@ -354,7 +354,12 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
 
         // Fill ranges or gaps
         while (next_cp < cp) : (next_cp += 1) {
-            unicode_data[next_cp] = range_data orelse .{};
+            unicode_data[next_cp] = range_data orelse .{
+                .decomposition_mapping = try allocator.dupe(u21, &.{next_cp}),
+                .simple_uppercase_mapping = next_cp,
+                .simple_titlecase_mapping = next_cp,
+                .simple_lowercase_mapping = next_cp,
+            };
         }
 
         if (range_data != null) {
@@ -393,17 +398,27 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
             unreachable;
         };
 
-        const simple_uppercase_mapping = if (simple_uppercase_mapping_str.len == 0) null else try parseCp(simple_uppercase_mapping_str);
-        const simple_lowercase_mapping = if (simple_lowercase_mapping_str.len == 0) null else try parseCp(simple_lowercase_mapping_str);
-        const simple_titlecase_mapping = if (simple_titlecase_mapping_str.len == 0) null else try parseCp(simple_titlecase_mapping_str);
+        const simple_uppercase_mapping = if (simple_uppercase_mapping_str.len == 0)
+            cp
+        else
+            try parseCp(simple_uppercase_mapping_str);
+        const simple_lowercase_mapping = if (simple_lowercase_mapping_str.len == 0)
+            cp
+        else
+            try parseCp(simple_lowercase_mapping_str);
+        const simple_titlecase_mapping = if (simple_titlecase_mapping_str.len == 0)
+            simple_uppercase_mapping
+        else
+            try parseCp(simple_titlecase_mapping_str);
 
         // Parse decomposition type and mapping from single field
-        // Default: character decomposes to itself (field 5 empty)
-        var decomposition_type = types.DecompositionType.default;
+        var decomposition_type: types.DecompositionType = undefined;
         var decomposition_mapping: [40]u21 = undefined; // Max is currently 18
-        var decomposition_mapping_len: usize = 0;
+        var decomposition_mapping_len: usize = undefined;
 
         if (decomposition_str.len > 0) {
+            decomposition_mapping_len = 0;
+
             // Non-empty field means canonical unless explicit type is given
             decomposition_type = types.DecompositionType.canonical;
             var mapping_str = decomposition_str;
@@ -432,6 +447,11 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
                     decomposition_mapping_len += 1;
                 }
             }
+        } else {
+            // Default: character decomposes to itself (field 5 empty)
+            decomposition_type = .default;
+            decomposition_mapping_len = 1;
+            decomposition_mapping[0] = cp;
         }
 
         // Determine numeric type and parse values based on which field has a value
@@ -486,8 +506,14 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
     }
 
     // Fill any remaining gaps at the end with default values
-    for (next_cp..config.max_code_point + 1) |cp| {
-        unicode_data[cp] = .{};
+    for (next_cp..config.max_code_point + 1) |cp_usize| {
+        const cp: u21 = @intCast(cp_usize);
+        unicode_data[cp_usize] = .{
+            .decomposition_mapping = try allocator.dupe(u21, &.{cp}),
+            .simple_uppercase_mapping = cp,
+            .simple_titlecase_mapping = cp,
+            .simple_lowercase_mapping = cp,
+        };
     }
 }
 

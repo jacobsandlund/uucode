@@ -86,7 +86,7 @@ const info = config.Extension{
             .name = "uppercase_mapping_first_char",
             .type = u21,
             .cp_packing = .shift,
-            .shift_low = -64190,
+            .shift_low = -65533,
             .shift_high = 42561,
         },
         .{ .name = "has_simple_lowercase", .type = bool },
@@ -120,7 +120,7 @@ fn computeInfo(
         )[0],
     );
 
-    data.has_simple_lowercase = data.simple_lowercase_mapping.unshift(cp) != null;
+    data.has_simple_lowercase = data.simple_lowercase_mapping.unshift(cp) != cp;
 
     var buffer: [13]u8 = undefined;
     for (data.numeric_value_numeric.slice(backing.numeric_value_numeric), 0..) |digit, i| {
@@ -380,6 +380,8 @@ pub const tables = [_]config.Table{
             d.field("grapheme_break"),
             d.field("special_lowercase_mapping"),
             canonical_decomposition.field("canonical_decomposition_mapping"),
+            d.field("decomposition_type"),
+            d.field("decomposition_mapping"),
         },
     },
     .{
