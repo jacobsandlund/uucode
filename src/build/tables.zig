@@ -929,6 +929,12 @@ pub fn writeTableData(
             a.joining_group = jg_value;
         }
 
+        // Composition Exclusions
+        if (@hasField(AllData, "composition_excluded")) {
+            const excluded = ucd.composition_exclusions[cp];
+            a.composition_excluded = excluded;
+        }
+
         // OriginalGraphemeBreak
         if (@hasField(AllData, "original_grapheme_break")) {
             const original_grapheme_break = ucd.original_grapheme_break[cp];
