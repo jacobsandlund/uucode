@@ -1016,7 +1016,23 @@ pub fn Slice(
         pub const Tracking = SliceTracking(T, max_len);
         pub const BackingBuffer = []const T;
         pub const MutableBackingBuffer = []T;
-        pub const empty = Self{ .len = 0, .data = .{ .offset = 0 } };
+        pub const empty = if (embedded_len == 0)
+            Self{ .len = 0, .data = .{ .offset = 0 } }
+        else
+            Self{
+                .len = 0,
+                .data = .{
+                    .embedded = blk: {
+                        var buffer: [embedded_len]T = undefined;
+                        @memset(&buffer, 0);
+                        break :blk buffer;
+                    },
+                },
+            };
+        pub const same = if (c.cp_packing == .shift) Self{
+            .data = .{ .shift = .same },
+            .len = 1,
+        } else void{};
 
         inline fn _init(
             allocator: Allocator,
@@ -1202,39 +1218,54 @@ pub fn Slice(
         }
 
         pub fn write(self: Self, writer: *std.Io.Writer) !void {
-            try writer.print(
-                \\.{{
-                \\    .len = {},
-                \\
-            , .{self.len});
-
             if ((comptime c.cp_packing == .shift) and self.len == 1) {
-                try writer.writeAll("    .data = .{ .shift = ");
-                try self.data.shift.write(writer);
-                try writer.writeAll("},\n");
-            } else if ((comptime embedded_len == 0) or self.len > embedded_len) {
-                try writer.print(
-                    \\    .data = .{{ .offset = {} }},
-                    \\
-                , .{self.data.offset});
-            } else {
-                try writer.writeAll(
-                    \\    .data = .{ .embedded = .{
-                );
-                for (self.data.embedded) |item| {
-                    try writeDataField(T, writer, item);
-                    try writer.writeAll(",");
+                if (self.eql(.same)) {
+                    try writer.writeAll(".same");
+                } else {
+                    try writer.print(
+                        \\.{{
+                        \\    .len = {},
+                        \\    .data = .{{ .shift = 
+                    , .{self.len});
+                    try self.data.shift.write(writer);
+                    try writer.writeAll(
+                        \\},
+                        \\}
+                        \\
+                    );
                 }
-                try writer.writeAll(
-                    \\} },
-                    \\
-                );
+            } else if ((comptime embedded_len == 0) or self.len > embedded_len) {
+                if (self.eql(.empty)) {
+                    try writer.writeAll(".empty");
+                } else {
+                    try writer.print(
+                        \\.{{
+                        \\    .len = {},
+                        \\    .data = .{{ .offset = {} }},
+                        \\}}
+                        \\
+                    , .{ self.len, self.data.offset });
+                }
+            } else {
+                if (self.eql(.empty)) {
+                    try writer.writeAll(".empty");
+                } else {
+                    try writer.print(
+                        \\.{{
+                        \\    .len = {},
+                        \\    .data = .{{ .embedded = .{{
+                    , .{self.len});
+                    for (self.data.embedded) |item| {
+                        try writeDataField(T, writer, item);
+                        try writer.writeAll(",");
+                    }
+                    try writer.writeAll(
+                        \\} },
+                        \\}
+                        \\
+                    );
+                }
             }
-
-            try writer.writeAll(
-                \\}
-                \\
-            );
         }
     };
 }
@@ -1502,9 +1533,14 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         const Self = @This();
         pub const Tracking = ShiftTracking;
         pub const @"null" = Self{ .data = null_data };
+        pub const same = Self{ .data = 0 };
 
         pub fn init(cp: u21, d: u21) Self {
             return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
+        }
+
+        pub fn initData(data: Int) Self {
+            return Self{ .data = data };
         }
 
         pub fn initOptional(cp: u21, o: ?u21) Self {
@@ -1537,12 +1573,18 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         }
 
         pub fn write(self: Self, writer: *std.Io.Writer) !void {
-            try writer.print(
-                \\.{{
-                \\    .data = {},
-                \\}}
-                \\
-            , .{self.data});
+            if (self.eql(.same)) {
+                try writer.writeAll(".same");
+            } else if ((comptime is_optional) and self.eql(.null)) {
+                try writer.writeAll(".null");
+            } else {
+                try writer.print(
+                    \\.{{
+                    \\    .data = {},
+                    \\}}
+                    \\
+                , .{self.data});
+            }
         }
     } else packed struct {
         data: Int,
@@ -1550,6 +1592,7 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
         const Self = @This();
         pub const Tracking = ShiftTracking;
         pub const @"null" = Self{ .data = null_data };
+        pub const same = Self{ .data = 0 };
 
         pub fn init(cp: u21, d: u21) Self {
             return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
