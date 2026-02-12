@@ -10,7 +10,7 @@ BidiTest.txt
 # Blocks.txt (used)
 CJKRadicals.txt
 # CaseFolding.txt (used)
-CompositionExclusions.txt
+# CompositionExclusions.txt (used)
 DerivedAge.txt
 # DerivedCoreProperties.txt (used)
 DerivedNormalizationProps.txt

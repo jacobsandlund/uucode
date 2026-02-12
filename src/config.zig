@@ -60,21 +60,21 @@ pub const default = Table{
         },
         .{
             .name = "simple_uppercase_mapping",
-            .type = ?u21,
+            .type = u21,
             .cp_packing = .shift,
             .shift_low = -38864,
             .shift_high = 42561,
         },
         .{
             .name = "simple_lowercase_mapping",
-            .type = ?u21,
+            .type = u21,
             .cp_packing = .shift,
             .shift_low = -42561,
             .shift_high = 38864,
         },
         .{
             .name = "simple_titlecase_mapping",
-            .type = ?u21,
+            .type = u21,
             .cp_packing = .shift,
             .shift_low = -38864,
             .shift_high = 42561,
@@ -291,6 +291,9 @@ pub const default = Table{
 
         // Joining Group
         .{ .name = "joining_group", .type = types.JoiningGroup },
+
+        // Composition Exclusions
+        .{ .name = "is_composition_exclusion", .type = bool },
     },
 };
 

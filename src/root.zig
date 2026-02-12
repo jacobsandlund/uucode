@@ -42,7 +42,7 @@ test "case_folding_simple" {
 
 test "simple_uppercase_mapping" {
     try testing.expectEqual(65, get(.simple_uppercase_mapping, 97)); // 'a'
-    try testing.expectEqual(null, get(.simple_uppercase_mapping, 65)); // 'A'
+    try testing.expectEqual(65, get(.simple_uppercase_mapping, 65)); // 'A'
 }
 
 test "generalCategory" {
@@ -57,7 +57,7 @@ test "getAll" {
     const d_checks = getAll("checks", 65);
     // auto should become packed for these checks
     try testing.expectEqual(.@"packed", @typeInfo(TypeOfAll("checks")).@"struct".layout);
-    try testing.expect(d_checks.simple_uppercase_mapping.unshift(65) == null);
+    try testing.expect(d_checks.simple_uppercase_mapping.unshift(65) == 65);
     try testing.expect(d_checks.is_alphabetic);
     try testing.expect(d_checks.is_uppercase);
     try testing.expect(!d_checks.is_lowercase);
@@ -161,6 +161,24 @@ test "script" {
     try testing.expectEqual(.arabic, get(.script, 0x0627)); // ا
 }
 
+test "decomposition" {
+    var buffer: [1]u21 = undefined;
+    // LATIN CAPITAL LETTER A WITH GRAVE
+    var mapping = get(.decomposition_mapping, 0x00C0).with(&buffer, 0x00C0);
+    try testing.expectEqual(.canonical, get(.decomposition_type, 0x00C0));
+    try testing.expect(std.mem.eql(u21, mapping, &.{ 0x0041, 0x0300 }));
+
+    // ARABIC LIGATURE KAF WITH MEEM INITIAL FORM
+    mapping = get(.decomposition_mapping, 0xFCC8).with(&buffer, 0xFCC8);
+    try testing.expectEqual(.initial, get(.decomposition_type, 0xFCC8));
+    try testing.expect(std.mem.eql(u21, mapping, &.{ 0x0643, 0x0645 }));
+
+    // 'A'
+    mapping = get(.decomposition_mapping, 0x0041).with(&buffer, 0x0041);
+    try testing.expectEqual(.default, get(.decomposition_type, 0x0041));
+    try testing.expect(std.mem.eql(u21, mapping, &.{0x0041}));
+}
+
 test "canonical_decomposition" {
     var buffer: [1]u21 = undefined;
     // LATIN CAPITAL LETTER A WITH GRAVE
@@ -170,4 +188,9 @@ test "canonical_decomposition" {
     // ARABIC LIGATURE KAF WITH MEEM INITIAL FORM
     mapping = get(.canonical_decomposition_mapping, 0xFCC8).with(&buffer, 0xFCC8);
     try testing.expectEqual(0, mapping.len);
+}
+
+test "is_composition_exclusion" {
+    try testing.expect(get(.is_composition_exclusion, 0x0958));
+    try testing.expect(!get(.is_composition_exclusion, 0x0300));
 }

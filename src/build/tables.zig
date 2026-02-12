@@ -189,7 +189,7 @@ fn eqlData(comptime Data: type, a: Data, b: Data) bool {
 }
 
 fn DataMap(comptime Data: type) type {
-    return std.HashMapUnmanaged(Data, u16, struct {
+    return std.HashMapUnmanaged(Data, u32, struct {
         pub fn hash(self: @This(), data: Data) u64 {
             _ = self;
             var hasher = std.hash.Wyhash.init(128572459);
@@ -207,31 +207,29 @@ fn DataMap(comptime Data: type) type {
 const block_size = 256;
 
 fn Block(comptime T: type) type {
-    inlineAssert(T == u16 or @typeInfo(T) == .@"struct");
+    inlineAssert(T == u32 or @typeInfo(T) == .@"struct");
     return [block_size]T;
 }
 
 fn BlockMap(comptime B: type) type {
     const T = @typeInfo(B).array.child;
-    return std.HashMapUnmanaged(B, u16, struct {
+    return std.HashMapUnmanaged(B, u32, struct {
         pub fn hash(self: @This(), block: B) u64 {
             _ = self;
             var hasher = std.hash.Wyhash.init(915296157);
-            if (T == u16) {
-                std.hash.autoHash(&hasher, block);
-            } else {
+            if (@typeInfo(T) == .@"struct") {
                 for (block) |item| {
                     hashData(T, &hasher, item);
                 }
+            } else {
+                std.hash.autoHash(&hasher, block);
             }
             return hasher.final();
         }
 
         pub fn eql(self: @This(), a: B, b: B) bool {
             _ = self;
-            if (T == u16) {
-                return std.mem.eql(T, &a, &b);
-            } else {
+            if (@typeInfo(T) == .@"struct") {
                 for (a, b) |a_item, b_item| {
                     if (!eqlData(T, a_item, b_item)) {
                         return false;
@@ -239,14 +237,17 @@ fn BlockMap(comptime B: type) type {
                 }
 
                 return true;
+            } else {
+                return std.mem.eql(T, &a, &b);
             }
         }
     }, std.hash_map.default_max_load_percentage);
 }
 
 fn TableAllData(comptime c: config.Table) type {
-    var x_fields_len: u16 = 0;
-    var fields_len_bound: u16 = c.fields.len;
+    @setEvalBranchQuota(20_000);
+    var x_fields_len: usize = 0;
+    var fields_len_bound: usize = c.fields.len;
     for (c.extensions) |x| {
         x_fields_len += x.fields.len;
         fields_len_bound += x.fields.len;
@@ -510,7 +511,7 @@ pub fn writeTableData(
     const num_stages: u2 = if (stages == .three) 3 else 2;
 
     const Stage2Elem = if (stages == .three)
-        u16
+        u32
     else
         Data;
 
@@ -520,7 +521,7 @@ pub fn writeTableData(
     var stage3: std.ArrayListUnmanaged(Data) = .empty;
     var block_map: BlockMap(B) = .empty;
     var stage2: std.ArrayListUnmanaged(Stage2Elem) = .empty;
-    var stage1: std.ArrayListUnmanaged(u16) = .empty;
+    var stage1: std.ArrayListUnmanaged(u32) = .empty;
 
     var block: B = undefined;
     var block_len: usize = 0;
@@ -795,7 +796,7 @@ pub fn writeTableData(
                         allocator,
                         backing.lowercase_mapping,
                         &tracking.lowercase_mapping,
-                        &.{unicode_data.simple_lowercase_mapping orelse cp},
+                        &.{unicode_data.simple_lowercase_mapping},
                         cp,
                     );
                 }
@@ -818,7 +819,7 @@ pub fn writeTableData(
                         allocator,
                         backing.titlecase_mapping,
                         &tracking.titlecase_mapping,
-                        &.{unicode_data.simple_titlecase_mapping orelse cp},
+                        &.{unicode_data.simple_titlecase_mapping},
                         cp,
                     );
                 }
@@ -841,7 +842,7 @@ pub fn writeTableData(
                         allocator,
                         backing.uppercase_mapping,
                         &tracking.uppercase_mapping,
-                        &.{unicode_data.simple_uppercase_mapping orelse cp},
+                        &.{unicode_data.simple_uppercase_mapping},
                         cp,
                     );
                 }
@@ -941,6 +942,12 @@ pub fn writeTableData(
         if (@hasField(AllData, "joining_group")) {
             const jg_value = ucd.joining_groups[cp];
             a.joining_group = jg_value;
+        }
+
+        // Composition Exclusions
+        if (@hasField(AllData, "is_composition_exclusion")) {
+            const exclusion = ucd.is_composition_exclusions[cp];
+            a.is_composition_exclusion = exclusion;
         }
 
         // OriginalGraphemeBreak
@@ -1076,7 +1083,7 @@ pub fn writeTableData(
 
         if (stages == .three) {
             const gop = try data_map.getOrPut(allocator, d);
-            var data_index: u16 = undefined;
+            var data_index: u32 = undefined;
             if (gop.found_existing) {
                 data_index = gop.value_ptr.*;
             } else {
@@ -1094,7 +1101,7 @@ pub fn writeTableData(
 
         if (block_len == block_size) {
             const gop_block = try block_map.getOrPut(allocator, block);
-            var block_offset: u16 = undefined;
+            var block_offset: u32 = undefined;
             if (gop_block.found_existing) {
                 block_offset = gop_block.value_ptr.*;
             } else {
@@ -1111,6 +1118,11 @@ pub fn writeTableData(
     inlineAssert(block_len == 0);
 
     std.log.debug("Getting data time: {d}ms", .{get_data_time / std.time.ns_per_ms});
+    std.log.debug("Table stage 1 len: {d}", .{stage1.items.len});
+    std.log.debug("Table stage 2 len: {d} (u{d})", .{ stage2.items.len, 1 + std.math.log2(stage2.items.len) });
+    if (stages == .three) {
+        std.log.debug("Table stage 3 len: {d} (u{d})", .{ stage3.items.len, 1 + std.math.log2(stage3.items.len) });
+    }
 
     const build_data_end = std.Io.Clock.awake.now(io);
     std.log.debug("Building data time: {d}ms", .{build_data_start.durationTo(build_data_end).toMilliseconds()});
@@ -1173,10 +1185,30 @@ pub fn writeTableData(
         \\
         \\const {s}_Data = types.Data({s}_config);
         \\const {s}_Backing = types.Backing({s}_Data);
+        \\const {s}_Stage1 = u{};
         \\
     ,
-        .{ TypePrefix, prefix, TypePrefix, TypePrefix },
+        .{
+            TypePrefix,
+            prefix,
+            TypePrefix,
+            TypePrefix,
+            TypePrefix,
+            1 + std.math.log2(stage2.items.len),
+        },
     );
+
+    if (stages == .three) {
+        try writer.print(
+            \\const {s}_Stage2 = u{};
+            \\
+        ,
+            .{
+                TypePrefix,
+                1 + std.math.log2(stage3.items.len),
+            },
+        );
+    }
 
     inline for (@typeInfo(Backing).@"struct".fields) |field| {
         if (!@hasField(Data, field.name)) continue;
@@ -1232,10 +1264,10 @@ pub fn writeTableData(
     try writer.print(
         \\}};
         \\
-        \\const {s}_stage1: [{d}]u16 align(std.atomic.cache_line) = .{{
+        \\const {s}_stage1: [{d}]{s}_Stage1 align(std.atomic.cache_line) = .{{
         \\
     ,
-        .{ prefix, stage1.items.len },
+        .{ prefix, stage1.items.len, TypePrefix },
     );
 
     for (stage1.items) |item| {
@@ -1247,10 +1279,10 @@ pub fn writeTableData(
             \\
             \\}};
             \\
-            \\const {s}_stage2: [{d}]u16 align(std.atomic.cache_line) = .{{
+            \\const {s}_stage2: [{d}]{s}_Stage2 align(std.atomic.cache_line) = .{{
             \\
         ,
-            .{ prefix, stage2.items.len },
+            .{ prefix, stage2.items.len, TypePrefix },
         );
 
         for (stage2.items) |item| {
@@ -1293,31 +1325,41 @@ fn writeTable(
     }
 
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
-    const num_stages: u2 = if (table_config.stages == .three) 3 else 2;
-
-    try writer.print(
-        \\types.Table{d}({s}_Data, {s}_Backing){{
-        \\        .stage1 = &{s}_stage1,
-        \\        .stage2 = &{s}_stage2,
-        \\
-    , .{
-        num_stages,
-        TypePrefix,
-        TypePrefix,
-        prefix,
-        prefix,
-    });
 
     if (table_config.stages == .three) {
         try writer.print(
+            \\types.Table3({s}_Stage1, {s}_Stage2, {s}_Data, {s}_Backing){{
+            \\        .stage1 = &{s}_stage1,
+            \\        .stage2 = &{s}_stage2,
             \\        .stage3 = &{s}_stage3,
+            \\        .backing = &{s}_backing,
+            \\    }},
             \\
-        , .{prefix});
+        , .{
+            TypePrefix,
+            TypePrefix,
+            TypePrefix,
+            TypePrefix,
+            prefix,
+            prefix,
+            prefix,
+            prefix,
+        });
+    } else {
+        try writer.print(
+            \\types.Table2({s}_Stage1, {s}_Data, {s}_Backing){{
+            \\        .stage1 = &{s}_stage1,
+            \\        .stage2 = &{s}_stage2,
+            \\        .backing = &{s}_backing,
+            \\    }},
+            \\
+        , .{
+            TypePrefix,
+            TypePrefix,
+            TypePrefix,
+            prefix,
+            prefix,
+            prefix,
+        });
     }
-
-    try writer.print(
-        \\        .backing = &{s}_backing,
-        \\    }},
-        \\
-    , .{prefix});
 }

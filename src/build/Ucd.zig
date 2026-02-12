@@ -24,6 +24,7 @@ blocks: []types.Block = undefined,
 scripts: []types.Script = undefined,
 joining_types: []types.JoiningType = undefined,
 joining_groups: []types.JoiningGroup = undefined,
+is_composition_exclusions: []bool = undefined,
 
 const Self = @This();
 
@@ -47,7 +48,7 @@ pub fn needsSection(comptime table_config: config.Table, comptime ucd_section: U
 }
 
 fn needsSectionAny(comptime table_configs: []const config.Table, comptime ucd_section: UcdSection) bool {
-    @setEvalBranchQuota(10_000);
+    @setEvalBranchQuota(20_000);
 
     inline for (table_configs) |table_config| {
         if (needsSection(table_config, ucd_section)) {
@@ -125,6 +126,7 @@ const field_to_sections = std.StaticStringMap([]const UcdSection).initComptime(.
     .{ "grapheme_break", &.{ .emoji_data, .original_grapheme_break, .derived_core_properties } },
     .{ "joining_type", &.{.joining_types} },
     .{ "joining_group", &.{.joining_groups} },
+    .{ "is_composition_exclusion", &.{.is_composition_exclusions} },
 });
 
 fn fieldNeedsSection(comptime field: []const u8, comptime ucd_section: UcdSection) bool {
@@ -207,6 +209,11 @@ pub fn init(allocator: std.mem.Allocator, io: std.Io, comptime table_configs: []
         try parseJoiningGroup(allocator, io, self.joining_groups);
     }
 
+    if (comptime needsSectionAny(table_configs, .is_composition_exclusions)) {
+        self.is_composition_exclusions = try allocator.alloc(bool, n);
+        try parseCompositionExclusions(allocator, io, self.is_composition_exclusions);
+    }
+
     const end = std.Io.Clock.awake.now(io);
     std.log.debug("Ucd init time: {d}ms\n", .{start.durationTo(end).toMilliseconds()});
 
@@ -219,16 +226,16 @@ const UnicodeData = struct {
     canonical_combining_class: u8 = 0,
     bidi_class: ?types.BidiClass = null,
     decomposition_type: types.DecompositionType = .default,
-    decomposition_mapping: []const u21 = &.{},
+    decomposition_mapping: []const u21,
     numeric_type: types.NumericType = .none,
     numeric_value_decimal: ?u4 = null,
     numeric_value_digit: ?u4 = null,
     numeric_value_numeric: []const u8 = &.{},
     is_bidi_mirrored: bool = false,
     unicode_1_name: []const u8 = &.{},
-    simple_uppercase_mapping: ?u21 = null,
-    simple_lowercase_mapping: ?u21 = null,
-    simple_titlecase_mapping: ?u21 = null,
+    simple_uppercase_mapping: u21,
+    simple_lowercase_mapping: u21,
+    simple_titlecase_mapping: u21,
 };
 
 const CaseFolding = struct {
@@ -360,14 +367,29 @@ fn parseUnicodeData(
 
         // Fill ranges or gaps
         while (next_cp < cp) : (next_cp += 1) {
-            unicode_data[next_cp] = range_data orelse .{};
+            var data: UnicodeData = range_data orelse .{
+                .decomposition_mapping = &.{},
+                .simple_uppercase_mapping = 0,
+                .simple_titlecase_mapping = 0,
+                .simple_lowercase_mapping = 0,
+            };
+            data.decomposition_mapping = try allocator.dupe(u21, &.{next_cp});
+            data.simple_uppercase_mapping = next_cp;
+            data.simple_titlecase_mapping = next_cp;
+            data.simple_lowercase_mapping = next_cp;
+            unicode_data[next_cp] = data;
         }
 
         if (range_data != null) {
             // We're in a range, so the next entry marks the last, with the same
             // information.
             inlineAssert(std.mem.endsWith(u8, parts.next().?, "Last>"));
-            unicode_data[next_cp] = range_data.?;
+            var data = range_data.?;
+            data.decomposition_mapping = try allocator.dupe(u21, &.{next_cp});
+            data.simple_uppercase_mapping = next_cp;
+            data.simple_titlecase_mapping = next_cp;
+            data.simple_lowercase_mapping = next_cp;
+            unicode_data[next_cp] = data;
             range_data = null;
             next_cp = cp + 1;
             continue;
@@ -399,17 +421,27 @@ fn parseUnicodeData(
             unreachable;
         };
 
-        const simple_uppercase_mapping = if (simple_uppercase_mapping_str.len == 0) null else try parseCp(simple_uppercase_mapping_str);
-        const simple_lowercase_mapping = if (simple_lowercase_mapping_str.len == 0) null else try parseCp(simple_lowercase_mapping_str);
-        const simple_titlecase_mapping = if (simple_titlecase_mapping_str.len == 0) null else try parseCp(simple_titlecase_mapping_str);
+        const simple_uppercase_mapping = if (simple_uppercase_mapping_str.len == 0)
+            cp
+        else
+            try parseCp(simple_uppercase_mapping_str);
+        const simple_lowercase_mapping = if (simple_lowercase_mapping_str.len == 0)
+            cp
+        else
+            try parseCp(simple_lowercase_mapping_str);
+        const simple_titlecase_mapping = if (simple_titlecase_mapping_str.len == 0)
+            simple_uppercase_mapping
+        else
+            try parseCp(simple_titlecase_mapping_str);
 
         // Parse decomposition type and mapping from single field
-        // Default: character decomposes to itself (field 5 empty)
-        var decomposition_type = types.DecompositionType.default;
+        var decomposition_type: types.DecompositionType = undefined;
         var decomposition_mapping: [40]u21 = undefined; // Max is currently 18
-        var decomposition_mapping_len: usize = 0;
+        var decomposition_mapping_len: usize = undefined;
 
         if (decomposition_str.len > 0) {
+            decomposition_mapping_len = 0;
+
             // Non-empty field means canonical unless explicit type is given
             decomposition_type = types.DecompositionType.canonical;
             var mapping_str = decomposition_str;
@@ -438,6 +470,11 @@ fn parseUnicodeData(
                     decomposition_mapping_len += 1;
                 }
             }
+        } else {
+            // Default: character decomposes to itself (field 5 empty)
+            decomposition_type = .default;
+            decomposition_mapping_len = 1;
+            decomposition_mapping[0] = cp;
         }
 
         // Determine numeric type and parse values based on which field has a value
@@ -492,8 +529,14 @@ fn parseUnicodeData(
     }
 
     // Fill any remaining gaps at the end with default values
-    for (next_cp..config.max_code_point + 1) |cp| {
-        unicode_data[cp] = .{};
+    for (next_cp..config.max_code_point + 1) |cp_usize| {
+        const cp: u21 = @intCast(cp_usize);
+        unicode_data[cp_usize] = .{
+            .decomposition_mapping = try allocator.dupe(u21, &.{cp}),
+            .simple_uppercase_mapping = cp,
+            .simple_titlecase_mapping = cp,
+            .simple_lowercase_mapping = cp,
+        };
     }
 }
 
@@ -1830,6 +1873,38 @@ fn parseJoiningGroup(
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
             joining_groups[cp] = jg;
+        }
+    }
+}
+
+fn parseCompositionExclusions(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    is_composition_exclusions: []bool,
+) !void {
+    @memset(is_composition_exclusions, false);
+
+    const file_path = "ucd/CompositionExclusions.txt";
+
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
+
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = trim(line);
+        if (trimmed.len == 0) continue;
+
+        const cp_str = trimmed;
+        const range = try parseRange(cp_str);
+
+        var cp: u21 = range.start;
+        while (cp <= range.end) : (cp += 1) {
+            is_composition_exclusions[cp] = true;
         }
     }
 }

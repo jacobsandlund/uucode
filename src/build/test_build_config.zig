@@ -120,7 +120,7 @@ fn computeInfo(
         )[0],
     );
 
-    data.has_simple_lowercase = data.simple_lowercase_mapping.unshift(cp) != null;
+    data.has_simple_lowercase = data.simple_lowercase_mapping.unshift(cp) != cp;
 
     var buffer: [13]u8 = undefined;
     for (data.numeric_value_numeric.slice(backing.numeric_value_numeric), 0..) |digit, i| {
@@ -380,6 +380,8 @@ pub const tables = [_]config.Table{
             d.field("grapheme_break"),
             d.field("special_lowercase_mapping"),
             canonical_decomposition.field("canonical_decomposition_mapping"),
+            d.field("decomposition_type"),
+            d.field("decomposition_mapping"),
         },
     },
     .{
@@ -413,6 +415,7 @@ pub const tables = [_]config.Table{
             d.field("is_uppercase"),
             d.field("is_emoji_vs_base"),
             d.field("is_emoji_modifier_base"),
+            d.field("is_composition_exclusion"),
         },
     },
     .{
