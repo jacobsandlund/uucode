@@ -13,7 +13,7 @@ pub const default = Table{
             .name = "name",
             .type = []const u8,
             .max_len = 88,
-            .max_offset = 1030461,
+            .max_offset = 1041131,
             .embedded_len = 2,
         },
         .{ .name = "general_category", .type = types.GeneralCategory },
@@ -115,7 +115,7 @@ pub const default = Table{
             .shift_low = -42561,
             .shift_high = 35267,
             .max_len = 1,
-            .max_offset = 1423,
+            .max_offset = 1451,
             .embedded_len = 0,
         },
         .{
