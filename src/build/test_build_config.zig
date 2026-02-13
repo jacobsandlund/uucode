@@ -375,7 +375,7 @@ pub const tables = [_]config.Table{
             bidi_paired_bracket_direct.field("bidi_paired_bracket_direct"),
             d.field("name").override(.{
                 .embedded_len = 15,
-                .max_offset = 986096,
+                .max_offset = 996337,
             }),
             d.field("grapheme_break"),
             d.field("special_lowercase_mapping"),

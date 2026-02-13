@@ -405,14 +405,22 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
         const simple_titlecase_mapping_str = parts.next().?; // Field 14
 
         const name = if (std.mem.endsWith(u8, name_str, "First>")) name_str["<".len..(name_str.len - ", First>".len)] else name_str;
-        const general_category = general_category_map.get(general_category_str) orelse {
+        const general_category = general_category_map.get(general_category_str) orelse blk: {
             std.log.err("Unknown general category: {s}", .{general_category_str});
-            unreachable;
+            if (!config.is_updating_ucd) {
+                unreachable;
+            } else {
+                break :blk .other_not_assigned;
+            }
         };
 
-        const bidi_class = bidi_class_map.get(bidi_class_str) orelse {
+        const bidi_class = bidi_class_map.get(bidi_class_str) orelse blk: {
             std.log.err("Unknown bidi class: {s}", .{bidi_class_str});
-            unreachable;
+            if (!config.is_updating_ucd) {
+                unreachable;
+            } else {
+                break :blk .left_to_right;
+            }
         };
 
         const simple_uppercase_mapping = if (simple_uppercase_mapping_str.len == 0)
@@ -447,9 +455,13 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
                     unreachable;
                 };
                 const type_str = decomposition_str[1..end_bracket];
-                decomposition_type = std.meta.stringToEnum(types.DecompositionType, type_str) orelse {
+                decomposition_type = std.meta.stringToEnum(types.DecompositionType, type_str) orelse blk: {
                     std.log.err("Unknown decomposition type: {s}", .{type_str});
-                    unreachable;
+                    if (!config.is_updating_ucd) {
+                        unreachable;
+                    } else {
+                        break :blk .canonical;
+                    }
                 };
                 mapping_str = std.mem.trim(u8, decomposition_str[end_bracket + 1 ..], " \t");
             }
@@ -702,9 +714,13 @@ fn parseSpecialCasing(
                 while (condition_parts.next()) |condition_part| {
                     const trimmed_condition = std.mem.trim(u8, condition_part, " \t");
                     if (trimmed_condition.len == 0) continue;
-                    const condition = special_casing_condition_map.get(trimmed_condition) orelse {
+                    const condition = special_casing_condition_map.get(trimmed_condition) orelse blk: {
                         std.log.err("Unknown special casing condition '{s}'", .{trimmed_condition});
-                        unreachable;
+                        if (!config.is_updating_ucd) {
+                            unreachable;
+                        } else {
+                            break :blk .final_sigma;
+                        }
                     };
                     conditions[conditions_len] = condition;
                     conditions_len += 1;
@@ -796,9 +812,13 @@ fn parseDerivedCoreProperties(
         const value_str = if (parts.next()) |v| std.mem.trim(u8, v, " \t") else "";
 
         const range = try parseRange(cp_str);
-        const property = derived_core_property_map.get(property_str) orelse {
+        const property = derived_core_property_map.get(property_str) orelse blk: {
             std.log.err("Unknown DerivedCoreProperties property: {s}", .{property_str});
-            unreachable;
+            if (!config.is_updating_ucd) {
+                unreachable;
+            } else {
+                break :blk .is_alphabetic;
+            }
         };
 
         const indic_conjunct_break = indic_conjunct_break_map.get(value_str);
@@ -807,9 +827,13 @@ fn parseDerivedCoreProperties(
         while (cp <= range.end) : (cp += 1) {
             switch (property) {
                 .indic_conjunct_break => {
-                    derived_core_properties[cp].indic_conjunct_break = indic_conjunct_break orelse {
+                    derived_core_properties[cp].indic_conjunct_break = indic_conjunct_break orelse blk: {
                         std.log.err("Unknown InCB value: {s}", .{value_str});
-                        unreachable;
+                        if (!config.is_updating_ucd) {
+                            unreachable;
+                        } else {
+                            break :blk .linker;
+                        }
                     };
                 },
                 inline else => |p| {
@@ -919,9 +943,13 @@ fn parseDerivedBidiClass(
                 continue;
             }
 
-            const bidi_class = bidi_longform_map.get(class_str) orelse {
+            const bidi_class = bidi_longform_map.get(class_str) orelse blk: {
                 std.log.err("Unknown @missing BidiClass value: {s}", .{class_str});
-                unreachable;
+                if (!config.is_updating_ucd) {
+                    unreachable;
+                } else {
+                    break :blk .left_to_right;
+                }
             };
 
             var cp: u21 = range.start;
@@ -941,9 +969,13 @@ fn parseDerivedBidiClass(
 
         const range = try parseRange(cp_str);
 
-        const bidi_class = bidi_class_map.get(class_str) orelse {
+        const bidi_class = bidi_class_map.get(class_str) orelse blk: {
             std.log.err("Unknown BidiClass value: {s}", .{class_str});
-            unreachable;
+            if (!config.is_updating_ucd) {
+                unreachable;
+            } else {
+                break :blk .left_to_right;
+            }
         };
 
         var cp: u21 = range.start;
@@ -988,7 +1020,9 @@ fn parseEastAsianWidth(
 
             if (!std.mem.eql(u8, width_str, "Wide")) {
                 std.log.err("Unknown @missing EastAsianWidth value: {s}", .{width_str});
-                unreachable;
+                if (!config.is_updating_ucd) {
+                    unreachable;
+                }
             }
 
             var cp: u21 = range.start;
@@ -1008,9 +1042,13 @@ fn parseEastAsianWidth(
 
         const range = try parseRange(cp_str);
 
-        const width = east_asian_width_map.get(width_str) orelse {
+        const width = east_asian_width_map.get(width_str) orelse blk: {
             std.log.err("Unknown EastAsianWidth value: {s}", .{width_str});
-            unreachable;
+            if (!config.is_updating_ucd) {
+                unreachable;
+            } else {
+                break :blk .wide;
+            }
         };
 
         var cp: u21 = range.start;
@@ -1106,9 +1144,13 @@ fn parseEmojiData(
 
         var cp: u21 = range.start;
         while (cp <= range.end) : (cp += 1) {
-            const property = emoji_data_property_map.get(prop_str) orelse {
+            const property = emoji_data_property_map.get(prop_str) orelse blk: {
                 std.log.err("Unknown EmojiData property: {s}", .{prop_str});
-                unreachable;
+                if (!config.is_updating_ucd) {
+                    unreachable;
+                } else {
+                    break :blk .is_emoji;
+                }
             };
 
             switch (property) {
@@ -1186,9 +1228,13 @@ fn parseBlocks(
 
         const range = try parseRange(cp_str);
 
-        const block = block_name_map.get(block_name) orelse {
+        const block = block_name_map.get(block_name) orelse blk: {
             std.log.err("Unknown block name: {s}", .{block_name});
-            unreachable;
+            if (!config.is_updating_ucd) {
+                unreachable;
+            } else {
+                break :blk .no_block;
+            }
         };
 
         var cp: u21 = range.start;
@@ -1226,6 +1272,7 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Bassa Vah", .bassa_vah },
     .{ "Batak", .batak },
     .{ "Bengali", .bengali },
+    .{ "Beria Erfe", .beria_erfe },
     .{ "Bhaiksuki", .bhaiksuki },
     .{ "Block Elements", .block_elements },
     .{ "Bopomofo Extended", .bopomofo_extended },
@@ -1252,6 +1299,7 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "CJK Unified Ideographs Extension G", .cjk_unified_ideographs_extension_g },
     .{ "CJK Unified Ideographs Extension H", .cjk_unified_ideographs_extension_h },
     .{ "CJK Unified Ideographs Extension I", .cjk_unified_ideographs_extension_i },
+    .{ "CJK Unified Ideographs Extension J", .cjk_unified_ideographs_extension_j },
     .{ "CJK Unified Ideographs", .cjk_unified_ideographs },
     .{ "Carian", .carian },
     .{ "Caucasian Albanian", .caucasian_albanian },
@@ -1405,6 +1453,7 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Miao", .miao },
     .{ "Miscellaneous Mathematical Symbols-A", .miscellaneous_mathematical_symbols_a },
     .{ "Miscellaneous Mathematical Symbols-B", .miscellaneous_mathematical_symbols_b },
+    .{ "Miscellaneous Symbols Supplement", .miscellaneous_symbols_supplement },
     .{ "Miscellaneous Symbols and Arrows", .miscellaneous_symbols_and_arrows },
     .{ "Miscellaneous Symbols and Pictographs", .miscellaneous_symbols_and_pictographs },
     .{ "Miscellaneous Symbols", .miscellaneous_symbols },
@@ -1463,10 +1512,12 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Runic", .runic },
     .{ "Samaritan", .samaritan },
     .{ "Saurashtra", .saurashtra },
+    .{ "Sharada Supplement", .sharada_supplement },
     .{ "Sharada", .sharada },
     .{ "Shavian", .shavian },
     .{ "Shorthand Format Controls", .shorthand_format_controls },
     .{ "Siddham", .siddham },
+    .{ "Sidetic", .sidetic },
     .{ "Sinhala Archaic Numbers", .sinhala_archaic_numbers },
     .{ "Sinhala", .sinhala },
     .{ "Small Form Variants", .small_form_variants },
@@ -1502,10 +1553,12 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Tai Tham", .tai_tham },
     .{ "Tai Viet", .tai_viet },
     .{ "Tai Xuan Jing Symbols", .tai_xuan_jing_symbols },
+    .{ "Tai Yo", .tai_yo },
     .{ "Takri", .takri },
     .{ "Tamil Supplement", .tamil_supplement },
     .{ "Tamil", .tamil },
     .{ "Tangsa", .tangsa },
+    .{ "Tangut Components Supplement", .tangut_components_supplement },
     .{ "Tangut Components", .tangut_components },
     .{ "Tangut Supplement", .tangut_supplement },
     .{ "Tangut", .tangut },
@@ -1516,6 +1569,7 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Tifinagh", .tifinagh },
     .{ "Tirhuta", .tirhuta },
     .{ "Todhri", .todhri },
+    .{ "Tolong Siki", .tolong_siki },
     .{ "Toto", .toto },
     .{ "Transport and Map Symbols", .transport_and_map_symbols },
     .{ "Tulu-Tigalari", .tulu_tigalari },
@@ -1563,9 +1617,13 @@ fn parseScripts(
         const script_name = std.mem.trim(u8, parts.next().?, " \t");
 
         const range = try parseRange(cp_str);
-        const script = script_name_map.get(script_name) orelse {
+        const script = script_name_map.get(script_name) orelse blk: {
             std.log.err("Unknown script name: {s}", .{script_name});
-            unreachable;
+            if (!config.is_updating_ucd) {
+                unreachable;
+            } else {
+                break :blk .unknown;
+            }
         };
 
         var cp: u21 = range.start;
@@ -1587,6 +1645,7 @@ const script_name_map = std.StaticStringMap(types.Script).initComptime(.{
     .{ "Bassa_Vah", .bassa_vah },
     .{ "Batak", .batak },
     .{ "Bengali", .bengali },
+    .{ "Beria_Erfe", .beria_erfe },
     .{ "Bhaiksuki", .bhaiksuki },
     .{ "Bopomofo", .bopomofo },
     .{ "Brahmi", .brahmi },
@@ -1711,6 +1770,7 @@ const script_name_map = std.StaticStringMap(types.Script).initComptime(.{
     .{ "Sharada", .sharada },
     .{ "Shavian", .shavian },
     .{ "Siddham", .siddham },
+    .{ "Sidetic", .sidetic },
     .{ "SignWriting", .signwriting },
     .{ "Sinhala", .sinhala },
     .{ "Sogdian", .sogdian },
@@ -1725,6 +1785,7 @@ const script_name_map = std.StaticStringMap(types.Script).initComptime(.{
     .{ "Tai_Le", .tai_le },
     .{ "Tai_Tham", .tai_tham },
     .{ "Tai_Viet", .tai_viet },
+    .{ "Tai_Yo", .tai_yo },
     .{ "Takri", .takri },
     .{ "Tamil", .tamil },
     .{ "Tangsa", .tangsa },
@@ -1736,10 +1797,10 @@ const script_name_map = std.StaticStringMap(types.Script).initComptime(.{
     .{ "Tifinagh", .tifinagh },
     .{ "Tirhuta", .tirhuta },
     .{ "Todhri", .todhri },
+    .{ "Tolong_Siki", .tolong_siki },
     .{ "Toto", .toto },
     .{ "Tulu_Tigalari", .tulu_tigalari },
     .{ "Ugaritic", .ugaritic },
-    .{ "Unknown", .unknown },
     .{ "Vai", .vai },
     .{ "Vithkuqi", .vithkuqi },
     .{ "Wancho", .wancho },
@@ -1773,16 +1834,13 @@ fn parseJoiningType(
         const jt_str = std.mem.trim(u8, parts.next().?, " \t");
 
         const range = try parseRange(cp_str);
-        const jt: types.JoiningType = switch (jt_str[0]) {
-            'C' => .join_causing,
-            'D' => .dual_joining,
-            'R' => .right_joining,
-            'L' => .left_joining,
-            'T' => .transparent,
-            else => {
-                std.log.err("Unknown joining type: {s}", .{jt_str});
+        const jt = joining_type_map.get(jt_str) orelse blk: {
+            std.log.err("Unknown joining type: {s}", .{jt_str});
+            if (!config.is_updating_ucd) {
                 unreachable;
-            },
+            } else {
+                break :blk .non_joining;
+            }
         };
 
         var cp: u21 = range.start;
@@ -1791,6 +1849,14 @@ fn parseJoiningType(
         }
     }
 }
+
+const joining_type_map = std.StaticStringMap(types.JoiningType).initComptime(.{
+    .{ "C", .join_causing },
+    .{ "D", .dual_joining },
+    .{ "L", .left_joining },
+    .{ "R", .right_joining },
+    .{ "T", .transparent },
+});
 
 fn parseJoiningGroup(
     allocator: std.mem.Allocator,
@@ -1806,8 +1872,6 @@ fn parseJoiningGroup(
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
     defer allocator.free(content);
 
-    var lower_case_buffer: [32]u8 = undefined;
-
     var lines = std.mem.splitScalar(u8, content, '\n');
     while (lines.next()) |line| {
         const trimmed = trim(line);
@@ -1816,12 +1880,15 @@ fn parseJoiningGroup(
         var parts = std.mem.splitScalar(u8, trimmed, ';');
         const cp_str = std.mem.trim(u8, parts.next().?, " \t");
         const jg_str = std.mem.trim(u8, parts.next().?, " \t");
-        const jg_str_lower = std.ascii.lowerString(&lower_case_buffer, jg_str);
 
         const range = try parseRange(cp_str);
-        const jg = std.meta.stringToEnum(types.JoiningGroup, jg_str_lower) orelse {
+        const jg = joining_group_map.get(jg_str) orelse blk: {
             std.log.err("Unknown joining group: {s}", .{jg_str});
-            unreachable;
+            if (!config.is_updating_ucd) {
+                unreachable;
+            } else {
+                break :blk .no_joining_group;
+            }
         };
 
         var cp: u21 = range.start;
@@ -1830,6 +1897,115 @@ fn parseJoiningGroup(
         }
     }
 }
+
+const joining_group_map = std.StaticStringMap(types.JoiningGroup).initComptime(.{
+    .{ "No_Joining_Group", .no_joining_group },
+    .{ "African_Feh", .african_feh },
+    .{ "African_Noon", .african_noon },
+    .{ "African_Qaf", .african_qaf },
+    .{ "Ain", .ain },
+    .{ "Alaph", .alaph },
+    .{ "Alef", .alef },
+    .{ "Beh", .beh },
+    .{ "Beth", .beth },
+    .{ "Burushaski_Yeh_Barree", .burushaski_yeh_barree },
+    .{ "Dal", .dal },
+    .{ "Dalath_Rish", .dalath_rish },
+    .{ "E", .e },
+    .{ "Farsi_Yeh", .farsi_yeh },
+    .{ "Fe", .fe },
+    .{ "Feh", .feh },
+    .{ "Final_Semkath", .final_semkath },
+    .{ "Gaf", .gaf },
+    .{ "Gamal", .gamal },
+    .{ "Hah", .hah },
+    .{ "Hanifi_Rohingya_Kinna_Ya", .hanifi_rohingya_kinna_ya },
+    .{ "Hanifi_Rohingya_Pa", .hanifi_rohingya_pa },
+    .{ "He", .he },
+    .{ "Heh", .heh },
+    .{ "Heh_Goal", .heh_goal },
+    .{ "Heth", .heth },
+    .{ "Kaf", .kaf },
+    .{ "Kaph", .kaph },
+    .{ "Kashmiri_Yeh", .kashmiri_yeh },
+    .{ "Khaph", .khaph },
+    .{ "Knotted_Heh", .knotted_heh },
+    .{ "Lam", .lam },
+    .{ "Lamadh", .lamadh },
+    .{ "Malayalam_Bha", .malayalam_bha },
+    .{ "Malayalam_Ja", .malayalam_ja },
+    .{ "Malayalam_Lla", .malayalam_lla },
+    .{ "Malayalam_Llla", .malayalam_llla },
+    .{ "Malayalam_Nga", .malayalam_nga },
+    .{ "Malayalam_Nna", .malayalam_nna },
+    .{ "Malayalam_Nnna", .malayalam_nnna },
+    .{ "Malayalam_Nya", .malayalam_nya },
+    .{ "Malayalam_Ra", .malayalam_ra },
+    .{ "Malayalam_Ssa", .malayalam_ssa },
+    .{ "Malayalam_Tta", .malayalam_tta },
+    .{ "Manichaean_Aleph", .manichaean_aleph },
+    .{ "Manichaean_Ayin", .manichaean_ayin },
+    .{ "Manichaean_Beth", .manichaean_beth },
+    .{ "Manichaean_Daleth", .manichaean_daleth },
+    .{ "Manichaean_Dhamedh", .manichaean_dhamedh },
+    .{ "Manichaean_Five", .manichaean_five },
+    .{ "Manichaean_Gimel", .manichaean_gimel },
+    .{ "Manichaean_Heth", .manichaean_heth },
+    .{ "Manichaean_Hundred", .manichaean_hundred },
+    .{ "Manichaean_Kaph", .manichaean_kaph },
+    .{ "Manichaean_Lamedh", .manichaean_lamedh },
+    .{ "Manichaean_Mem", .manichaean_mem },
+    .{ "Manichaean_Nun", .manichaean_nun },
+    .{ "Manichaean_One", .manichaean_one },
+    .{ "Manichaean_Pe", .manichaean_pe },
+    .{ "Manichaean_Qoph", .manichaean_qoph },
+    .{ "Manichaean_Resh", .manichaean_resh },
+    .{ "Manichaean_Sadhe", .manichaean_sadhe },
+    .{ "Manichaean_Samekh", .manichaean_samekh },
+    .{ "Manichaean_Taw", .manichaean_taw },
+    .{ "Manichaean_Ten", .manichaean_ten },
+    .{ "Manichaean_Teth", .manichaean_teth },
+    .{ "Manichaean_Thamedh", .manichaean_thamedh },
+    .{ "Manichaean_Twenty", .manichaean_twenty },
+    .{ "Manichaean_Waw", .manichaean_waw },
+    .{ "Manichaean_Yodh", .manichaean_yodh },
+    .{ "Manichaean_Zayin", .manichaean_zayin },
+    .{ "Meem", .meem },
+    .{ "Mim", .mim },
+    .{ "Noon", .noon },
+    .{ "Nun", .nun },
+    .{ "Nya", .nya },
+    .{ "Pe", .pe },
+    .{ "Qaf", .qaf },
+    .{ "Qaph", .qaph },
+    .{ "Reh", .reh },
+    .{ "Reversed_Pe", .reversed_pe },
+    .{ "Rohingya_Yeh", .rohingya_yeh },
+    .{ "Sad", .sad },
+    .{ "Sadhe", .sadhe },
+    .{ "Seen", .seen },
+    .{ "Semkath", .semkath },
+    .{ "Shin", .shin },
+    .{ "Straight_Waw", .straight_waw },
+    .{ "Swash_Kaf", .swash_kaf },
+    .{ "Syriac_Waw", .syriac_waw },
+    .{ "Tah", .tah },
+    .{ "Taw", .taw },
+    .{ "Teh_Marbuta", .teh_marbuta },
+    .{ "Teh_Marbuta_Goal", .teh_marbuta_goal },
+    .{ "Teth", .teth },
+    .{ "Thin_Noon", .thin_noon },
+    .{ "Thin_Yeh", .thin_yeh },
+    .{ "Vertical_Tail", .vertical_tail },
+    .{ "Waw", .waw },
+    .{ "Yeh", .yeh },
+    .{ "Yeh_Barree", .yeh_barree },
+    .{ "Yeh_With_Tail", .yeh_with_tail },
+    .{ "Yudh", .yudh },
+    .{ "Yudh_He", .yudh_he },
+    .{ "Zain", .zain },
+    .{ "Zhain", .zhain },
+});
 
 fn parseCompositionExclusions(
     allocator: std.mem.Allocator,

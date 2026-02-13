@@ -1,8 +1,8 @@
 #!/bin/bash
 
-version="16.0.0"
+version="17.0.0"
 
-base_url="https://www.unicode.org/Public/zipped/${version}"
+base_url="https://www.unicode.org/Public/zipped/latest"
 emoji_url="https://www.unicode.org/Public/emoji/latest"
 
 mv ucd/.gitignore ucd-gitignore
