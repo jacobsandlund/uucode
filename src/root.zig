@@ -194,3 +194,266 @@ test "is_composition_exclusion" {
     try testing.expect(get(.is_composition_exclusion, 0x0958));
     try testing.expect(!get(.is_composition_exclusion, 0x0300));
 }
+
+test "joining_type" {
+    try testing.expectEqual(.dual_joining, get(.joining_type, 0x0628)); // ب BEH
+    try testing.expectEqual(.right_joining, get(.joining_type, 0x0627)); // ا ALEF
+    try testing.expectEqual(.non_joining, get(.joining_type, 0x0041)); // 'A'
+}
+
+test "joining_group" {
+    try testing.expectEqual(.beh, get(.joining_group, 0x0628)); // ب BEH
+    try testing.expectEqual(.alef, get(.joining_group, 0x0627)); // ا ALEF
+    try testing.expectEqual(.no_joining_group, get(.joining_group, 0x0041)); // 'A'
+}
+
+test "east_asian_width" {
+    try testing.expectEqual(.narrow, get(.east_asian_width, 0x0041)); // 'A'
+    try testing.expectEqual(.wide, get(.east_asian_width, 0x4E00)); // 一
+    try testing.expectEqual(.fullwidth, get(.east_asian_width, 0xFF01)); // ！
+}
+
+test "canonical_combining_class" {
+    try testing.expectEqual(@as(u8, 230), get(.canonical_combining_class, 0x0300)); // COMBINING GRAVE ACCENT
+    try testing.expectEqual(@as(u8, 0), get(.canonical_combining_class, 0x0041)); // 'A'
+}
+
+test "numeric_type" {
+    try testing.expectEqual(.decimal, get(.numeric_type, 0x0030)); // '0'
+    try testing.expectEqual(.digit, get(.numeric_type, 0x00B2)); // ²
+    try testing.expectEqual(.numeric, get(.numeric_type, 0x00BD)); // ½
+    try testing.expectEqual(.none, get(.numeric_type, 0x0041)); // 'A'
+}
+
+test "numeric_value_decimal" {
+    try testing.expectEqual(@as(?u4, 0), get(.numeric_value_decimal, 0x0030)); // '0'
+    try testing.expectEqual(@as(?u4, 5), get(.numeric_value_decimal, 0x0035)); // '5'
+    try testing.expectEqual(@as(?u4, null), get(.numeric_value_decimal, 0x0041)); // 'A'
+}
+
+test "numeric_value_digit" {
+    try testing.expectEqual(@as(?u4, 2), get(.numeric_value_digit, 0x00B2)); // ²
+    try testing.expectEqual(@as(?u4, null), get(.numeric_value_digit, 0x0041)); // 'A'
+}
+
+test "is_bidi_mirrored" {
+    try testing.expect(get(.is_bidi_mirrored, 0x0028)); // '('
+    try testing.expect(!get(.is_bidi_mirrored, 0x0041)); // 'A'
+}
+
+test "unicode_1_name" {
+    try testing.expect(std.mem.eql(u8, "NULL", get(.unicode_1_name, 0x0000)));
+    try testing.expect(std.mem.eql(u8, "", get(.unicode_1_name, 0x0041))); // 'A' has no Unicode 1.0 name
+}
+
+test "simple_titlecase_mapping" {
+    try testing.expectEqual(0x0041, get(.simple_titlecase_mapping, 0x0061)); // 'a' -> 'A'
+    try testing.expectEqual(0x0041, get(.simple_titlecase_mapping, 0x0041)); // 'A' -> 'A'
+}
+
+test "simple_lowercase_mapping" {
+    try testing.expectEqual(0x0061, get(.simple_lowercase_mapping, 0x0041)); // 'A' -> 'a'
+    try testing.expectEqual(0x0061, get(.simple_lowercase_mapping, 0x0061)); // 'a' -> 'a'
+}
+
+test "case_folding_full" {
+    var buffer: [1]u21 = undefined;
+    // ß (U+00DF) maps to "ss" (0x0073, 0x0073)
+    const mapping = get(.case_folding_full, 0x00DF).with(&buffer, 0x00DF);
+    try testing.expectEqual(2, mapping.len);
+    try testing.expectEqual(0x0073, mapping[0]);
+    try testing.expectEqual(0x0073, mapping[1]);
+}
+
+test "case_folding_turkish_only" {
+    // U+0049 'I' has Turkish-only case folding to U+0131 (ı)
+    const mapping = get(.case_folding_turkish_only, 0x0049);
+    try testing.expectEqual(1, mapping.len);
+    try testing.expectEqual(0x0131, mapping[0]);
+}
+
+test "case_folding_common_only" {
+    // U+0041 'A' has common case folding to U+0061 'a'
+    const mapping = get(.case_folding_common_only, 0x0041);
+    try testing.expectEqual(1, mapping.len);
+    try testing.expectEqual(0x0061, mapping[0]);
+}
+
+test "case_folding_simple_only" {
+    // U+1E9E (ẞ) has simple-only case folding to U+00DF (ß)
+    const mapping = get(.case_folding_simple_only, 0x1E9E);
+    try testing.expectEqual(1, mapping.len);
+    try testing.expectEqual(0x00DF, mapping[0]);
+}
+
+test "case_folding_full_only" {
+    // ß (U+00DF) has full-only case folding to "ss"
+    const mapping = get(.case_folding_full_only, 0x00DF);
+    try testing.expectEqual(2, mapping.len);
+    try testing.expectEqual(0x0073, mapping[0]);
+    try testing.expectEqual(0x0073, mapping[1]);
+}
+
+test "has_special_casing" {
+    try testing.expect(get(.has_special_casing, 0x00DF)); // ß
+    try testing.expect(!get(.has_special_casing, 0x0041)); // 'A'
+}
+
+test "special_titlecase_mapping" {
+    var buffer: [1]u21 = undefined;
+    // ß (U+00DF) has special titlecase mapping to "Ss" (0x0053, 0x0073)
+    const mapping = get(.special_titlecase_mapping, 0x00DF).with(&buffer, 0x00DF);
+    try testing.expectEqual(2, mapping.len);
+    try testing.expectEqual(0x0053, mapping[0]);
+    try testing.expectEqual(0x0073, mapping[1]);
+}
+
+test "special_uppercase_mapping" {
+    var buffer: [1]u21 = undefined;
+    // ß (U+00DF) has special uppercase mapping to "SS" (0x0053, 0x0053)
+    const mapping = get(.special_uppercase_mapping, 0x00DF).with(&buffer, 0x00DF);
+    try testing.expectEqual(2, mapping.len);
+    try testing.expectEqual(0x0053, mapping[0]);
+    try testing.expectEqual(0x0053, mapping[1]);
+}
+
+test "lowercase_mapping" {
+    var buffer: [1]u21 = undefined;
+    const mapping = get(.lowercase_mapping, 0x0041).with(&buffer, 0x0041); // 'A' -> 'a'
+    try testing.expectEqual(1, mapping.len);
+    try testing.expectEqual(0x0061, mapping[0]);
+}
+
+test "titlecase_mapping" {
+    var buffer: [1]u21 = undefined;
+    const mapping = get(.titlecase_mapping, 0x0061).with(&buffer, 0x0061); // 'a' -> 'A'
+    try testing.expectEqual(1, mapping.len);
+    try testing.expectEqual(0x0041, mapping[0]);
+}
+
+test "is_math" {
+    try testing.expect(get(.is_math, 0x002B)); // '+'
+    try testing.expect(!get(.is_math, 0x0041)); // 'A'
+}
+
+test "is_cased" {
+    try testing.expect(get(.is_cased, 0x0041)); // 'A'
+    try testing.expect(!get(.is_cased, 0x0030)); // '0'
+}
+
+test "is_case_ignorable" {
+    try testing.expect(get(.is_case_ignorable, 0x0027)); // apostrophe
+    try testing.expect(!get(.is_case_ignorable, 0x0041)); // 'A'
+}
+
+test "changes_when_lowercased" {
+    try testing.expect(get(.changes_when_lowercased, 0x0041)); // 'A'
+    try testing.expect(!get(.changes_when_lowercased, 0x0061)); // 'a'
+}
+
+test "changes_when_uppercased" {
+    try testing.expect(get(.changes_when_uppercased, 0x0061)); // 'a'
+    try testing.expect(!get(.changes_when_uppercased, 0x0041)); // 'A'
+}
+
+test "changes_when_titlecased" {
+    try testing.expect(get(.changes_when_titlecased, 0x0061)); // 'a'
+    try testing.expect(!get(.changes_when_titlecased, 0x0041)); // 'A'
+}
+
+test "changes_when_casefolded" {
+    try testing.expect(get(.changes_when_casefolded, 0x0041)); // 'A'
+    try testing.expect(!get(.changes_when_casefolded, 0x0061)); // 'a'
+}
+
+test "changes_when_casemapped" {
+    try testing.expect(get(.changes_when_casemapped, 0x0041)); // 'A'
+    try testing.expect(!get(.changes_when_casemapped, 0x0030)); // '0'
+}
+
+test "is_id_start" {
+    try testing.expect(get(.is_id_start, 0x0041)); // 'A'
+    try testing.expect(!get(.is_id_start, 0x0030)); // '0'
+}
+
+test "is_id_continue" {
+    try testing.expect(get(.is_id_continue, 0x0041)); // 'A'
+    try testing.expect(get(.is_id_continue, 0x0030)); // '0'
+}
+
+test "is_xid_start" {
+    try testing.expect(get(.is_xid_start, 0x0041)); // 'A'
+    try testing.expect(!get(.is_xid_start, 0x0030)); // '0'
+}
+
+test "is_xid_continue" {
+    try testing.expect(get(.is_xid_continue, 0x0041)); // 'A'
+    try testing.expect(get(.is_xid_continue, 0x0030)); // '0'
+}
+
+test "is_default_ignorable" {
+    try testing.expect(get(.is_default_ignorable, 0x00AD)); // SOFT HYPHEN
+    try testing.expect(!get(.is_default_ignorable, 0x0041)); // 'A'
+}
+
+test "is_grapheme_extend" {
+    try testing.expect(get(.is_grapheme_extend, 0x0300)); // COMBINING GRAVE ACCENT
+    try testing.expect(!get(.is_grapheme_extend, 0x0041)); // 'A'
+}
+
+test "is_grapheme_base" {
+    try testing.expect(get(.is_grapheme_base, 0x0041)); // 'A'
+    try testing.expect(!get(.is_grapheme_base, 0x0300)); // COMBINING GRAVE ACCENT
+}
+
+test "is_grapheme_link" {
+    try testing.expect(get(.is_grapheme_link, 0x094D)); // DEVANAGARI SIGN VIRAMA
+    try testing.expect(!get(.is_grapheme_link, 0x0041)); // 'A'
+}
+
+test "indic_conjunct_break" {
+    try testing.expectEqual(.linker, get(.indic_conjunct_break, 0x094D)); // DEVANAGARI SIGN VIRAMA
+    try testing.expectEqual(.consonant, get(.indic_conjunct_break, 0x0915)); // DEVANAGARI LETTER KA
+    try testing.expectEqual(.none, get(.indic_conjunct_break, 0x0041)); // 'A'
+}
+
+test "original_grapheme_break" {
+    try testing.expectEqual(.cr, get(.original_grapheme_break, 0x000D));
+    try testing.expectEqual(.lf, get(.original_grapheme_break, 0x000A));
+    try testing.expectEqual(.other, get(.original_grapheme_break, 0x0041)); // 'A'
+}
+
+test "is_emoji" {
+    try testing.expect(get(.is_emoji, 0x1F600)); // 😀
+    try testing.expect(!get(.is_emoji, 0x0041)); // 'A'
+}
+
+test "is_emoji_presentation" {
+    try testing.expect(get(.is_emoji_presentation, 0x1F600)); // 😀
+    try testing.expect(!get(.is_emoji_presentation, 0x0041)); // 'A'
+}
+
+test "is_emoji_modifier" {
+    try testing.expect(get(.is_emoji_modifier, 0x1F3FB)); // EMOJI MODIFIER FITZPATRICK TYPE-1-2
+    try testing.expect(!get(.is_emoji_modifier, 0x0041)); // 'A'
+}
+
+test "is_emoji_component" {
+    try testing.expect(get(.is_emoji_component, 0x1F3FB)); // EMOJI MODIFIER FITZPATRICK TYPE-1-2
+    try testing.expect(!get(.is_emoji_component, 0x0041)); // 'A'
+}
+
+test "is_extended_pictographic" {
+    try testing.expect(get(.is_extended_pictographic, 0x1F600)); // 😀
+    try testing.expect(!get(.is_extended_pictographic, 0x0041)); // 'A'
+}
+
+test "is_emoji_vs_text" {
+    try testing.expect(get(.is_emoji_vs_text, 0x231B)); // ⌛
+    try testing.expect(!get(.is_emoji_vs_text, 0x1F46C)); // 👬
+}
+
+test "is_emoji_vs_emoji" {
+    try testing.expect(get(.is_emoji_vs_emoji, 0x231B)); // ⌛
+    try testing.expect(!get(.is_emoji_vs_emoji, 0x1F46C)); // 👬
+}
