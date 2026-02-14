@@ -324,9 +324,9 @@ test "parseRange" {
 // Public for GraphemeBreakTest in src/grapheme.zig
 pub fn trim(line: []const u8) []const u8 {
     if (std.mem.indexOf(u8, line, "#")) |idx| {
-        return std.mem.trim(u8, line[0..idx], " \t");
+        return std.mem.trim(u8, line[0..idx], " \t\r");
     }
-    return std.mem.trim(u8, line, " \t");
+    return std.mem.trim(u8, line, " \t\r");
 }
 
 fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !void {
@@ -463,7 +463,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
                         break :blk .canonical;
                     }
                 };
-                mapping_str = std.mem.trim(u8, decomposition_str[end_bracket + 1 ..], " \t");
+                mapping_str = std.mem.trim(u8, decomposition_str[end_bracket + 1 ..], " \t\r");
             }
 
             // Parse code points from mapping string
@@ -632,13 +632,13 @@ fn parseCaseFolding(
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
         const cp = try parseCp(cp_str);
 
-        const status_str = std.mem.trim(u8, parts.next().?, " \t");
+        const status_str = std.mem.trim(u8, parts.next().?, " \t\r");
         const status = if (status_str.len > 0) status_str[0] else 0;
 
-        const mapping_str = std.mem.trim(u8, parts.next() orelse "", " \t");
+        const mapping_str = std.mem.trim(u8, parts.next() orelse "", " \t\r");
         var mapping_parts = std.mem.splitScalar(u8, mapping_str, ' ');
 
         var mapping: [9]u21 = undefined; // Max is currently 3
@@ -696,23 +696,23 @@ fn parseSpecialCasing(
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
         const cp = try parseCp(cp_str);
 
-        const lower_str = std.mem.trim(u8, parts.next().?, " \t");
-        const title_str = std.mem.trim(u8, parts.next().?, " \t");
-        const upper_str = std.mem.trim(u8, parts.next().?, " \t");
+        const lower_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const title_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const upper_str = std.mem.trim(u8, parts.next().?, " \t\r");
 
         // TODO: this doesn't handle multiple condition lists in the Turkish and Azeri section
         // Parse the optional condition list
         var conditions: [6]types.SpecialCasingCondition = undefined; // Max is currently 2
         var conditions_len: u8 = 0;
         if (parts.next()) |condition_str| {
-            const trimmed_conditions = std.mem.trim(u8, condition_str, " \t");
+            const trimmed_conditions = std.mem.trim(u8, condition_str, " \t\r");
             if (trimmed_conditions.len > 0) {
                 var condition_parts = std.mem.splitScalar(u8, trimmed_conditions, ' ');
                 while (condition_parts.next()) |condition_part| {
-                    const trimmed_condition = std.mem.trim(u8, condition_part, " \t");
+                    const trimmed_condition = std.mem.trim(u8, condition_part, " \t\r");
                     if (trimmed_condition.len == 0) continue;
                     const condition = special_casing_condition_map.get(trimmed_condition) orelse blk: {
                         std.log.err("Unknown special casing condition '{s}'", .{trimmed_condition});
@@ -807,9 +807,9 @@ fn parseDerivedCoreProperties(
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const property_str = std.mem.trim(u8, parts.next().?, " \t");
-        const value_str = if (parts.next()) |v| std.mem.trim(u8, v, " \t") else "";
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const property_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const value_str = if (parts.next()) |v| std.mem.trim(u8, v, " \t\r") else "";
 
         const range = try parseRange(cp_str);
         const property = derived_core_property_map.get(property_str) orelse blk: {
@@ -864,13 +864,13 @@ fn parseBidiBrackets(
         if (trimmed.len == 0 or std.mem.startsWith(u8, trimmed, "#")) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const paired_cp_str = std.mem.trim(u8, parts.next().?, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const paired_cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
 
         const op = try parseCp(cp_str);
         const paired = try parseCp(paired_cp_str);
 
-        const type_str = std.mem.trim(u8, parts.next().?, " \t");
+        const type_str = std.mem.trim(u8, parts.next().?, " \t\r");
         const bracket_type: types.BidiPairedBracket = switch (type_str[0]) {
             'c' => .{ .close = paired },
             'o' => .{ .open = paired },
@@ -926,15 +926,15 @@ fn parseDerivedBidiClass(
 
     var lines = std.mem.splitScalar(u8, content, '\n');
     while (lines.next()) |line| {
-        const trimmed = std.mem.trim(u8, line, " \t");
+        const trimmed = std.mem.trim(u8, line, " \t\r");
         if (trimmed.len == 0) continue;
 
         // Handle @missing directives first
         if (std.mem.startsWith(u8, trimmed, "# @missing:")) {
             const missing_line = trimmed["# @missing:".len..];
             var parts = std.mem.splitScalar(u8, missing_line, ';');
-            const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-            const class_str = std.mem.trim(u8, parts.next().?, " \t");
+            const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+            const class_str = std.mem.trim(u8, parts.next().?, " \t\r");
 
             const range = try parseRange(cp_str);
 
@@ -964,8 +964,8 @@ fn parseDerivedBidiClass(
         if (data_line.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, data_line, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const class_str = std.mem.trim(u8, parts.next().?, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const class_str = std.mem.trim(u8, parts.next().?, " \t\r");
 
         const range = try parseRange(cp_str);
 
@@ -1001,15 +1001,15 @@ fn parseEastAsianWidth(
 
     var lines = std.mem.splitScalar(u8, content, '\n');
     while (lines.next()) |line| {
-        const trimmed = std.mem.trim(u8, line, " \t");
+        const trimmed = std.mem.trim(u8, line, " \t\r");
         if (trimmed.len == 0) continue;
 
         // Handle @missing directives first
         if (std.mem.startsWith(u8, trimmed, "# @missing:")) {
             const missing_line = trimmed["# @missing:".len..];
             var parts = std.mem.splitScalar(u8, missing_line, ';');
-            const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-            const width_str = std.mem.trim(u8, parts.next().?, " \t");
+            const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+            const width_str = std.mem.trim(u8, parts.next().?, " \t\r");
 
             const range = try parseRange(cp_str);
 
@@ -1037,8 +1037,8 @@ fn parseEastAsianWidth(
         if (data_line.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, data_line, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const width_str = std.mem.trim(u8, parts.next().?, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const width_str = std.mem.trim(u8, parts.next().?, " \t\r");
 
         const range = try parseRange(cp_str);
 
@@ -1087,8 +1087,8 @@ fn parseGraphemeBreak(
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const prop_str = std.mem.trim(u8, parts.next().?, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const prop_str = std.mem.trim(u8, parts.next().?, " \t\r");
 
         const range = try parseRange(cp_str);
 
@@ -1137,8 +1137,8 @@ fn parseEmojiData(
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const prop_str = std.mem.trim(u8, parts.next().?, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const prop_str = std.mem.trim(u8, parts.next().?, " \t\r");
 
         const range = try parseRange(cp_str);
 
@@ -1223,8 +1223,8 @@ fn parseBlocks(
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const block_name = std.mem.trim(u8, parts.next().?, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const block_name = std.mem.trim(u8, parts.next().?, " \t\r");
 
         const range = try parseRange(cp_str);
 
@@ -1613,8 +1613,8 @@ fn parseScripts(
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const script_name = std.mem.trim(u8, parts.next().?, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const script_name = std.mem.trim(u8, parts.next().?, " \t\r");
 
         const range = try parseRange(cp_str);
         const script = script_name_map.get(script_name) orelse blk: {
@@ -1830,8 +1830,8 @@ fn parseJoiningType(
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const jt_str = std.mem.trim(u8, parts.next().?, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const jt_str = std.mem.trim(u8, parts.next().?, " \t\r");
 
         const range = try parseRange(cp_str);
         const jt = joining_type_map.get(jt_str) orelse blk: {
@@ -1878,8 +1878,8 @@ fn parseJoiningGroup(
         if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
-        const cp_str = std.mem.trim(u8, parts.next().?, " \t");
-        const jg_str = std.mem.trim(u8, parts.next().?, " \t");
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const jg_str = std.mem.trim(u8, parts.next().?, " \t\r");
 
         const range = try parseRange(cp_str);
         const jg = joining_group_map.get(jg_str) orelse blk: {
