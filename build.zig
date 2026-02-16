@@ -209,6 +209,10 @@ pub fn build(b: *std.Build) void {
 
     // b.addModule with an existing module
     _ = b.modules.put(b.dupe("uucode"), mod.lib) catch @panic("OOM");
+    _ = b.modules.put(b.dupe("uucode_build_config"), mod.build_config) catch @panic("OOM");
+    if (mod.build_tables_config) |btc| {
+        _ = b.modules.put(b.dupe("uucode_build_tables_config"), btc) catch @panic("OOM");
+    }
     b.addNamedLazyPath("tables.zig", mod.tables_path);
 
     const test_mod = createLibMod(
@@ -394,6 +398,7 @@ fn buildTables(
     build_tables_optimize: std.builtin.OptimizeMode,
 ) struct {
     build_tables: *std.Build.Module,
+    build_config: *std.Build.Module,
     tables: std.Build.LazyPath,
 } {
     const target = b.graph.host;
@@ -462,6 +467,7 @@ fn buildTables(
     return .{
         .tables = tables_path,
         .build_tables = build_tables_mod,
+        .build_config = build_config_mod,
     };
 }
 
@@ -474,7 +480,9 @@ fn createLibMod(
     build_config_path: std.Build.LazyPath,
 ) struct {
     lib: *std.Build.Module,
+    build_config: *std.Build.Module,
     build_tables: ?*std.Build.Module,
+    build_tables_config: ?*std.Build.Module,
     tables_path: std.Build.LazyPath,
 } {
     const config_mod = b.createModule(.{
@@ -507,7 +515,6 @@ fn createLibMod(
     config_x_mod.addImport("types.zig", types_mod);
     config_x_mod.addImport("config.zig", config_mod);
 
-    // TODO: expose this to see if importing can work?
     const build_config_mod = b.createModule(.{
         .root_source_file = build_config_path,
         .target = target,
@@ -518,9 +525,11 @@ fn createLibMod(
     build_config_mod.addImport("config.x.zig", config_x_mod);
 
     var build_tables: ?*std.Build.Module = null;
+    var build_tables_config: ?*std.Build.Module = null;
     const tables_path = tables_path_opt orelse blk: {
         const t = buildTables(b, build_config_path, build_tables_optimize);
         build_tables = t.build_tables;
+        build_tables_config = t.build_config;
         break :blk t.tables;
     };
 
@@ -557,7 +566,9 @@ fn createLibMod(
 
     return .{
         .lib = lib_mod,
+        .build_config = build_config_mod,
         .build_tables = build_tables,
+        .build_tables_config = build_tables_config,
         .tables_path = tables_path,
     };
 }
