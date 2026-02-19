@@ -23,6 +23,14 @@ fn computeFoo(
         .control => 3,
         else => 10,
     };
+    if (@hasField(@TypeOf(data.*), "bar_unused")) {
+        data.bar_unused = switch (data.original_grapheme_break) {
+            .other => 0,
+            .prepend => 1,
+            .extend => 4,
+            else => 255,
+        };
+    }
 }
 
 const foo = config.Extension{
@@ -30,6 +38,7 @@ const foo = config.Extension{
     .compute = &computeFoo,
     .fields = &.{
         .{ .name = "foo", .type = u8 },
+        .{ .name = "bar_unused", .type = u8 },
     },
 };
 
@@ -457,6 +466,8 @@ pub const tables = [_]config.Table{
             d.field("simple_lowercase_mapping"),
             d.field("original_grapheme_break"),
             d.field("indic_conjunct_break"),
+            d.field("indic_positional_category"),
+            d.field("indic_syllabic_category"),
         },
     },
     .{

@@ -259,6 +259,10 @@ fn computeEmojiOddOrEven(
     _ = backing;
     _ = tracking;
 
+    // For simple single-field extensions, assigning directly to `data` is
+    // preferred. For multiple-field extensions, guard assignment with a
+    // `const Data = @TypeOf(data.*);` and
+    // `if (@hasField(Data, "<field_name>"))`
     if (!data.is_emoji) {
         data.emoji_odd_or_even = .not_emoji;
     } else if (cp % 2 == 0) {

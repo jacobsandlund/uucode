@@ -207,6 +207,18 @@ test "joining_group" {
     try testing.expectEqual(.no_joining_group, get(.joining_group, 0x0041)); // 'A'
 }
 
+test "indic_positional_category" {
+    try testing.expectEqual(.top, get(.indic_positional_category, 0x0A81)); // Gujarati Sign Candrabindu
+    try testing.expectEqual(.right, get(.indic_positional_category, 0x1182E)); // Dogra Vowel Sign Ii
+    try testing.expectEqual(.not_applicable, get(.indic_positional_category, 0x0041)); // 'A'
+}
+
+test "indic_syllabic_category" {
+    try testing.expectEqual(.consonant, get(.indic_syllabic_category, 0x0A97)); // ગ Gujarati Letter Ga
+    try testing.expectEqual(.vowel_dependent, get(.indic_syllabic_category, 0x1182E)); // Dogra Vowel Sign Ii
+    try testing.expectEqual(.other, get(.indic_syllabic_category, 0x0041)); // 'A'
+}
+
 test "east_asian_width" {
     try testing.expectEqual(.narrow, get(.east_asian_width, 0x0041)); // 'A'
     try testing.expectEqual(.wide, get(.east_asian_width, 0x4E00)); // 一

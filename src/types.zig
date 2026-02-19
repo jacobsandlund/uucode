@@ -815,6 +815,65 @@ pub const JoiningGroup = enum(u7) {
     zhain,
 };
 
+pub const IndicPositionalCategory = enum(u4) {
+    not_applicable,
+    right,
+    left,
+    visual_order_left,
+    left_and_right,
+    top,
+    bottom,
+    top_and_bottom,
+    top_and_right,
+    top_and_left,
+    top_and_left_and_right,
+    bottom_and_right,
+    bottom_and_left,
+    top_and_bottom_and_right,
+    top_and_bottom_and_left,
+    overstruck,
+};
+
+pub const IndicSyllabicCategory = enum(u6) {
+    other,
+    bindu,
+    visarga,
+    avagraha,
+    nukta,
+    virama,
+    pure_killer,
+    reordering_killer,
+    invisible_stacker,
+    vowel_independent,
+    vowel_dependent,
+    vowel,
+    consonant_placeholder,
+    consonant,
+    consonant_dead,
+    consonant_with_stacker,
+    consonant_prefixed,
+    consonant_preceding_repha,
+    consonant_initial_postfixed,
+    consonant_succeeding_repha,
+    consonant_subjoined,
+    consonant_medial,
+    consonant_final,
+    consonant_head_letter,
+    modifying_letter,
+    tone_letter,
+    tone_mark,
+    gemination_mark,
+    cantillation_mark,
+    register_shifter,
+    syllable_modifier,
+    consonant_killer,
+    non_joiner,
+    joiner,
+    number_joiner,
+    number,
+    brahmi_joining_number,
+};
+
 // The following types are internal to `uucode`:
 
 pub fn Field(comptime c: config.Field, comptime packing: config.Table.Packing) type {
@@ -1239,7 +1298,7 @@ pub fn Slice(
                     try writer.print(
                         \\.{{
                         \\    .len = {},
-                        \\    .data = .{{ .shift = 
+                        \\    .data = .{{ .shift =
                     , .{self.len});
                     try self.data.shift.write(writer);
                     try writer.writeAll(

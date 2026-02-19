@@ -294,6 +294,12 @@ pub const default = Table{
 
         // Composition Exclusions
         .{ .name = "is_composition_exclusion", .type = bool },
+
+        // Indic Positional Category
+        .{ .name = "indic_positional_category", .type = types.IndicPositionalCategory },
+
+        // Indic Syllabic Category
+        .{ .name = "indic_syllabic_category", .type = types.IndicSyllabicCategory },
     },
 };
 
@@ -598,7 +604,7 @@ pub const Table = struct {
         }
     };
 
-    pub fn hasField(comptime self: *const Table, name: []const u8) bool {
+    pub fn hasField(comptime self: *const Table, comptime name: []const u8) bool {
         @setEvalBranchQuota(10_000);
 
         return inline for (self.fields) |f| {
@@ -608,7 +614,7 @@ pub const Table = struct {
         } else false;
     }
 
-    pub fn field(comptime self: *const Table, name: []const u8) Field {
+    pub fn field(comptime self: *const Table, comptime name: []const u8) Field {
         @setEvalBranchQuota(20_000);
 
         return for (self.fields) |f| {
@@ -719,7 +725,7 @@ pub const Extension = struct {
         tracking: anytype,
     ) std.mem.Allocator.Error!void,
 
-    pub fn hasField(comptime self: *const Extension, name: []const u8) bool {
+    pub fn hasField(comptime self: *const Extension, comptime name: []const u8) bool {
         return inline for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
                 break true;
@@ -727,7 +733,7 @@ pub const Extension = struct {
         } else false;
     }
 
-    pub fn field(comptime self: *const Extension, name: []const u8) Field {
+    pub fn field(comptime self: *const Extension, comptime name: []const u8) Field {
         return for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
                 break f;

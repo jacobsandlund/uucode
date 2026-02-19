@@ -25,6 +25,8 @@ scripts: []types.Script = undefined,
 joining_types: []types.JoiningType = undefined,
 joining_groups: []types.JoiningGroup = undefined,
 is_composition_exclusions: []bool = undefined,
+indic_positional_category: []types.IndicPositionalCategory = undefined,
+indic_syllabic_category: []types.IndicSyllabicCategory = undefined,
 
 const Self = @This();
 
@@ -127,6 +129,8 @@ const field_to_sections = std.StaticStringMap([]const UcdSection).initComptime(.
     .{ "joining_type", &.{.joining_types} },
     .{ "joining_group", &.{.joining_groups} },
     .{ "is_composition_exclusion", &.{.is_composition_exclusions} },
+    .{ "indic_positional_category", &.{.indic_positional_category} },
+    .{ "indic_syllabic_category", &.{.indic_syllabic_category} },
 });
 
 fn fieldNeedsSection(comptime field: []const u8, comptime ucd_section: UcdSection) bool {
@@ -212,6 +216,16 @@ pub fn init(allocator: std.mem.Allocator, io: std.Io, comptime table_configs: []
     if (comptime needsSectionAny(table_configs, .is_composition_exclusions)) {
         self.is_composition_exclusions = try allocator.alloc(bool, n);
         try parseCompositionExclusions(allocator, io, self.is_composition_exclusions);
+    }
+
+    if (comptime needsSectionAny(table_configs, .indic_positional_category)) {
+        self.indic_positional_category = try allocator.alloc(types.IndicPositionalCategory, n);
+        try parseIndicPositionalCategory(allocator, io, self.indic_positional_category);
+    }
+
+    if (comptime needsSectionAny(table_configs, .indic_syllabic_category)) {
+        self.indic_syllabic_category = try allocator.alloc(types.IndicSyllabicCategory, n);
+        try parseIndicSyllabicCategory(allocator, io, self.indic_syllabic_category);
     }
 
     const end = std.Io.Clock.awake.now(io);
@@ -2084,3 +2098,148 @@ fn parseCompositionExclusions(
         }
     }
 }
+
+fn parseIndicPositionalCategory(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    indic_positional_category: []types.IndicPositionalCategory,
+) !void {
+    @memset(indic_positional_category, .not_applicable);
+
+    const file_path = "ucd/IndicPositionalCategory.txt";
+
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
+
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = trim(line);
+        if (trimmed.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, trimmed, ';');
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const ipc_str = std.mem.trim(u8, parts.next().?, " \t\r");
+
+        const range = try parseRange(cp_str);
+        const ipc = indic_positional_category_map.get(ipc_str) orelse blk: {
+            std.log.err("Unknown indic positional category: {s}", .{ipc_str});
+            if (!config.is_updating_ucd) {
+                unreachable;
+            } else {
+                break :blk .not_applicable;
+            }
+        };
+
+        var cp: u21 = range.start;
+        while (cp <= range.end) : (cp += 1) {
+            indic_positional_category[cp] = ipc;
+        }
+    }
+}
+
+const indic_positional_category_map = std.StaticStringMap(types.IndicPositionalCategory).initComptime(.{
+    .{ "Not_Applicable", .not_applicable },
+    .{ "Right", .right },
+    .{ "Left", .left },
+    .{ "Visual_Order_Left", .visual_order_left },
+    .{ "Left_And_Right", .left_and_right },
+    .{ "Top", .top },
+    .{ "Bottom", .bottom },
+    .{ "Top_And_Bottom", .top_and_bottom },
+    .{ "Top_And_Right", .top_and_right },
+    .{ "Top_And_Left", .top_and_left },
+    .{ "Top_And_Left_And_Right", .top_and_left_and_right },
+    .{ "Bottom_And_Right", .bottom_and_right },
+    .{ "Bottom_And_Left", .bottom_and_left },
+    .{ "Top_And_Bottom_And_Right", .top_and_bottom_and_right },
+    .{ "Top_And_Bottom_And_Left", .top_and_bottom_and_left },
+    .{ "Overstruck", .overstruck },
+});
+
+fn parseIndicSyllabicCategory(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    indic_syllabic_category: []types.IndicSyllabicCategory,
+) !void {
+    @memset(indic_syllabic_category, .other);
+
+    const file_path = "ucd/IndicSyllabicCategory.txt";
+
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
+
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = trim(line);
+        if (trimmed.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, trimmed, ';');
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const isc_str = std.mem.trim(u8, parts.next().?, " \t\r");
+
+        const range = try parseRange(cp_str);
+        const ipc = indic_syllabic_category_map.get(isc_str) orelse blk: {
+            std.log.err("Unknown indic syllabic category: {s}", .{isc_str});
+            if (!config.is_updating_ucd) {
+                unreachable;
+            } else {
+                break :blk .other;
+            }
+        };
+
+        var cp: u21 = range.start;
+        while (cp <= range.end) : (cp += 1) {
+            indic_syllabic_category[cp] = ipc;
+        }
+    }
+}
+
+const indic_syllabic_category_map = std.StaticStringMap(types.IndicSyllabicCategory).initComptime(.{
+    .{ "Other", .other },
+    .{ "Bindu", .bindu },
+    .{ "Visarga", .visarga },
+    .{ "Avagraha", .avagraha },
+    .{ "Nukta", .nukta },
+    .{ "Virama", .virama },
+    .{ "Pure_Killer", .pure_killer },
+    .{ "Reordering_Killer", .reordering_killer },
+    .{ "Invisible_Stacker", .invisible_stacker },
+    .{ "Vowel_Independent", .vowel_independent },
+    .{ "Vowel_Dependent", .vowel_dependent },
+    .{ "Vowel", .vowel },
+    .{ "Consonant_Placeholder", .consonant_placeholder },
+    .{ "Consonant", .consonant },
+    .{ "Consonant_Dead", .consonant_dead },
+    .{ "Consonant_With_Stacker", .consonant_with_stacker },
+    .{ "Consonant_Prefixed", .consonant_prefixed },
+    .{ "Consonant_Preceding_Repha", .consonant_preceding_repha },
+    .{ "Consonant_Initial_Postfixed", .consonant_initial_postfixed },
+    .{ "Consonant_Succeeding_Repha", .consonant_succeeding_repha },
+    .{ "Consonant_Subjoined", .consonant_subjoined },
+    .{ "Consonant_Medial", .consonant_medial },
+    .{ "Consonant_Final", .consonant_final },
+    .{ "Consonant_Head_Letter", .consonant_head_letter },
+    .{ "Modifying_Letter", .modifying_letter },
+    .{ "Tone_Letter", .tone_letter },
+    .{ "Tone_Mark", .tone_mark },
+    .{ "Gemination_Mark", .gemination_mark },
+    .{ "Cantillation_Mark", .cantillation_mark },
+    .{ "Register_Shifter", .register_shifter },
+    .{ "Syllable_Modifier", .syllable_modifier },
+    .{ "Consonant_Killer", .consonant_killer },
+    .{ "Non_Joiner", .non_joiner },
+    .{ "Joiner", .joiner },
+    .{ "Number_Joiner", .number_joiner },
+    .{ "Number", .number },
+    .{ "Brahmi_Joining_Number", .brahmi_joining_number },
+});

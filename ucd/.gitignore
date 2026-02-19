@@ -20,8 +20,8 @@ EmojiSources.txt
 EquivalentUnifiedIdeograph.txt
 HangulSyllableType.txt
 Index.txt
-IndicPositionalCategory.txt
-IndicSyllabicCategory.txt
+# IndicPositionalCategory.txt (used)
+# IndicSyllabicCategory.txt (used)
 Jamo.txt
 LineBreak.txt
 NameAliases.txt
