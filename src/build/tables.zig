@@ -1004,6 +1004,17 @@ pub fn writeTableData(
             );
         }
 
+        if (@hasField(AllData, "bidi_mirroring")) {
+            const bidi_mirroring = ucd.bidi_mirroring[cp];
+            types.fieldInit(
+                "bidi_mirroring",
+                cp,
+                &a,
+                &tracking,
+                bidi_mirroring,
+            );
+        }
+
         // GraphemeBreak
         if (@hasField(AllData, "grapheme_break")) {
             const emoji_data = &ucd.emoji_data[cp];

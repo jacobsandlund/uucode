@@ -20,6 +20,7 @@ original_grapheme_break: []types.OriginalGraphemeBreak = undefined,
 emoji_data: []EmojiData = undefined,
 emoji_vs: []EmojiVariationSequence = undefined,
 bidi_paired_bracket: []types.BidiPairedBracket = undefined,
+bidi_mirroring: []?u21 = undefined,
 blocks: []types.Block = undefined,
 scripts: []types.Script = undefined,
 joining_types: []types.JoiningType = undefined,
@@ -120,6 +121,7 @@ const field_to_sections = std.StaticStringMap([]const UcdSection).initComptime(.
     .{ "is_emoji_vs_text", &.{.emoji_vs} },
     .{ "is_emoji_vs_emoji", &.{.emoji_vs} },
     .{ "bidi_paired_bracket", &.{.bidi_paired_bracket} },
+    .{ "bidi_mirroring", &.{.bidi_mirroring} },
     .{ "block", &.{.blocks} },
     .{ "script", &.{.scripts} },
     .{ "lowercase_mapping", &.{ .special_casing, .unicode_data } },
@@ -191,6 +193,11 @@ pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config
     if (comptime needsSectionAny(table_configs, .bidi_paired_bracket)) {
         self.bidi_paired_bracket = try allocator.alloc(types.BidiPairedBracket, n);
         try parseBidiBrackets(allocator, self.bidi_paired_bracket);
+    }
+
+    if (comptime needsSectionAny(table_configs, .bidi_mirroring)) {
+        self.bidi_mirroring = try allocator.alloc(?u21, n);
+        try parseBidiMirroring(allocator, self.bidi_mirroring);
     }
 
     if (comptime needsSectionAny(table_configs, .blocks)) {
@@ -875,7 +882,7 @@ fn parseBidiBrackets(
     var lines = std.mem.splitScalar(u8, content, '\n');
     while (lines.next()) |line| {
         const trimmed = trim(line);
-        if (trimmed.len == 0 or std.mem.startsWith(u8, trimmed, "#")) continue;
+        if (trimmed.len == 0) continue;
 
         var parts = std.mem.splitScalar(u8, trimmed, ';');
         const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
@@ -892,6 +899,36 @@ fn parseBidiBrackets(
         };
 
         bidi_paired_bracket[op] = bracket_type;
+    }
+}
+
+fn parseBidiMirroring(
+    allocator: std.mem.Allocator,
+    bidi_mirroring: []?u21,
+) !void {
+    @memset(bidi_mirroring, null);
+
+    const file_path = "ucd/BidiMirroring.txt";
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = trim(line);
+        if (trimmed.len == 0) continue;
+
+        var parts = std.mem.splitScalar(u8, trimmed, ';');
+        const cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+        const paired_cp_str = std.mem.trim(u8, parts.next().?, " \t\r");
+
+        const cp = try parseCp(cp_str);
+        const paired = try parseCp(paired_cp_str);
+
+        bidi_mirroring[cp] = paired;
     }
 }
 
