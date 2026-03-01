@@ -148,6 +148,12 @@ test "is_emoji_vs_base" {
     try testing.expect(!get(.is_emoji_vs_base, 0x1F46C)); // 👬
 }
 
+test "bidi_mirroring" {
+    try testing.expectEqual(0x0029, get(.bidi_mirroring, 0x0028)); // LEFT PARENTHESIS
+    try testing.expectEqual(0x0028, get(.bidi_mirroring, 0x0029)); // RIGHT PARENTHESIS
+    try testing.expectEqual(null, get(.bidi_mirroring, 0x0041)); // 'A'
+}
+
 test "block" {
     try testing.expectEqual(.basic_latin, get(.block, 0x0041)); // 'A'
     try testing.expectEqual(.greek_and_coptic, get(.block, 0x03B1)); // α

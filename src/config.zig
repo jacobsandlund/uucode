@@ -280,6 +280,15 @@ pub const default = Table{
             .shift_high = 3,
         },
 
+        // BidiMirroring
+        .{
+            .name = "bidi_mirroring",
+            .type = ?u21,
+            .cp_packing = .shift,
+            .shift_low = -2527,
+            .shift_high = 2527,
+        },
+
         // Block
         .{ .name = "block", .type = types.Block },
 
