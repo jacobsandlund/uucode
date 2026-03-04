@@ -412,24 +412,6 @@ fn TableTracking(comptime Struct: type) type {
     });
 }
 
-fn maybePackedInit(
-    comptime field: []const u8,
-    data: anytype,
-    tracking: anytype,
-    d: anytype,
-) void {
-    const Field = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
-    if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "init")) {
-        @field(data, field) = .init(d);
-    } else {
-        @field(data, field) = d;
-    }
-    const Tracking = @typeInfo(@TypeOf(tracking)).pointer.child;
-    if (@hasField(Tracking, field)) {
-        @field(tracking, field).track(d);
-    }
-}
-
 fn tablePrefix(
     comptime table_config: config.Table,
     table_index: usize,
@@ -557,16 +539,18 @@ pub fn writeTableData(
                 a.numeric_type = unicode_data.numeric_type;
             }
             if (@hasField(AllData, "numeric_value_decimal")) {
-                maybePackedInit(
+                types.fieldInit(
                     "numeric_value_decimal",
+                    cp,
                     &a,
                     &tracking,
                     unicode_data.numeric_value_decimal,
                 );
             }
             if (@hasField(AllData, "numeric_value_digit")) {
-                maybePackedInit(
+                types.fieldInit(
                     "numeric_value_digit",
+                    cp,
                     &a,
                     &tracking,
                     unicode_data.numeric_value_digit,
