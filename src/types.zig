@@ -876,89 +876,93 @@ pub const IndicSyllabicCategory = enum(u6) {
 
 // The following types are internal to `uucode`:
 
-pub fn Field(comptime c: config.Field, comptime packing: config.Table.Packing) type {
+pub fn Field(comptime c: config.Field, comptime is_packed: bool) type {
     return switch (c.kind()) {
-        .slice => if (packing == .unpacked) Slice(c) else unreachable,
-        .shift => Shift(c, packing),
-        .@"union" => Union(c, packing),
-        .optional => if (packing == .unpacked) c.type else PackedOptional(c),
+        .slice => if (is_packed) unreachable else Slice(c),
+        .shift => Shift(c, is_packed),
+        .@"union" => Union(c, is_packed),
+        .optional => if (is_packed) PackedOptional(c) else c.type,
         .basic => c.type,
     };
 }
 
-pub fn Data(comptime c: config.Table) type {
-    var data_fields: [c.fields.len]std.builtin.Type.StructField = undefined;
+pub fn Row(
+    comptime fields: []const config.Field,
+    comptime fields_is_packed: []const bool,
+    comptime table_packing: config.Table.Packing,
+) type {
+    var row_fields: [fields.len]std.builtin.Type.StructField = undefined;
 
-    for (c.fields, 0..) |cf, i| {
-        const F = Field(cf, c.packing);
-
-        data_fields[i] = .{
-            .name = cf.name,
+    for (fields, fields_is_packed, 0..) |field, is_field_packed, i| {
+        const F = Field(field, is_field_packed or table_packing == .@"packed");
+        row_fields[i] = .{
+            .name = field.name,
             .type = F,
             .default_value_ptr = null,
             .is_comptime = false,
-            .alignment = if (c.packing == .@"packed") 0 else @alignOf(F),
+            .alignment = if (table_packing == .@"packed") 0 else @alignOf(F),
         };
     }
 
     return @Type(.{
         .@"struct" = .{
-            .layout = if (c.packing == .@"packed") .@"packed" else .auto,
-            .fields = &data_fields,
+            .layout = if (table_packing == .@"packed") .@"packed" else .auto,
+            .fields = &row_fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },
     });
 }
 
-pub fn writeDataItems(comptime D: type, writer: *std.Io.Writer, data_items: []const D) !void {
-    if (@typeInfo(D).@"struct".layout == .@"packed") {
-        const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(D));
+pub fn DeclStruct(
+    comptime fields: []const config.Field,
+    comptime fields_is_packed: []const bool,
+    comptime decl: []const u8,
+) type {
+    var struct_fields: [fields.len]std.builtin.Type.StructField = undefined;
+    var i: usize = 0;
 
-        try writer.print("@bitCast([_]{s}{{\n", .{@typeName(IntEquivalent)});
-
-        for (data_items) |item| {
-            try writer.print("{d},", .{@as(IntEquivalent, @bitCast(item))});
-        }
-
-        try writer.writeAll(
-            \\});
-            \\
-        );
-    } else {
-        try writer.writeAll(
-            \\.{
-            \\
-        );
-
-        for (data_items) |item| {
-            try writer.writeAll(
-                \\.{
-                \\
-            );
-
-            inline for (@typeInfo(D).@"struct".fields) |field| {
-                try writer.print("    .{s} = ", .{field.name});
-
-                try writeDataField(field.type, writer, @field(item, field.name));
-
-                try writer.writeAll(",\n");
+    for (fields, fields_is_packed) |field, is_field_packed| {
+        if (@field(field, decl)) |T| {
+            struct_fields[i] = .{
+                .name = field.name,
+                .type = T,
+                .default_value_ptr = null,
+                .is_comptime = false,
+                .alignment = @alignOf(T),
+            };
+            i += 1;
+        } else {
+            const F = Field(field, is_field_packed);
+            switch (@typeInfo(F)) {
+                .@"struct", .@"union", .@"enum" => {
+                    if (@hasDecl(F, decl)) {
+                        struct_fields[i] = .{
+                            .name = field.name,
+                            .type = F,
+                            .default_value_ptr = null,
+                            .is_comptime = false,
+                            .alignment = @alignOf(F),
+                        };
+                        i += 1;
+                    }
+                },
+                else => {},
             }
-
-            try writer.writeAll(
-                \\},
-                \\
-            );
         }
-
-        try writer.writeAll(
-            \\};
-            \\
-        );
     }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = &struct_fields[0..i],
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
 }
 
-pub fn writeDataField(comptime F: type, writer: *std.Io.Writer, field: F) !void {
+pub fn writeField(comptime F: type, writer: *std.Io.Writer, field: F) !void {
     switch (@typeInfo(F)) {
         .@"struct" => {
             if (@hasDecl(F, "write")) {
@@ -994,63 +998,26 @@ pub fn writeDataField(comptime F: type, writer: *std.Io.Writer, field: F) !void 
     }
 }
 
-pub fn Backing(comptime D: type) type {
-    return StructFromDecls(D, "BackingBuffer");
-}
-
 pub fn Table3(
     comptime Stage1: type,
     comptime Stage2: type,
-    comptime Data_: type,
-    comptime Backing_: type,
+    comptime Row_: type,
 ) type {
     return struct {
         stage1: []const Stage1,
         stage2: []const Stage2,
-        stage3: []const Data_,
-        backing: *const Backing_,
+        stage3: []const Row_,
     };
 }
 
 pub fn Table2(
     comptime Stage1: type,
-    comptime Data_: type,
-    comptime Backing_: type,
+    comptime Row_: type,
 ) type {
     return struct {
         stage1: []const Stage1,
-        stage2: []const Data_,
-        backing: *const Backing_,
+        stage2: []const Row_,
     };
-}
-
-pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
-    const fields = @typeInfo(Struct).@"struct".fields;
-    var decl_fields: [fields.len]std.builtin.Type.StructField = undefined;
-    var i: usize = 0;
-
-    for (@typeInfo(Struct).@"struct".fields) |f| {
-        if (@typeInfo(f.type) == .@"struct" and @hasDecl(f.type, decl)) {
-            const T = @field(f.type, decl);
-            decl_fields[i] = .{
-                .name = f.name,
-                .type = T,
-                .default_value_ptr = null, // TODO: can we set this?
-                .is_comptime = false,
-                .alignment = @alignOf(T),
-            };
-            i += 1;
-        }
-    }
-
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = decl_fields[0..i],
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
 }
 
 pub fn Slice(
@@ -1085,8 +1052,7 @@ pub fn Slice(
         const Len = std.math.IntFittingRange(0, max_len);
 
         pub const Tracking = SliceTracking(T, max_len);
-        pub const BackingBuffer = []const T;
-        pub const MutableBackingBuffer = []T;
+        pub const Backing = []const T;
         pub const empty = if (embedded_len == 0)
             Self{ .len = 0, .data = .{ .offset = 0 } }
         else
@@ -1327,7 +1293,7 @@ pub fn Slice(
                         \\    .data = .{{ .embedded = .{{
                     , .{self.len});
                     for (self.data.embedded) |item| {
-                        try writeDataField(T, writer, item);
+                        try writeField(T, writer, item);
                         try writer.writeAll(",");
                     }
                     try writer.writeAll(
@@ -1581,7 +1547,7 @@ pub fn OptionalTracking(comptime Optional: type) type {
     };
 }
 
-pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) type {
+pub fn Shift(comptime c: config.Field, comptime is_packed: bool) type {
     const is_optional = @typeInfo(c.type) == .optional;
 
     if (c.kind() == .shift and !((is_optional and @typeInfo(c.type).optional.child == u21) or
@@ -1598,7 +1564,43 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
     // Only valid if `is_optional`
     const null_data = std.math.maxInt(Int);
 
-    return if (packing == .unpacked) struct {
+    return if (is_packed) packed struct {
+        data: Int,
+
+        const Self = @This();
+        pub const Tracking = ShiftTracking;
+        pub const @"null" = Self{ .data = null_data };
+        pub const same = Self{ .data = 0 };
+
+        pub fn init(cp: u21, d: u21) Self {
+            return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
+        }
+
+        pub fn initOptional(cp: u21, o: ?u21) Self {
+            if (o) |d| {
+                return .init(cp, d);
+            } else {
+                return .null;
+            }
+        }
+
+        fn _unshift(self: Self, cp: u21) u21 {
+            return @intCast(@as(isize, cp) + @as(isize, self.data));
+        }
+
+        fn _unshiftOptional(self: Self, cp: u21) ?u21 {
+            if (self.data == null_data) {
+                return null;
+            } else {
+                return self._unshift(cp);
+            }
+        }
+
+        pub const unshift = if (is_optional)
+            _unshiftOptional
+        else
+            _unshift;
+    } else struct {
         data: Int,
 
         const Self = @This();
@@ -1657,47 +1659,11 @@ pub fn Shift(comptime c: config.Field, comptime packing: config.Table.Packing) t
                 , .{self.data});
             }
         }
-    } else packed struct {
-        data: Int,
-
-        const Self = @This();
-        pub const Tracking = ShiftTracking;
-        pub const @"null" = Self{ .data = null_data };
-        pub const same = Self{ .data = 0 };
-
-        pub fn init(cp: u21, d: u21) Self {
-            return Self{ .data = @intCast(@as(isize, d) - @as(isize, cp)) };
-        }
-
-        pub fn initOptional(cp: u21, o: ?u21) Self {
-            if (o) |d| {
-                return .init(cp, d);
-            } else {
-                return .null;
-            }
-        }
-
-        fn _unshift(self: Self, cp: u21) u21 {
-            return @intCast(@as(isize, cp) + @as(isize, self.data));
-        }
-
-        fn _unshiftOptional(self: Self, cp: u21) ?u21 {
-            if (self.data == null_data) {
-                return null;
-            } else {
-                return self._unshift(cp);
-            }
-        }
-
-        pub const unshift = if (is_optional)
-            _unshiftOptional
-        else
-            _unshift;
     };
 }
 
-pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) type {
-    if (packing == .unpacked and c.cp_packing == .direct) {
+pub fn Union(comptime c: config.Field, comptime is_packed: bool) type {
+    if (!is_packed and c.cp_packing == .direct) {
         return c.type;
     }
 
@@ -1706,7 +1672,7 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
     const Int = @typeInfo(Tag).@"enum".tag_type;
     inlineAssert(Int == std.meta.Int(.unsigned, @bitSizeOf(Tag)));
 
-    const ShiftMember = if (c.cp_packing == .shift) Shift(c, packing) else void;
+    const ShiftMember = if (c.cp_packing == .shift) Shift(c, is_packed) else void;
 
     var fields: [info.fields.len]std.builtin.Type.UnionField = undefined;
     var has_shift: bool = false;
@@ -1718,7 +1684,7 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
         fields[i] = .{
             .name = f.name,
             .type = T,
-            .alignment = if (packing == .@"packed") 0 else @alignOf(T),
+            .alignment = if (is_packed) 0 else @alignOf(T),
         };
     }
 
@@ -1728,61 +1694,14 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
 
     const InnerUnion = @Type(.{
         .@"union" = .{
-            .layout = if (packing == .@"packed") .@"packed" else .auto,
-            .tag_type = if (packing == .@"packed") null else Tag,
+            .layout = if (is_packed) .@"packed" else .auto,
+            .tag_type = if (is_packed) null else Tag,
             .fields = &fields,
             .decls = &[_]std.builtin.Type.Declaration{},
         },
     });
 
-    return if (packing == .unpacked) struct {
-        @"union": InnerUnion,
-
-        const Self = @This();
-        pub const Tracking = UnionShiftTracking;
-
-        pub fn init(cp: u21, value: c.type) Self {
-            return .{
-                .@"union" = switch (value) {
-                    inline else => |v, tag| if (@FieldType(InnerUnion, @tagName(tag)) == ShiftMember)
-                        @unionInit(InnerUnion, @tagName(tag), .init(cp, v))
-                    else
-                        @unionInit(InnerUnion, @tagName(tag), v),
-                },
-            };
-        }
-
-        pub fn unshift(self: Self, cp: u21) c.type {
-            return switch (self.@"union") {
-                inline else => |v, comptime_tag| if (@FieldType(InnerUnion, @tagName(comptime_tag)) == ShiftMember)
-                    @unionInit(
-                        c.type,
-                        @tagName(comptime_tag),
-                        v.unshift(cp),
-                    )
-                else
-                    @unionInit(
-                        c.type,
-                        @tagName(comptime_tag),
-                        v,
-                    ),
-            };
-        }
-
-        pub fn write(self: Self, writer: *std.Io.Writer) !void {
-            try writer.writeAll(
-                \\.{
-                \\    .@"union" =
-            );
-            try writer.writeAll(" ");
-            try writeDataField(InnerUnion, writer, self.@"union");
-            try writer.writeAll(
-                \\,
-                \\}
-                \\
-            );
-        }
-    } else packed struct {
+    return if (is_packed) packed struct {
         tag: Int,
         @"union": InnerUnion,
 
@@ -1868,6 +1787,53 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
                     return std.meta.eql(a_v, b_v);
                 },
             }
+        }
+    } else struct {
+        @"union": InnerUnion,
+
+        const Self = @This();
+        pub const Tracking = UnionShiftTracking;
+
+        pub fn init(cp: u21, value: c.type) Self {
+            return .{
+                .@"union" = switch (value) {
+                    inline else => |v, tag| if (@FieldType(InnerUnion, @tagName(tag)) == ShiftMember)
+                        @unionInit(InnerUnion, @tagName(tag), .init(cp, v))
+                    else
+                        @unionInit(InnerUnion, @tagName(tag), v),
+                },
+            };
+        }
+
+        pub fn unshift(self: Self, cp: u21) c.type {
+            return switch (self.@"union") {
+                inline else => |v, comptime_tag| if (@FieldType(InnerUnion, @tagName(comptime_tag)) == ShiftMember)
+                    @unionInit(
+                        c.type,
+                        @tagName(comptime_tag),
+                        v.unshift(cp),
+                    )
+                else
+                    @unionInit(
+                        c.type,
+                        @tagName(comptime_tag),
+                        v,
+                    ),
+            };
+        }
+
+        pub fn write(self: Self, writer: *std.Io.Writer) !void {
+            try writer.writeAll(
+                \\.{
+                \\    .@"union" =
+            );
+            try writer.writeAll(" ");
+            try writeField(InnerUnion, writer, self.@"union");
+            try writer.writeAll(
+                \\,
+                \\}
+                \\
+            );
         }
     };
 }

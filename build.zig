@@ -446,7 +446,7 @@ fn buildTables(
 
     // Generate tables.zig with build_config
     const build_tables_mod = b.createModule(.{
-        .root_source_file = b.path("src/build/tables.zig"),
+        .root_source_file = b.path("src/tables.zig"),
         .target = b.graph.host,
         .optimize = build_tables_optimize,
     });

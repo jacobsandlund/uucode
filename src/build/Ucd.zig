@@ -311,45 +311,6 @@ const EmojiVariationSequence = packed struct {
     is_emoji: bool = false, // VS16
 };
 
-// Public for GraphemeBreakTest in src/grapheme.zig
-pub fn parseCp(str: []const u8) !u21 {
-    return std.fmt.parseInt(u21, str, 16);
-}
-
-fn parseRange(str: []const u8) !struct { start: u21, end: u21 } {
-    if (std.mem.indexOf(u8, str, "..")) |dot_idx| {
-        const start = try parseCp(str[0..dot_idx]);
-        const end = try parseCp(str[dot_idx + 2 ..]);
-        return .{ .start = start, .end = end };
-    } else {
-        const cp = try parseCp(str);
-        return .{ .start = cp, .end = cp };
-    }
-}
-
-test "parseCp" {
-    try std.testing.expectEqual(0x0000, try parseCp("0000"));
-    try std.testing.expectEqual(0x1F600, try parseCp("1F600"));
-}
-
-test "parseRange" {
-    const range = try parseRange("0030..0039");
-    try std.testing.expectEqual(0x0030, range.start);
-    try std.testing.expectEqual(0x0039, range.end);
-
-    const single = try parseRange("1F600");
-    try std.testing.expectEqual(0x1F600, single.start);
-    try std.testing.expectEqual(0x1F600, single.end);
-}
-
-// Public for GraphemeBreakTest in src/grapheme.zig
-pub fn trim(line: []const u8) []const u8 {
-    if (std.mem.indexOf(u8, line, "#")) |idx| {
-        return std.mem.trim(u8, line[0..idx], " \t\r");
-    }
-    return std.mem.trim(u8, line, " \t\r");
-}
-
 fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !void {
     const file_path = "ucd/UnicodeData.txt";
 

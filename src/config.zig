@@ -1,318 +1,22 @@
 const std = @import("std");
 const types = @import("types.zig");
 pub const quirks = @import("quirks.zig");
+const components = @import("components.zig");
+pub const fields = @import("fields.zig").fields;
+
+pub const build_components = components.build_components;
+pub const get_components = components.get_components;
 
 pub const max_code_point = 0x10FFFF;
+pub const num_code_points = max_code_point + 1;
 pub const zero_width_non_joiner = 0x200C;
 pub const zero_width_joiner = 0x200D;
 
-pub const default = Table{
-    .fields = &.{
-        // UnicodeData
-        .{
-            .name = "name",
-            .type = []const u8,
-            .max_len = 88,
-            .max_offset = 1041131,
-            .embedded_len = 2,
-        },
-        .{ .name = "general_category", .type = types.GeneralCategory },
-        .{ .name = "canonical_combining_class", .type = u8 },
-        .{ .name = "bidi_class", .type = types.BidiClass },
-        .{ .name = "decomposition_type", .type = types.DecompositionType },
-        .{
-            .name = "decomposition_mapping",
-            .type = []const u21,
-            .cp_packing = .shift,
-            .shift_low = -181519,
-            .shift_high = 99324,
-            .max_len = 18,
-            .max_offset = 4602,
-            .embedded_len = 0,
-        },
-        .{ .name = "numeric_type", .type = types.NumericType },
-        .{
-            .name = "numeric_value_decimal",
-            .type = ?u4,
-            .min_value = 0,
-            .max_value = 9,
-        },
-        .{
-            .name = "numeric_value_digit",
-            .type = ?u4,
-            .min_value = 0,
-            .max_value = 9,
-        },
-        .{
-            .name = "numeric_value_numeric",
-            .type = []const u8,
-            .max_len = 13,
-            .max_offset = 503,
-            .embedded_len = 1,
-        },
-        .{ .name = "is_bidi_mirrored", .type = bool },
-        .{
-            .name = "unicode_1_name",
-            .type = []const u8,
-            .max_len = 55,
-            .max_offset = 49956,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "simple_uppercase_mapping",
-            .type = u21,
-            .cp_packing = .shift,
-            .shift_low = -38864,
-            .shift_high = 42561,
-        },
-        .{
-            .name = "simple_lowercase_mapping",
-            .type = u21,
-            .cp_packing = .shift,
-            .shift_low = -42561,
-            .shift_high = 38864,
-        },
-        .{
-            .name = "simple_titlecase_mapping",
-            .type = u21,
-            .cp_packing = .shift,
-            .shift_low = -38864,
-            .shift_high = 42561,
-        },
-
-        // CaseFolding
-        .{
-            .name = "case_folding_simple",
-            .type = u21,
-            .cp_packing = .shift,
-            .shift_low = -42561,
-            .shift_high = 35267,
-        },
-        .{
-            .name = "case_folding_full",
-            .type = []const u21,
-            .cp_packing = .shift,
-            .shift_low = -42561,
-            .shift_high = 35267,
-            .max_len = 3,
-            .max_offset = 160,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "case_folding_turkish_only",
-            .type = []const u21,
-            .cp_packing = .direct,
-            .shift_low = -199,
-            .shift_high = 232,
-            .max_len = 1,
-            .max_offset = 2,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "case_folding_common_only",
-            .type = []const u21,
-            .cp_packing = .direct,
-            .shift_low = -42561,
-            .shift_high = 35267,
-            .max_len = 1,
-            .max_offset = 1451,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "case_folding_simple_only",
-            .type = []const u21,
-            .cp_packing = .direct,
-            .shift_low = -7615,
-            .shift_high = 1,
-            .max_len = 1,
-            .max_offset = 31,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "case_folding_full_only",
-            .type = []const u21,
-            .max_len = 3,
-            .max_offset = 160,
-            .embedded_len = 0,
-        },
-
-        // SpecialCasing
-        .{ .name = "has_special_casing", .type = bool },
-        .{
-            .name = "special_lowercase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift,
-            .shift_low = -199,
-            .shift_high = 232,
-            .max_len = 3,
-            .max_offset = 13,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "special_titlecase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift,
-            .shift_low = 0,
-            .shift_high = 199,
-            .max_len = 3,
-            .max_offset = 104,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "special_uppercase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift,
-            .shift_low = 0,
-            .shift_high = 199,
-            .max_len = 3,
-            .max_offset = 158,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "special_casing_condition",
-            .type = []const types.SpecialCasingCondition,
-            .max_len = 2,
-            .max_offset = 9,
-            .embedded_len = 0,
-        },
-
-        // Case mappings
-        .{
-            .name = "lowercase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift,
-            .shift_low = -42561,
-            .shift_high = 38864,
-            .max_len = 1,
-            .max_offset = 0,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "titlecase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift,
-            .shift_low = -38864,
-            .shift_high = 42561,
-            .max_len = 3,
-            .max_offset = 104,
-            .embedded_len = 0,
-        },
-        .{
-            .name = "uppercase_mapping",
-            .type = []const u21,
-            .cp_packing = .shift,
-            .shift_low = -38864,
-            .shift_high = 42561,
-            .max_len = 3,
-            .max_offset = 158,
-            .embedded_len = 0,
-        },
-
-        // DerivedCoreProperties
-        .{ .name = "is_math", .type = bool },
-        .{ .name = "is_alphabetic", .type = bool },
-        .{ .name = "is_lowercase", .type = bool },
-        .{ .name = "is_uppercase", .type = bool },
-        .{ .name = "is_cased", .type = bool },
-        .{ .name = "is_case_ignorable", .type = bool },
-        .{ .name = "changes_when_lowercased", .type = bool },
-        .{ .name = "changes_when_uppercased", .type = bool },
-        .{ .name = "changes_when_titlecased", .type = bool },
-        .{ .name = "changes_when_casefolded", .type = bool },
-        .{ .name = "changes_when_casemapped", .type = bool },
-        .{ .name = "is_id_start", .type = bool },
-        .{ .name = "is_id_continue", .type = bool },
-        .{ .name = "is_xid_start", .type = bool },
-        .{ .name = "is_xid_continue", .type = bool },
-        .{ .name = "is_default_ignorable", .type = bool },
-        .{ .name = "is_grapheme_extend", .type = bool },
-        .{ .name = "is_grapheme_base", .type = bool },
-        .{ .name = "is_grapheme_link", .type = bool },
-        .{ .name = "indic_conjunct_break", .type = types.IndicConjunctBreak },
-
-        // EastAsianWidth
-        .{ .name = "east_asian_width", .type = types.EastAsianWidth },
-
-        // OriginalGraphemeBreak
-        // This is the field from GraphemeBreakProperty.txt, without combining
-        // `indic_conjunct_break`, `is_emoji_modifier`,
-        // `is_emoji_modifier_base`, and `is_extended_pictographic`
-        .{ .name = "original_grapheme_break", .type = types.OriginalGraphemeBreak },
-
-        // EmojiData
-        .{ .name = "is_emoji", .type = bool },
-        .{ .name = "is_emoji_presentation", .type = bool },
-        .{ .name = "is_emoji_modifier", .type = bool },
-        .{ .name = "is_emoji_modifier_base", .type = bool },
-        .{ .name = "is_emoji_component", .type = bool },
-        .{ .name = "is_extended_pictographic", .type = bool },
-
-        // EmojiVariationSequences
-        // These are all going to be equivalent, but
-        // `emoji-variation-sequences.txt` and UTS #51 split out the emoji and
-        // text variation sequences separately. However, ever since these were
-        // introduced in Unicode 6.1 (see
-        // https://unicode.org/Public/6.1.0/ucd/StandardizedVariants.txt --
-        // dated 2011-11-10), until present, there has never been an emoji
-        // variation sequence that isn't also a valid text variation sequence,
-        // and vice versa, so the recommendation is to just use
-        // `is_emoji_vs_base`. Also the "Total sequences" comment at the end of
-        // emoji-variation-sequences.txt counts the number of sequences as one
-        // per base code point, rather than counting the "emoji style" and
-        // "text style" lines separately.
-        .{ .name = "is_emoji_vs_base", .type = bool },
-        .{ .name = "is_emoji_vs_text", .type = bool },
-        .{ .name = "is_emoji_vs_emoji", .type = bool },
-
-        // GraphemeBreak (derived)
-        // This is derived from `original_grapheme_break`
-        // (GraphemeBreakProperty.txt), `indic_conjunct_break`,
-        // `is_emoji_modifier`, `is_emoji_modifier_base`, and
-        // `is_extended_pictographic`
-        .{ .name = "grapheme_break", .type = types.GraphemeBreak },
-
-        // BidiPairedBracket
-        .{
-            .name = "bidi_paired_bracket",
-            .type = types.BidiPairedBracket,
-            .cp_packing = .shift,
-            .shift_low = -3,
-            .shift_high = 3,
-        },
-
-        // BidiMirroring
-        .{
-            .name = "bidi_mirroring",
-            .type = ?u21,
-            .cp_packing = .shift,
-            .shift_low = -2527,
-            .shift_high = 2527,
-        },
-
-        // Block
-        .{ .name = "block", .type = types.Block },
-
-        // Script
-        .{ .name = "script", .type = types.Script },
-
-        // Joining Type
-        .{ .name = "joining_type", .type = types.JoiningType },
-
-        // Joining Group
-        .{ .name = "joining_group", .type = types.JoiningGroup },
-
-        // Composition Exclusions
-        .{ .name = "is_composition_exclusion", .type = bool },
-
-        // Indic Positional Category
-        .{ .name = "indic_positional_category", .type = types.IndicPositionalCategory },
-
-        // Indic Syllabic Category
-        .{ .name = "indic_syllabic_category", .type = types.IndicSyllabicCategory },
-    },
-};
-
-pub const is_updating_ucd = false;
+// The `build_config.zig` needs to set:
+// pub const fields: [_]Field
+// pub const tables: [_]Table
+// pub const build_components: [_]Component
+// pub const get_components: [_]Component
 
 pub const Field = struct {
     name: [:0]const u8,
@@ -331,6 +35,11 @@ pub const Field = struct {
     // For PackedOptional fields
     min_value: isize = 0,
     max_value: isize = 0,
+
+    // For custom fields
+    MutableBacking: ?type = null,
+    Backing: ?type = null,
+    Tracking: ?type = null,
 
     pub const CpPacking = enum {
         direct,
@@ -417,66 +126,6 @@ pub const Field = struct {
             }
 
             return is_okay;
-        }
-
-        pub fn write(self: Runtime, writer: *std.Io.Writer) !void {
-            try writer.print(
-                \\.{{
-                \\    .name = "{s}",
-                \\
-            , .{self.name});
-
-            var type_parts = std.mem.splitScalar(u8, self.type, '.');
-            const base_type = type_parts.next().?;
-            const rest_type = type_parts.rest();
-
-            if (std.mem.endsWith(u8, base_type, "types") or
-                std.mem.endsWith(u8, base_type, "types_x") or
-                rest_type.len == 0)
-            {
-                try writer.print(
-                    \\    .type = {s},
-                    \\
-                , .{self.type});
-            } else {
-                const prefix = if (base_type[0] == '?') "?" else "";
-                try writer.print(
-                    \\    .type = {s}build_config.{s},
-                    \\
-                , .{ prefix, rest_type });
-            }
-
-            if (self.cp_packing != .direct or
-                self.shift_low != 0 or
-                self.shift_high != 0)
-            {
-                try writer.print(
-                    \\    .cp_packing = .{s},
-                    \\    .shift_low = {},
-                    \\    .shift_high = {},
-                    \\
-                , .{ @tagName(self.cp_packing), self.shift_low, self.shift_high });
-            }
-            if (self.max_len != 0) {
-                try writer.print(
-                    \\    .max_len = {},
-                    \\    .max_offset = {},
-                    \\    .embedded_len = {},
-                    \\
-                , .{ self.max_len, self.max_offset, self.embedded_len });
-            }
-            if (self.min_value != 0 or self.max_value != 0) {
-                try writer.print(
-                    \\    .min_value = {},
-                    \\    .max_value = {},
-                    \\
-                , .{ self.min_value, self.max_value });
-            }
-
-            try writer.writeAll(
-                \\},
-                \\
-            );
         }
     };
 
@@ -586,12 +235,109 @@ pub fn isPackable(comptime T: type) bool {
     }
 }
 
+// This is the "interface" for a component:
+//
+pub const Component = struct {
+    // struct type defining *either* `build` or `get`.
+    //
+    // // Sets the `rows` slices for the selected fields from `Row`
+    // pub fn build(
+    //     comptime fields: []const config.Field,
+    //     comptime fields_is_packed: []const bool,
+    //     comptime input_fields: []const usize,
+    //     comptime build_fields: []const usize,
+    //     allocator: std.mem.Allocator,
+    //     inputs: config.MultiSlice(fields, fields_is_packed, input_fields),
+    //     rows: config.MultiSlice(fields, fields_is_packed, build_fields),
+    //     backing: anytype, // Backing,
+    //     tracking: anytype, // Tracking,
+    // ) config.Error!void;
+    //
+    // // Computes the field value at runtime from the inputs and/or backing
+    // pub fn get(
+    //     comptime fields: []const Field,
+    //     comptime field: []const u8,
+    //     cp: u21,
+    //     tables: anytype,
+    //     backing: anytype,
+    // ) config.FieldFor(fields, field);
+    Impl: type,
+
+    inputs: []const [:0]const u8 = &[_][:0]const u8{},
+
+    // These fields get built into tables, or are values derived by the
+    // `get` method for `get_components`.
+    fields: []const [:0]const u8,
+
+    // Some fields need only backing, if they are used as `inputs` to
+    // other components (usually in "get" components).
+    backing_only_fields: []const [:0]const u8 = &[_][:0]const u8{},
+
+    pub const Error = std.mem.Allocator.Error || std.fs.File.OpenError;
+
+    fn coveredBy(comptime a: Component, comptime b: Component) bool {
+        if (a.backing_only_fields.len != b.backing_only_fields.len) return false;
+        for (a.backing_only_fields) |af| {
+            for (b.backing_only_fields) |bf| {
+                if (std.mem.eql(u8, af, bf)) break;
+            } else return false;
+        }
+
+        if (a.fields.len != b.fields.len) return false;
+        for (a.fields) |af| {
+            for (b.fields) |bf| {
+                if (std.mem.eql(u8, af.name, bf.name)) break;
+            } else return false;
+        }
+
+        return true;
+    }
+
+    fn partiallyMatches(comptime self: Component, comptime fs: *[][:0]const u8, comptime backing_only: *[][:0]const u8) bool {
+        var matches = false;
+        var i: usize = 0;
+        for (fs.*) |af| {
+            for (self.fields) |bf| {
+                if (std.mem.eql(u8, af, bf)) {
+                    matches = true;
+                    break;
+                }
+            } else {
+                fs.*[i] = af;
+                i += 1;
+            }
+        }
+
+        fs.*.len = i;
+        i = 0;
+
+        for (backing_only.*) |af| {
+            for (self.backing_only_fields) |bf| {
+                if (std.mem.eql(u8, af, bf)) {
+                    matches = true;
+                    break;
+                }
+            } else {
+                backing_only.*[i] = af;
+                i += 1;
+            }
+        }
+
+        backing_only.*.len = i;
+        return matches;
+    }
+};
+
 pub const Table = struct {
     name: ?[]const u8 = null,
     stages: Stages = .auto,
     packing: Packing = .auto,
-    extensions: []const Extension = &.{},
-    fields: []const Field,
+
+    // The union of all `fields` on all tables defines what fields are
+    // available for `uucode.get`. Additionally, any "get" fields from "get"
+    // components are activated if any table contains all the inputs for that
+    // component.
+    fields: []const [:0]const u8,
 
     pub const Stages = enum {
         auto,
@@ -603,47 +349,21 @@ pub const Table = struct {
         auto, // as in decide automatically, not as in Type.ContainerLayout.auto
         @"packed",
         unpacked,
-
-        pub fn write(self: Packing, writer: *std.Io.Writer) !void {
-            switch (self) {
-                .auto => unreachable,
-                .unpacked => try writer.writeAll(".unpacked"),
-                .@"packed" => try writer.writeAll(".@\"packed\""),
-            }
-        }
     };
-
-    pub fn hasField(comptime self: *const Table, comptime name: []const u8) bool {
-        @setEvalBranchQuota(10_000);
-
-        return inline for (self.fields) |f| {
-            if (std.mem.eql(u8, f.name, name)) {
-                break true;
-            }
-        } else false;
-    }
-
-    pub fn field(comptime self: *const Table, comptime name: []const u8) Field {
-        @setEvalBranchQuota(20_000);
-
-        return for (self.fields) |f| {
-            if (std.mem.eql(u8, f.name, name)) {
-                break f;
-            }
-        } else @compileError("Field '" ++ name ++ "' not found in Table");
-    }
 
     // TODO: benchmark this more
     const two_stage_size_threshold = 4;
 
-    pub fn resolve(comptime self: *const Table) Table {
+    pub fn resolve(comptime self: *const Table, comptime fields_: []const Field) Table {
         if (self.stages != .auto and self.packing != .auto) {
             return self;
         }
 
+        const fs = selectFields(fields_, self.fields);
+
         const can_be_packed = switch (self.packing) {
             .auto, .@"packed" => blk: {
-                for (self.fields) |f| {
+                for (fs) |f| {
                     if (!f.canBePacked()) {
                         break :blk false;
                     }
@@ -654,20 +374,15 @@ pub const Table = struct {
             .unpacked => false,
         };
 
-        const DataUnpacked = types.Data(.{
-            .packing = .unpacked,
-            .fields = self.fields,
-        });
-        const DataPacked = if (can_be_packed)
-            types.Data(.{
-                .packing = .@"packed",
-                .fields = self.fields,
-            })
+        const fields_is_packed: [fs.len]bool = @splat(false);
+        const RowUnpacked = types.Row(fs, fields_is_packed, .unpacked);
+        const RowPacked = if (can_be_packed)
+            types.Row(fs, fields_is_packed, .@"packed")
         else
-            DataUnpacked;
+            RowUnpacked;
 
-        const unpacked_size = @sizeOf(DataUnpacked);
-        const packed_size = @sizeOf(DataPacked);
+        const unpacked_size = @sizeOf(RowUnpacked);
+        const packed_size = @sizeOf(RowPacked);
         const min_size = @min(unpacked_size, packed_size);
 
         const stages: Stages = switch (self.stages) {
@@ -716,61 +431,241 @@ pub const Table = struct {
             .stages = stages,
             .packing = packing,
             .name = self.name,
-            .extensions = self.extensions,
             .fields = self.fields,
         };
     }
 };
 
-pub const Extension = struct {
-    inputs: []const [:0]const u8,
-    fields: []const Field,
+pub fn Row(
+    comptime fs: []const Field,
+    comptime fs_is_packed: []const bool,
+    comptime indexes: []const usize,
+) type {
+    return types.Row(
+        selectAt(Field, fs, indexes),
+        selectAt(bool, fs_is_packed, indexes),
+        .unpacked,
+    );
+}
 
-    compute: *const fn (
-        allocator: std.mem.Allocator,
-        cp: u21,
-        data: anytype,
-        backing: anytype,
-        tracking: anytype,
-    ) std.mem.Allocator.Error!void,
+fn MultiArray(
+    comptime fs: []const Field,
+    comptime fs_is_packed: []const bool,
+    comptime selected_fields: []const usize,
+) type {
+    return std.MultiArrayList(Row(fs, fs_is_packed, selected_fields));
+}
 
-    pub fn hasField(comptime self: *const Extension, comptime name: []const u8) bool {
-        return inline for (self.fields) |f| {
-            if (std.mem.eql(u8, f.name, name)) {
-                break true;
-            }
-        } else false;
+pub fn MultiSlice(
+    comptime fs: []const Field,
+    comptime fs_is_packed: []const bool,
+    comptime selected_fields: []const usize,
+) type {
+    return MultiArray(fs, fs_is_packed, selected_fields).Slice;
+}
+
+fn DeclStruct(
+    comptime fs: []const Field,
+    comptime fs_is_packed: []const bool,
+    comptime selected_fields: []const usize,
+    comptime decl: []const u8,
+) type {
+    return types.DeclStruct(
+        selectAt(Field, fs, selected_fields),
+        selectAt(bool, fs_is_packed, selected_fields),
+        decl,
+    );
+}
+
+pub fn Backing(
+    comptime fs: []const Field,
+    comptime fs_is_packed: []const bool,
+    comptime backing_fields: []const usize,
+) type {
+    return DeclStruct(fs, fs_is_packed, backing_fields, "Backing");
+}
+
+pub fn Tracking(
+    comptime fs: []const Field,
+    comptime fs_is_packed: []const bool,
+    comptime tracking_fields: []const usize,
+) type {
+    return DeclStruct(fs, fs_is_packed, tracking_fields, "Tracking");
+}
+
+pub fn multiSliceSubset(
+    comptime fs: []const Field,
+    comptime fs_is_packed: []const bool,
+    comptime array_fields: []const usize,
+    comptime subset_fields: []const usize,
+    source: MultiSlice(fs, fs_is_packed, array_fields),
+) MultiSlice(fs, fs_is_packed, subset_fields) {
+    const subset_positions = comptime blk: {
+        var positions: [subset_fields.len]usize = undefined;
+        for (subset_fields, 0..) |sf, i| {
+            positions[i] = for (array_fields, 0..) |af, j| {
+                if (af == sf) break j;
+            } else {
+                @compileError("subset field not found in array fields");
+            };
+        }
+        break :blk positions;
+    };
+
+    var result: MultiSlice(fs, fs_is_packed, subset_fields) = undefined;
+    inline for (subset_positions, 0..) |src_idx, dst_idx| {
+        result.ptrs[dst_idx] = source.ptrs[src_idx];
     }
-
-    pub fn field(comptime self: *const Extension, comptime name: []const u8) Field {
-        return for (self.fields) |f| {
-            if (std.mem.eql(u8, f.name, name)) {
-                break f;
-            }
-        } else @compileError("Field '" ++ name ++ "' not found in Extension");
-    }
-};
-
-// This is used by generated build_config.zig, and not intended for direct use
-// when using advanced configuration.
-pub fn _resolveFields(
-    comptime config_x: type,
-    comptime field_names: []const []const u8,
-    comptime extension_names: []const []const u8,
-) [field_names.len]Field {
-    @setEvalBranchQuota(100_000);
-    var result: [field_names.len]Field = undefined;
-    for (field_names, 0..) |field_name, i| {
-        result[i] = extensions_loop: inline for (@typeInfo(config_x).@"struct".decls) |decl| {
-            for (extension_names) |ext_name| {
-                if (std.mem.eql(u8, decl.name, ext_name)) {
-                    const extension = @field(config_x, decl.name);
-                    if (extension.hasField(field_name)) {
-                        break :extensions_loop extension.field(field_name);
-                    }
-                }
-            }
-        } else default.field(field_name);
-    }
+    result.len = source.len;
+    result.capacity = source.capacity;
     return result;
 }
+
+pub fn fieldIndex(comptime fs: []const Field, comptime name: []const u8) usize {
+    @setEvalBranchQuota(10_000);
+    for (fs, 0..) |f, i| {
+        if (std.mem.eql(u8, f.name, name)) return i;
+    }
+    @compileError("Field '" ++ name ++ "' not found in fields");
+}
+
+pub fn field(comptime fs: []const Field, comptime name: []const u8) Field {
+    return fs[fieldIndex(fs, name)];
+}
+
+pub fn FieldFor(comptime fs: []const Field, comptime name: []const u8) type {
+    return types.Field(field(fs, name), false);
+}
+
+pub fn selectFieldIndexes(comptime fs: []const Field, comptime select: []const []const u8) []const usize {
+    var result: [select.len]usize = undefined;
+    for (select, 0..) |f, i| {
+        result[i] = fieldIndex(fs, f);
+    }
+    return &result;
+}
+
+pub fn selectFields(comptime fs: []const Field, comptime select: []const []const u8) []const Field {
+    var result: [select.len]Field = undefined;
+    const indexes = selectFieldIndexes(fs, select);
+    for (indexes, 0..) |f, i| {
+        result[i] = fs[f];
+    }
+    return &result;
+}
+
+pub fn mergeFields(comptime a: []const Field, comptime b: []const Field) []const Field {
+    var result: [a.len + b.len]Field = undefined;
+    var i: usize = 0;
+    loop_a: for (a) |af| {
+        for (b) |bf| {
+            if (std.mem.eql(u8, af.name, bf.name)) {
+                continue :loop_a;
+            }
+        }
+        result[i] = af;
+        i += 1;
+    }
+    for (b) |bf| {
+        result[i] = bf;
+        i += 1;
+    }
+
+    return result[0..i];
+}
+
+pub fn selectAt(comptime T: type, all: []const T, select: []const usize) []const T {
+    var result: [select]T = undefined;
+    for (select, 0..) |s, i| {
+        result[i] = all[s];
+    }
+    return &result;
+}
+
+pub fn intersect(comptime a: []const usize, comptime b: []const usize) []const usize {
+    var result: [if (a.len < b.len) a.len else b.len]usize = undefined;
+    var i: usize = 0;
+    for (a) |av| {
+        for (b) |bv| {
+            if (av == bv) {
+                result[i] = av;
+                i += 1;
+                break;
+            }
+        }
+    }
+    return result[0..i];
+}
+
+pub fn componentIndexFor(comptime cs: []const Component, comptime field_name: []const u8) usize {
+    for (cs, 0..) |c, i| {
+        for (c.fields) |f| {
+            if (std.mem.eql(u8, f, field_name)) return i;
+        }
+        if (@hasDecl(c, "backing_only_fields")) {
+            for (c.backing_only_fields) |f| {
+                if (std.mem.eql(u8, f, field_name)) return i;
+            }
+        }
+    }
+    @compileError("Component not found for field: " ++ field_name);
+}
+
+pub fn componentFor(comptime cs: []const Component, comptime field_name: []const u8) Component {
+    @setEvalBranchQuota(10_000);
+    const i = componentIndexFor(cs, field_name);
+    return cs[i];
+}
+
+pub fn mergeComponents(comptime a: []const Component, comptime b: []const Component) []const Component {
+    var result: [a.len + b.len]Component = undefined;
+    var i: usize = 0;
+    var bi: usize = 0;
+    loop_a: for (a) |ac| {
+        comptime var fs: [ac.fields.len][:0]const u8 = ac.fields.*;
+        comptime var backing_only: [ac.backing_only_fields.len][:0]const u8 = ac.backing_only_fields.*;
+        comptime var fs_slice = &fs;
+        comptime var backing_only_slice = &backing_only;
+
+        for (b, 0..) |bc, j| {
+            if (bc.partiallyMatches(&fs_slice, &backing_only_slice)) {
+                if (j < bi) {
+                    @compileLog("Found (at least partially) matching component at", j, "in 'b' when already at", bc);
+                    @compileError("Component (at least partially) matches a component earlier in 'b'");
+                }
+                for (b[bi .. j + 1]) |c| {
+                    result[i] = c;
+                    i += 1;
+                }
+                bi = j + 1;
+
+                if (fs_slice.len == 0 and backing_only_slice.len == 0) {
+                    continue :loop_a;
+                }
+            }
+        }
+
+        result[i] = .{
+            .Impl = ac.Impl,
+            .inputs = ac.inputs,
+            .fields = fs_slice,
+            .backing_only_fields = backing_only_slice,
+        };
+        i += 1;
+    }
+    for (b[bi..]) |c| {
+        result[i] = c;
+        i += 1;
+    }
+
+    return result[0..i];
+}
+
+pub inline fn setField(container: anytype, comptime name: []const u8, value: anytype) void {
+    const T = @TypeOf(container);
+    if (@hasField(T, name)) {
+        @field(container, name) = value;
+    }
+}
+
+pub const is_updating_ucd = false;

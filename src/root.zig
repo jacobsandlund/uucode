@@ -465,13 +465,3 @@ test "is_extended_pictographic" {
     try testing.expect(get(.is_extended_pictographic, 0x1F600)); // 😀
     try testing.expect(!get(.is_extended_pictographic, 0x0041)); // 'A'
 }
-
-test "is_emoji_vs_text" {
-    try testing.expect(get(.is_emoji_vs_text, 0x231B)); // ⌛
-    try testing.expect(!get(.is_emoji_vs_text, 0x1F46C)); // 👬
-}
-
-test "is_emoji_vs_emoji" {
-    try testing.expect(get(.is_emoji_vs_emoji, 0x231B)); // ⌛
-    try testing.expect(!get(.is_emoji_vs_emoji, 0x1F46C)); // 👬
-}

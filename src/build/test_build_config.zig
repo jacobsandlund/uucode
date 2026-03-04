@@ -447,8 +447,6 @@ pub const tables = [_]config.Table{
             d.field("is_emoji_modifier"),
             d.field("is_emoji_component"),
             d.field("is_extended_pictographic"),
-            d.field("is_emoji_vs_text"),
-            d.field("is_emoji_vs_emoji"),
         },
     },
     .{
