@@ -1,20 +1,505 @@
-fn maybePackedInit(
-    comptime field: []const u8,
-    data: anytype,
-    tracking: anytype,
-    d: anytype,
-) void {
-    const Field = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
-    if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "init")) {
-        @field(data, field) = .init(d);
-    } else {
-        @field(data, field) = d;
+const std = @import("std");
+const Ucd = @import("Ucd.zig");
+const types = @import("types.zig");
+const config = @import("config.zig");
+const build_config = @import("build_config");
+const inlineAssert = config.quirks.inlineAssert;
+
+pub const std_options: std.Options = .{
+    .log_level = if (@hasDecl(build_config, "log_level"))
+        build_config.log_level
+    else
+        .info,
+};
+
+pub fn main() !void {
+    const total_start = try std.time.Instant.now();
+    const table_configs: []const config.Table = if (config.is_updating_ucd) &.{updating_ucd} else &build_config.tables;
+
+    var main_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer main_arena.deinit();
+    const main_allocator = main_arena.allocator();
+
+    const ucd = try Ucd.init(main_allocator, table_configs);
+
+    var args_iter = try std.process.argsWithAllocator(main_allocator);
+    _ = args_iter.skip(); // Skip program name
+
+    // Get output path (only argument now)
+    const output_path = args_iter.next() orelse std.debug.panic("No output file arg!", .{});
+
+    std.log.debug("Writing to file: {s}", .{output_path});
+
+    var out_file = try std.fs.cwd().createFile(output_path, .{});
+    defer out_file.close();
+    var buffer: [4096]u8 = undefined;
+    var file_writer = out_file.writer(&buffer);
+    var writer = &file_writer.interface;
+
+    try writer.writeAll(
+        \\//! This file is auto-generated. Do not edit.
+        \\
+        \\const std = @import("std");
+        \\const types = @import("types.zig");
+        \\const types_x = @import("types.x.zig");
+        \\const config = @import("config.zig");
+        \\const build_config = @import("build_config");
+        \\
+        \\
+    );
+
+    var table_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer table_arena.deinit();
+    const table_allocator = table_arena.allocator();
+
+    comptime var resolved_tables: [table_configs.len]config.Table = undefined;
+    inline for (table_configs, 0..) |table_config, i| {
+        resolved_tables[i] = table_config.resolve();
     }
-    const Tracking = @typeInfo(@TypeOf(tracking)).pointer.child;
-    if (@hasField(Tracking, field)) {
-        @field(tracking, field).track(d);
+
+    inline for (resolved_tables, 0..) |resolved_table, i| {
+        const start = try std.time.Instant.now();
+
+        try writeTableData(
+            resolved_table,
+            i,
+            table_allocator,
+            &ucd,
+            writer,
+        );
+
+        std.log.debug("Arena end capacity: {d}", .{table_arena.queryCapacity()});
+        _ = table_arena.reset(.retain_capacity);
+
+        const end = try std.time.Instant.now();
+        std.log.debug("`writeTableData` for table_config {d} time: {d}ms", .{ i, end.since(start) / std.time.ns_per_ms });
+    }
+
+    try writer.writeAll(
+        \\
+        \\pub const tables = .{
+        \\
+    );
+
+    inline for (resolved_tables, 0..) |resolved_table, i| {
+        try writeTable(
+            resolved_table,
+            i,
+            table_allocator,
+            writer,
+        );
+    }
+
+    try writer.writeAll(
+        \\
+        \\};
+        \\
+    );
+
+    try writer.flush();
+
+    std.log.debug("Main arena end capacity: {d}", .{main_arena.queryCapacity()});
+
+    const total_end = try std.time.Instant.now();
+    std.log.debug("Total time: {d}ms", .{total_end.since(total_start) / std.time.ns_per_ms});
+
+    if (config.is_updating_ucd) {
+        @panic("Updating Ucd -- tables not configured to actully run. flip `is_updating_ucd` to false and run again");
     }
 }
+
+const updating_ucd_fields = brk: {
+    const d = config.default;
+    const max_cp: u21 = config.max_code_point;
+
+    @setEvalBranchQuota(5_000);
+    var fields: [d.fields.len]config.Field = undefined;
+
+    for (d.fields, 0..) |f, i| {
+        switch (f.kind()) {
+            .basic => {
+                fields[i] = f;
+            },
+            .optional => {
+                fields[i] = f.override(.{
+                    .min_value = std.math.minInt(isize),
+                    .max_value = std.math.maxInt(isize) - 1,
+                });
+            },
+            .shift, .@"union" => {
+                fields[i] = f.override(.{
+                    .shift_low = -@as(isize, max_cp),
+                    .shift_high = max_cp,
+                });
+            },
+            .slice => {
+                fields[i] = f.override(.{
+                    .shift_low = -@as(isize, max_cp),
+                    .shift_high = max_cp,
+                    .max_len = if (f.max_len > 0)
+                        f.max_len * 3 + 100
+                    else
+                        0,
+                    .max_offset = f.max_offset * 3 + 1000,
+                    .embedded_len = 0,
+                });
+            },
+        }
+    }
+
+    break :brk fields;
+};
+
+const updating_ucd = config.Table{
+    .fields = &updating_ucd_fields,
+};
+
+fn hashData(comptime Data: type, hasher: anytype, data: Data) void {
+    inline for (@typeInfo(Data).@"struct".fields) |field| {
+        if (comptime @typeInfo(field.type) == .@"struct" and @hasDecl(field.type, "autoHash")) {
+            @field(data, field.name).autoHash(hasher);
+        } else {
+            std.hash.autoHash(hasher, @field(data, field.name));
+        }
+    }
+}
+
+fn eqlData(comptime Data: type, a: Data, b: Data) bool {
+    inline for (@typeInfo(Data).@"struct".fields) |field| {
+        if (comptime @typeInfo(field.type) == .@"struct" and @hasDecl(field.type, "eql")) {
+            if (!@field(a, field.name).eql(@field(b, field.name))) {
+                return false;
+            }
+        } else {
+            if (!std.meta.eql(@field(a, field.name), @field(b, field.name))) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+fn DataMap(comptime Data: type) type {
+    return std.HashMapUnmanaged(Data, u32, struct {
+        pub fn hash(self: @This(), data: Data) u64 {
+            _ = self;
+            var hasher = std.hash.Wyhash.init(128572459);
+            hashData(Data, &hasher, data);
+            return hasher.final();
+        }
+
+        pub fn eql(self: @This(), a: Data, b: Data) bool {
+            _ = self;
+            return eqlData(Data, a, b);
+        }
+    }, std.hash_map.default_max_load_percentage);
+}
+
+const block_size = 256;
+
+fn Block(comptime T: type) type {
+    inlineAssert(T == u32 or @typeInfo(T) == .@"struct");
+    return [block_size]T;
+}
+
+fn BlockMap(comptime B: type) type {
+    const T = @typeInfo(B).array.child;
+    return std.HashMapUnmanaged(B, u32, struct {
+        pub fn hash(self: @This(), block: B) u64 {
+            _ = self;
+            var hasher = std.hash.Wyhash.init(915296157);
+            if (@typeInfo(T) == .@"struct") {
+                for (block) |item| {
+                    hashData(T, &hasher, item);
+                }
+            } else {
+                std.hash.autoHash(&hasher, block);
+            }
+            return hasher.final();
+        }
+
+        pub fn eql(self: @This(), a: B, b: B) bool {
+            _ = self;
+            if (@typeInfo(T) == .@"struct") {
+                for (a, b) |a_item, b_item| {
+                    if (!eqlData(T, a_item, b_item)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            } else {
+                return std.mem.eql(T, &a, &b);
+            }
+        }
+    }, std.hash_map.default_max_load_percentage);
+}
+
+fn TableAllData(comptime c: config.Table) type {
+    @setEvalBranchQuota(20_000);
+    var x_fields_len: usize = 0;
+    var fields_len_bound: usize = c.fields.len;
+    for (c.extensions) |x| {
+        x_fields_len += x.fields.len;
+        fields_len_bound += x.fields.len;
+        fields_len_bound += x.inputs.len;
+    }
+    var x_fields: [x_fields_len]config.Field = undefined;
+    var x_i: usize = 0;
+
+    // Union extension fields:
+    for (c.extensions) |x| {
+        for (x.fields) |xf| {
+            for (x_fields[0..x_i]) |existing| {
+                if (std.mem.eql(u8, existing.name, xf.name)) {
+                    @compileError("Extension field '" ++ xf.name ++ "' already exists in table");
+                }
+            }
+
+            x_fields[x_i] = xf;
+            x_i += 1;
+        }
+    }
+
+    var fields: [fields_len_bound]std.builtin.Type.StructField = undefined;
+    var i: usize = 0;
+
+    // Add Data fields:
+    for (c.fields, 0..) |cf, c_i| {
+        for (c.fields[0..c_i]) |existing| {
+            if (std.mem.eql(u8, existing.name, cf.name)) {
+                @compileError("Field '" ++ cf.name ++ "' already exists in table");
+            }
+        }
+
+        // If a field isn't in `default` it's an extension field, which should
+        // be in x_fields.
+        if (!config.default.hasField(cf.name)) {
+            const x_field: ?config.Field = for (x_fields) |xf| {
+                if (std.mem.eql(u8, xf.name, cf.name)) break xf;
+            } else null;
+
+            if (x_field) |xf| {
+                if (!xf.eql(cf)) {
+                    @compileError("Table field '" ++ cf.name ++ "' does not match the field in the extension");
+                }
+            } else {
+                @compileError("Table field '" ++ cf.name ++ "' not found in any of the table's extensions");
+            }
+        }
+
+        const F = types.Field(cf, c.packing);
+        fields[i] = .{
+            .name = cf.name,
+            .type = F,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(F),
+        };
+        i += 1;
+    }
+
+    // Add extension inputs:
+    for (c.extensions) |x| {
+        loop_inputs: for (x.inputs) |input| {
+            for (fields[0..i]) |existing| {
+                if (std.mem.eql(u8, existing.name, input)) {
+                    continue :loop_inputs;
+                }
+            }
+
+            var cf: config.Field = undefined;
+
+            if (config.default.hasField(input)) {
+                cf = config.default.field(input);
+            } else {
+                // If a field isn't in `default` it's an extension field, which should
+                // be in x_fields.
+                cf = for (x_fields) |xf| {
+                    if (std.mem.eql(u8, xf.name, input)) break xf;
+                } else {
+                    @compileError("Extension field for input '" ++ input ++ "' not found in any of the table's extensions");
+                };
+            }
+
+            const F = types.Field(cf, .unpacked);
+            fields[i] = .{
+                .name = input,
+                .type = F,
+                .default_value_ptr = null,
+                .is_comptime = false,
+                .alignment = @alignOf(F),
+            };
+            i += 1;
+        }
+    }
+
+    const all_fields = fields[0..i];
+
+    // We sanity check here that at least one field from every extension is
+    // present in AllData, otherwise it's a configuration error, and we want to
+    // avoid running an extension that won't be used.
+    loop_extensions: for (c.extensions) |x| {
+        for (x.fields) |xf| {
+            for (all_fields) |f| {
+                if (std.mem.eql(u8, xf.name, f.name)) {
+                    continue :loop_extensions;
+                }
+            }
+        }
+
+        if (x.fields.len > 0) {
+            @compileError("Extension with field '" ++ x.fields[0].name ++ "' has no fields present in table or other extension inputs");
+        } else {
+            @compileError("Extension has no fields");
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = all_fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+
+fn TableTracking(comptime Struct: type) type {
+    const fields = @typeInfo(Struct).@"struct".fields;
+    var tracking_fields: [fields.len]std.builtin.Type.StructField = undefined;
+    var i: usize = 0;
+
+    for (@typeInfo(Struct).@"struct".fields) |f| {
+        switch (@typeInfo(f.type)) {
+            .@"struct", .@"union" => {
+                if (@hasDecl(f.type, "Tracking") and f.type.Tracking != void) {
+                    const T = @field(f.type, "Tracking");
+                    tracking_fields[i] = .{
+                        .name = f.name,
+                        .type = T,
+                        .default_value_ptr = null, // TODO: can we set this?
+                        .is_comptime = false,
+                        .alignment = @alignOf(T),
+                    };
+                    i += 1;
+                }
+            },
+            .optional => |optional| {
+                if (config.isPackable(optional.child)) {
+                    const T = types.OptionalTracking(f.type);
+                    tracking_fields[i] = .{
+                        .name = f.name,
+                        .type = T,
+                        .default_value_ptr = null,
+                        .is_comptime = false,
+                        .alignment = @alignOf(T),
+                    };
+                    i += 1;
+                }
+            },
+            else => {},
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = tracking_fields[0..i],
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+
+fn tablePrefix(
+    comptime table_config: config.Table,
+    table_index: usize,
+    allocator: std.mem.Allocator,
+) !struct { []const u8, []const u8 } {
+    const prefix = if (table_config.name) |name|
+        try std.fmt.allocPrint(allocator, "table_{s}", .{name})
+    else
+        try std.fmt.allocPrint(allocator, "table_{d}", .{table_index});
+
+    const TypePrefix = if (table_config.name) |name|
+        try std.fmt.allocPrint(allocator, "Table_{s}", .{name})
+    else
+        try std.fmt.allocPrint(allocator, "Table_{d}", .{table_index});
+
+    return .{ prefix, TypePrefix };
+}
+
+pub fn writeTableData(
+    comptime table_config: config.Table,
+    table_index: usize,
+    allocator: std.mem.Allocator,
+    ucd: *const Ucd,
+    writer: *std.Io.Writer,
+) !void {
+    const Data = types.Data(table_config);
+    const AllData = TableAllData(table_config);
+    const Backing = types.StructFromDecls(AllData, "MutableBackingBuffer");
+    const Tracking = TableTracking(AllData);
+
+    var backing = blk: {
+        var b: Backing = undefined;
+        inline for (@typeInfo(Backing).@"struct".fields) |field| {
+            comptime var c: config.Field = undefined;
+            if (comptime table_config.hasField(field.name)) {
+                c = table_config.field(field.name);
+            } else if (comptime config.default.hasField(field.name)) {
+                c = config.default.field(field.name);
+            } else {
+                c = x_blk: for (table_config.extensions) |x| {
+                    for (x.fields) |f| {
+                        if (std.mem.eql(u8, f.name, field.name)) {
+                            break :x_blk f;
+                        }
+                    }
+                } else unreachable;
+            }
+
+            const T = @typeInfo(field.type).pointer.child;
+            @field(b, field.name) = try allocator.alloc(T, c.max_offset);
+        }
+
+        break :blk b;
+    };
+
+    var tracking = blk: {
+        var t: Tracking = undefined;
+        inline for (@typeInfo(Tracking).@"struct".fields) |field| {
+            @field(t, field.name) = .{};
+        }
+        break :blk t;
+    };
+
+    const stages = table_config.stages;
+    const num_stages: u2 = if (stages == .three) 3 else 2;
+
+    const Stage2Elem = if (stages == .three)
+        u32
+    else
+        Data;
+
+    const B = Block(Stage2Elem);
+
+    var data_map: DataMap(Data) = .empty;
+    var stage3: std.ArrayListUnmanaged(Data) = .empty;
+    var block_map: BlockMap(B) = .empty;
+    var stage2: std.ArrayListUnmanaged(Stage2Elem) = .empty;
+    var stage1: std.ArrayListUnmanaged(u32) = .empty;
+
+    var block: B = undefined;
+    var block_len: usize = 0;
+
+    const build_data_start = try std.time.Instant.now();
+    var get_data_time: u64 = 0;
+
+    for (0..config.max_code_point + 1) |cp_usize| {
+        const get_data_start = try std.time.Instant.now();
+        const cp: u21 = @intCast(cp_usize);
 
         const get_data_end = try std.time.Instant.now();
         get_data_time += get_data_end.since(get_data_start);
@@ -54,16 +539,18 @@ fn maybePackedInit(
                 a.numeric_type = unicode_data.numeric_type;
             }
             if (@hasField(AllData, "numeric_value_decimal")) {
-                maybePackedInit(
+                types.fieldInit(
                     "numeric_value_decimal",
+                    cp,
                     &a,
                     &tracking,
                     unicode_data.numeric_value_decimal,
                 );
             }
             if (@hasField(AllData, "numeric_value_digit")) {
-                maybePackedInit(
+                types.fieldInit(
                     "numeric_value_digit",
+                    cp,
                     &a,
                     &tracking,
                     unicode_data.numeric_value_digit,
