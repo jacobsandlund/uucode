@@ -1071,7 +1071,7 @@ pub fn Slice(
             .len = 1,
         } else void{};
 
-        inline fn _init(
+        inline fn initInner(
             allocator: Allocator,
             backing: []T,
             tracking: *Tracking,
@@ -1133,7 +1133,7 @@ pub fn Slice(
             }
         }
 
-        pub fn init(
+        pub fn _init(
             allocator: Allocator,
             backing: []T,
             tracking: *Tracking,
@@ -1143,10 +1143,10 @@ pub fn Slice(
                 @compileError("init is only supported for direct packing: use initFor instead");
             }
 
-            return ._init(allocator, backing, tracking, s);
+            return .initInner(allocator, backing, tracking, s);
         }
 
-        pub fn initFor(
+        pub fn _initShift(
             allocator: Allocator,
             backing: []T,
             tracking: *Tracking,
@@ -1167,9 +1167,14 @@ pub fn Slice(
                     },
                 };
             } else {
-                return ._init(allocator, backing, tracking, s);
+                return .initInner(allocator, backing, tracking, s);
             }
         }
+
+        pub const init = if (c.cp_packing == .direct)
+            _init
+        else
+            _initShift;
 
         fn _slice(
             self: *const Self,
@@ -1841,7 +1846,7 @@ pub fn Union(comptime c: config.Field, comptime is_packed: bool) type {
 /// This is used in build/tables.zig but is exposed to allow extension to use
 /// it as well. Use this to initialize non-slice fields, and use
 /// `sliceFieldInit` for slice fields.
-pub fn fieldInit(
+pub inline fn fieldInit(
     comptime field: []const u8,
     cp: u21,
     data: anytype,

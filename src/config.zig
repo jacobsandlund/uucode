@@ -661,10 +661,118 @@ pub fn mergeComponents(comptime a: []const Component, comptime b: []const Compon
     return result[0..i];
 }
 
-pub inline fn setField(container: anytype, comptime name: []const u8, value: anytype) void {
-    const T = @TypeOf(container);
-    if (@hasField(T, name)) {
+pub inline fn setBasicField(
+    container: anytype,
+    comptime name: []const u8,
+    value: anytype,
+) void {
+    const R = @typeInfo(@TypeOf(container)).pointer.child;
+    if (@hasField(R, name)) {
+        const info = @typeInfo(@FieldType(R, name));
+        comptime switch (info) {
+            .type,
+            .noreturn,
+            .pointer,
+            .@"struct",
+            .comptime_float,
+            .comptime_int,
+            .undefined,
+            .optional,
+            .error_union,
+            .error_set,
+            .@"union",
+            .@"fn",
+            .@"opaque",
+            .frame,
+            .@"anyframe",
+            => @compileError("setBasicField cannot be used with type" ++ @tagName(info)),
+
+            .void,
+            .bool,
+            .int,
+            .float,
+            .array,
+            .null,
+            .vector,
+            .enum_literal,
+            => {},
+        };
         @field(container, name) = value;
+    }
+}
+
+pub inline fn setOptionalField(
+    container: anytype,
+    comptime name: []const u8,
+    value: anytype,
+) void {
+    const R = @typeInfo(@TypeOf(container)).pointer.child;
+    if (@hasField(R, name)) {
+        const F = @typeInfo(@FieldType(R, name));
+        const info = @typeInfo(F);
+        comptime switch (info) {
+            .optional => {
+                if (info.child == u21) {
+                    @compileError("setOptionalField cannot be used with ?u21");
+                }
+                @field(container, name) = value;
+            },
+            .@"struct" => {
+                if (!@hasDecl(F, "unpack") or !@hasDecl(F, "init")) {
+                    @compileError("setOptionalField cannot be used with struct without unpack+init");
+                }
+                @field(container, name) = .init(value);
+            },
+            else => @compileError("setOptionalField cannot be used with type" ++ @tagName(info)),
+        };
+        @field(container, name) = value;
+    }
+}
+
+pub inline fn setField(
+    allocator: std.mem.Allocator,
+    container: anytype,
+    comptime name: []const u8,
+    cp: u21,
+    value: anytype,
+    backing: anytype,
+    tracking: anytype,
+) void {
+    const R = @typeInfo(@TypeOf(container)).pointer.child;
+    if (!@hasField(R, name)) {
+        return;
+    }
+
+    const F = @typeInfo(@FieldType(R, name));
+    const info = @typeInfo(F);
+
+    if (@typeInfo(F) == .@"struct") {
+        if (@typeInfo(@TypeOf(value)) == .optional and @hasDecl(F, "initOptional")) {
+            @field(container, name) = .initOptional(
+                cp,
+                value,
+            );
+        } else if (@hasDecl(F, "init")) {
+            const params = @typeInfo(@FieldType(F, "init")).@"fn".params;
+            if (params.len == 1) {
+                @container(data, name) = .init(value);
+            } else if (params.len == 2) {
+                @container(data, name) = .init(cp, value);
+        } else {
+            @field(container, name) = value;
+        }
+    } else if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unpack")) {
+        @field(data, field) = .init(d);
+    } else {
+        @field(data, field) = d;
+    }
+    const Tracking = @typeInfo(@TypeOf(tracking)).pointer.child;
+    if (@hasField(Tracking, field)) {
+        if (@typeInfo(@TypeOf(@FieldType(Tracking, field).track)).@"fn".params.len == 3) {
+            @field(tracking, field).track(cp, d);
+        } else {
+            @field(tracking, field).track(d);
+        }
     }
 }
 
