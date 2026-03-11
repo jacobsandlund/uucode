@@ -1,7 +1,7 @@
 const std = @import("std");
 const storage = @import("storage.zig");
 pub const quirks = @import("quirks.zig");
-const components = @import("components.zig");
+pub const components = @import("components.zig");
 pub const fields = @import("fields.zig").fields;
 pub const types = @import("types.zig");
 

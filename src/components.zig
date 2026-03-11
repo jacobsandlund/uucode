@@ -34,7 +34,6 @@ pub const build_components: []const config.Component = &.{
 
 pub const get_components: []const config.Component = &.{};
 
-// Public for GraphemeBreakTest in src/grapheme.zig
 pub fn parseCp(str: []const u8) !u21 {
     return std.fmt.parseInt(u21, str, 16);
 }
@@ -44,7 +43,7 @@ test "parseCp" {
     try std.testing.expectEqual(0x1F600, try parseCp("1F600"));
 }
 
-fn parseRange(str: []const u8) !struct { start: u21, end: u21 } {
+pub fn parseRange(str: []const u8) !struct { start: u21, end: u21 } {
     if (std.mem.indexOf(u8, str, "..")) |dot_idx| {
         const start = try parseCp(str[0..dot_idx]);
         const end = try parseCp(str[dot_idx + 2 ..]);
@@ -65,7 +64,6 @@ test "parseRange" {
     try std.testing.expectEqual(0x1F600, single.end);
 }
 
-// Public for GraphemeBreakTest in src/grapheme.zig
 pub fn trim(line: []const u8) []const u8 {
     if (std.mem.indexOf(u8, line, "#")) |idx| {
         return std.mem.trim(u8, line[0..idx], " \t\r");
