@@ -18,6 +18,7 @@ const get_components = if (config.is_updating_ucd) config.get_components else bu
 const all_components = build_components_and_unused ++ get_components;
 
 fn visitField(comptime used: *[fields_and_unused.len]bool, comptime field: []const u8) void {
+    @setEvalBranchQuota(50_000);
     const i = config.fieldIndex(fields_and_unused, field);
     if (!used[i]) {
         used[i] = true;
@@ -164,6 +165,7 @@ pub fn main() !void {
     std.log.debug("Writing to file: {s}", .{output_path});
 
     var rows: std.MultiArrayList(AllRow) = .empty;
+    var slice = rows.slice();
     try rows.ensureTotalCapacity(allocator, config.num_code_points);
     var backing: Backing = undefined;
     var tracking: Tracking = undefined;
@@ -188,6 +190,7 @@ pub fn main() !void {
             fields_is_packed,
             row_fields,
             input_fields,
+            slice,
         );
 
         const build_fields = config.intersect(component_fields, row_fields);
@@ -196,6 +199,7 @@ pub fn main() !void {
             fields_is_packed,
             row_fields,
             build_fields,
+            slice,
         );
 
         const component_outputs = component_fields.* ++ component_backing_only.*;
@@ -411,8 +415,6 @@ pub fn main() !void {
         \\};
         \\
     );
-
-    const slice = rows.slice();
 
     inline for (tables, 0..) |table, i| {
         const start = try std.time.Instant.now();

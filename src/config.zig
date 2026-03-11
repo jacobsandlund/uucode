@@ -555,8 +555,8 @@ pub fn selectFields(comptime fs: []const Field, comptime select: []const []const
     return &result;
 }
 
-pub fn mergeFields(comptime a: []const Field, comptime b: []const Field) []const Field {
-    var result: [a.len + b.len]Field = undefined;
+pub fn mergeFields(comptime a: []const Field, comptime b: []const Field) [mergeFieldsLen(a, b)]Field {
+    var result: [mergeFieldsLen(a, b)]Field = undefined;
     var i: usize = 0;
     loop_a: for (a) |af| {
         for (b) |bf| {
@@ -571,8 +571,20 @@ pub fn mergeFields(comptime a: []const Field, comptime b: []const Field) []const
         result[i] = bf;
         i += 1;
     }
+    return result;
+}
 
-    return result[0..i];
+fn mergeFieldsLen(comptime a: []const Field, comptime b: []const Field) usize {
+    var count: usize = b.len;
+    loop_a: for (a) |af| {
+        for (b) |bf| {
+            if (std.mem.eql(u8, af.name, bf.name)) {
+                continue :loop_a;
+            }
+        }
+        count += 1;
+    }
+    return count;
 }
 
 pub fn selectAt(comptime T: type, all: []const T, select: []const usize) []const T {
