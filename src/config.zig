@@ -1,8 +1,9 @@
 const std = @import("std");
-const types = @import("types.zig");
+const storage = @import("storage.zig");
 pub const quirks = @import("quirks.zig");
 const components = @import("components.zig");
 pub const fields = @import("fields.zig").fields;
+pub const types = @import("types.zig");
 
 pub const build_components = components.build_components;
 pub const get_components = components.get_components;
@@ -13,10 +14,10 @@ pub const zero_width_non_joiner = 0x200C;
 pub const zero_width_joiner = 0x200D;
 
 // The `build_config.zig` needs to set:
-// pub const fields: [_]Field
-// pub const tables: [_]Table
-// pub const build_components: [_]Component
-// pub const get_components: [_]Component
+// pub const fields: []const Field
+// pub const tables: []const Table
+// pub const build_components: []const Component
+// pub const get_components: []const Component
 
 pub const Field = struct {
     name: [:0]const u8,
@@ -375,9 +376,9 @@ pub const Table = struct {
         };
 
         const fields_is_packed: [fs.len]bool = @splat(false);
-        const RowUnpacked = types.Row(fs, fields_is_packed, .unpacked);
+        const RowUnpacked = storage.Row(fs, fields_is_packed, .unpacked);
         const RowPacked = if (can_be_packed)
-            types.Row(fs, fields_is_packed, .@"packed")
+            storage.Row(fs, fields_is_packed, .@"packed")
         else
             RowUnpacked;
 
@@ -441,7 +442,7 @@ pub fn Row(
     comptime fs_is_packed: []const bool,
     comptime indexes: []const usize,
 ) type {
-    return types.Row(
+    return storage.Row(
         selectAt(Field, fs, indexes),
         selectAt(bool, fs_is_packed, indexes),
         .unpacked,
@@ -470,7 +471,7 @@ fn DeclStruct(
     comptime selected_fields: []const usize,
     comptime decl: []const u8,
 ) type {
-    return types.DeclStruct(
+    return storage.DeclStruct(
         selectAt(Field, fs, selected_fields),
         selectAt(bool, fs_is_packed, selected_fields),
         decl,
@@ -534,7 +535,7 @@ pub fn field(comptime fs: []const Field, comptime name: []const u8) Field {
 }
 
 pub fn FieldFor(comptime fs: []const Field, comptime name: []const u8) type {
-    return types.Field(field(fs, name), false);
+    return storage.Field(field(fs, name), false);
 }
 
 pub fn selectFieldIndexes(comptime fs: []const Field, comptime select: []const []const u8) []const usize {
@@ -602,10 +603,8 @@ pub fn componentIndexFor(comptime cs: []const Component, comptime field_name: []
         for (c.fields) |f| {
             if (std.mem.eql(u8, f, field_name)) return i;
         }
-        if (@hasDecl(c, "backing_only_fields")) {
-            for (c.backing_only_fields) |f| {
-                if (std.mem.eql(u8, f, field_name)) return i;
-            }
+        for (c.backing_only_fields) |f| {
+            if (std.mem.eql(u8, f, field_name)) return i;
         }
     }
     @compileError("Component not found for field: " ++ field_name);
@@ -661,42 +660,13 @@ pub fn mergeComponents(comptime a: []const Component, comptime b: []const Compon
     return result[0..i];
 }
 
-pub inline fn setBasicField(
+pub inline fn setBuiltField(
     container: anytype,
     comptime name: []const u8,
     value: anytype,
 ) void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
     if (@hasField(R, name)) {
-        const info = @typeInfo(@FieldType(R, name));
-        comptime switch (info) {
-            .type,
-            .noreturn,
-            .pointer,
-            .@"struct",
-            .comptime_float,
-            .comptime_int,
-            .undefined,
-            .optional,
-            .error_union,
-            .error_set,
-            .@"union",
-            .@"fn",
-            .@"opaque",
-            .frame,
-            .@"anyframe",
-            => @compileError("setBasicField cannot be used with type" ++ @tagName(info)),
-
-            .void,
-            .bool,
-            .int,
-            .float,
-            .array,
-            .null,
-            .vector,
-            .enum_literal,
-            => {},
-        };
         @field(container, name) = value;
     }
 }
@@ -725,7 +695,40 @@ pub inline fn setOptionalField(
             },
             else => @compileError("setOptionalField cannot be used with type" ++ @tagName(info)),
         };
-        @field(container, name) = value;
+    }
+}
+
+pub inline fn setShiftField(
+    container: anytype,
+    comptime name: []const u8,
+    cp: u21,
+    value: anytype,
+) void {
+    const R = @typeInfo(@TypeOf(container)).pointer.child;
+    if (@hasField(R, name)) {
+        const F = @typeInfo(@FieldType(R, name));
+        const info = @typeInfo(F);
+        comptime switch (info) {
+            .@"struct" => {
+                if (!@hasDecl(F, "unshift") or !@hasDecl(F, "init")) {
+                    @compileError("setShiftField cannot be used with struct without unshift+init");
+                }
+                @field(container, name) = .init(cp, value);
+            },
+            .optional => {
+                if (info.child != u21) {
+                    @compileError("setOptionalField with optional must be ?u21");
+                }
+                @field(container, name) = value;
+            },
+            .int => {
+                if (F != u21) {
+                    @compileError("setOptionalField with int must be u21");
+                }
+                @field(container, name) = value;
+            },
+            else => @compileError("setOptionalField cannot be used with type" ++ @tagName(info)),
+        };
     }
 }
 
@@ -746,34 +749,73 @@ pub inline fn setField(
     const F = @typeInfo(@FieldType(R, name));
     const info = @typeInfo(F);
 
-    if (@typeInfo(F) == .@"struct") {
-        if (@typeInfo(@TypeOf(value)) == .optional and @hasDecl(F, "initOptional")) {
-            @field(container, name) = .initOptional(
-                cp,
-                value,
-            );
-        } else if (@hasDecl(F, "init")) {
-            const params = @typeInfo(@FieldType(F, "init")).@"fn".params;
-            if (params.len == 1) {
-                @container(data, name) = .init(value);
-            } else if (params.len == 2) {
-                @container(data, name) = .init(cp, value);
-        } else {
+    comptime switch (info) {
+        .@"struct" => {
+            if (@hasDecl(F, "init")) {
+                const params = @typeInfo(@FieldType(F, "init")).@"fn".params;
+                if (params.len == 1) {
+                    @field(container, name) = .init(value);
+                } else if (params.len == 2) {
+                    @field(container, name) = .init(cp, value);
+                } else if (params.len == 4) {
+                    @field(container, name) = .init(
+                        allocator,
+                        @field(backing, field),
+                        &@field(tracking, field),
+                        value,
+                    );
+                } else if (params.len == 5) {
+                    @field(container, name) = .init(
+                        allocator,
+                        @field(backing, field),
+                        &@field(tracking, field),
+                        value,
+                        cp,
+                    );
+                } else {
+                    @compileError(std.fmt.comptimePrint("setField cannot be used with struct with init taking {d} parameters", .{params.len}));
+                }
+            } else {
+                @field(container, name) = value;
+            }
+        },
+        .@"union" => {
+            if (@hasDecl(F, "init")) {
+                const params = @typeInfo(@FieldType(F, "init")).@"fn".params;
+                if (params.len == 1) {
+                    @field(container, name) = .init(value);
+                } else if (params.len == 2) {
+                    @field(container, name) = .init(cp, value);
+                } else {
+                    @compileError(std.fmt.comptimePrint("setField cannot be used with struct with init taking {d} parameters", .{params.len}));
+                }
+            } else {
+                @field(container, name) = value;
+            }
+        },
+
+        .bool,
+        .int,
+        .float,
+        .array,
+        .vector,
+        .@"enum",
+        => {
             @field(container, name) = value;
-        }
-    } else if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unpack")) {
-        @field(data, field) = .init(d);
-    } else {
-        @field(data, field) = d;
-    }
-    const Tracking = @typeInfo(@TypeOf(tracking)).pointer.child;
-    if (@hasField(Tracking, field)) {
-        if (@typeInfo(@TypeOf(@FieldType(Tracking, field).track)).@"fn".params.len == 3) {
-            @field(tracking, field).track(cp, d);
+        },
+        else => @compileError("setField cannot be used with type" ++ @tagName(info)),
+    };
+    const Track = @typeInfo(@TypeOf(tracking)).pointer.child;
+    if (@hasField(Track, field)) {
+        const params = @typeInfo(@TypeOf(@FieldType(Track, field).track)).@"fn".params;
+        if (params.len == 3) {
+            @field(Track, field).track(cp, value);
+        } else if (params.len == 2) {
+            @field(Track, field).track(value);
         } else {
-            @field(tracking, field).track(d);
+            @compileError("Tracking `track` must take 2 or 3 parameters (including self)");
         }
     }
 }
 
-pub const is_updating_ucd = false;
+pub const is_updating_ucd = true;

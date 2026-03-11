@@ -1,9 +1,8 @@
 //! This file defines the low(er)-level `get` method, returning `Data`.
-//! (It also must be separate from `root.zig` so that `types.zig` can use it to
+//! (It also must be separate from `root.zig` so that `storage.zig` can use it to
 //! allow for a better API on `Slice` fields.)
 const std = @import("std");
 const tables = @import("tables").tables;
-const types = @import("types.zig");
 
 fn TableData(comptime Table: anytype) type {
     const DataSlice = if (@hasField(Table, "stage3"))

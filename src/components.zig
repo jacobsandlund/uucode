@@ -3,9 +3,12 @@ const config = @import("config.zig");
 const types = @import("types.zig");
 const inlineAssert = config.quirks.inlineAssert;
 
+const setBuiltField = config.setBuiltField;
+const setOptionalField = config.setOptionalField;
+const setShiftField = config.setShiftField;
 const setField = config.setField;
 
-pub const build_components = [_]config.Component{
+pub const build_components: []const config.Component = &.{
     .{
         .Impl = UnicodeData,
         .fields = &.{
@@ -29,7 +32,7 @@ pub const build_components = [_]config.Component{
     .{ .Impl = EmojiVs, .fields = &.{"is_emoji_vs_base"} },
 };
 
-pub const get_components = [_]type{};
+pub const get_components: []const config.Component = &.{};
 
 // Public for GraphemeBreakTest in src/grapheme.zig
 pub fn parseCp(str: []const u8) !u21 {
@@ -82,24 +85,26 @@ const UnicodeData = struct {
         backing: anytype,
         tracking: anytype,
     ) !void {
+        _ = inputs;
+
         const Row = config.Row(fields, fields_is_packed, build_fields);
         const default_row: Row = comptime blk: {
-            var row: Row = .{};
-            setField(&row, "name", .empty);
-            setField(&row, "general_category", .other_not_assigned);
-            setField(&row, "canonical_combining_class", 0);
-            setField(&row, "bidi_class", .left_to_right);
-            setField(&row, "decomposition_type", .default);
-            setField(&row, "decomposition_mapping", .same);
-            setField(&row, "numeric_type", .none);
-            setField(&row, "numeric_value_decimal", null);
-            setField(&row, "numeric_value_digit", null);
-            setField(&row, "numeric_value_numeric", &.{});
-            setField(&row, "is_bidi_mirrored", false);
-            setField(&row, "unicode_1_name", &.{});
-            setField(&row, "simple_uppercase_mapping", 0);
-            setField(&row, "simple_lowercase_mapping", 0);
-            setField(&row, "simple_titlecase_mapping", 0);
+            var row: Row = undefined;
+            setBuiltField(&row, "name", .empty);
+            setBuiltField(&row, "general_category", .other_not_assigned);
+            setBuiltField(&row, "canonical_combining_class", 0);
+            setBuiltField(&row, "bidi_class", .left_to_right);
+            setBuiltField(&row, "decomposition_type", .default);
+            setBuiltField(&row, "decomposition_mapping", .same);
+            setBuiltField(&row, "numeric_type", .none);
+            setOptionalField(&row, "numeric_value_decimal", null);
+            setOptionalField(&row, "numeric_value_digit", null);
+            setBuiltField(&row, "numeric_value_numeric", .empty);
+            setBuiltField(&row, "is_bidi_mirrored", false);
+            setBuiltField(&row, "unicode_1_name", .empty);
+            setBuiltField(&row, "simple_uppercase_mapping", .same);
+            setBuiltField(&row, "simple_lowercase_mapping", .same);
+            setBuiltField(&row, "simple_titlecase_mapping", .same);
             break :blk row;
         };
 
@@ -131,31 +136,15 @@ const UnicodeData = struct {
 
             // Fill ranges or gaps
             while (rows.len < cp) {
-                var row: Row = range_row orelse .{
-                    .decomposition_mapping = &.{},
-                    .simple_uppercase_mapping = 0,
-                    .simple_titlecase_mapping = 0,
-                    .simple_lowercase_mapping = 0,
-                };
-                row.decomposition_mapping = try allocator.dupe(u21, &.{rows.len});
-                row.simple_uppercase_mapping = rows.len;
-                row.simple_titlecase_mapping = rows.len;
-                row.simple_lowercase_mapping = rows.len;
-                rows.appendAssumeCapacity(row);
+                rows.appendAssumeCapacity(range_row orelse default_row);
             }
 
-            if (range_data != null) {
+            if (range_row != null) {
                 // We're in a range, so the next entry marks the last, with the same
                 // information.
                 inlineAssert(std.mem.endsWith(u8, parts.next().?, "Last>"));
-                var data = range_data.?;
-                data.decomposition_mapping = try allocator.dupe(u21, &.{next_cp});
-                data.simple_uppercase_mapping = next_cp;
-                data.simple_titlecase_mapping = next_cp;
-                data.simple_lowercase_mapping = next_cp;
-                unicode_data[next_cp] = data;
-                range_data = null;
-                next_cp = cp + 1;
+                rows.appendAssumeCapacity(range_row.?);
+                range_row = null;
                 continue;
             }
 
@@ -166,7 +155,7 @@ const UnicodeData = struct {
             const decomposition_str = parts.next().?; // Field 5: Combined type and mapping
             const numeric_decimal_str = parts.next().?; // Field 6
             const numeric_digit_str = parts.next().?; // Field 7
-            const numeric_numeric_str = parts.next().?; // Field 8
+            const numeric_value_numeric = parts.next().?; // Field 8
             const is_bidi_mirrored = std.mem.eql(u8, parts.next().?, "Y"); // Field 9
             const unicode_1_name = parts.next().?; // Field 10
             _ = parts.next().?; // Field 11: Obsolete ISO_Comment
@@ -270,52 +259,133 @@ const UnicodeData = struct {
                     std.log.err("Invalid digit numeric value '{s}' at code point {X}: {}", .{ numeric_digit_str, cp, err });
                     unreachable;
                 };
-            } else if (numeric_numeric_str.len > 0) {
+            } else if (numeric_value_numeric.len > 0) {
                 numeric_type = types.NumericType.numeric;
             }
 
-            const data = UnicodeData{
-                .name = try allocator.dupe(u8, name),
-                .general_category = general_category,
-                .canonical_combining_class = canonical_combining_class,
-                .bidi_class = bidi_class,
-                .decomposition_type = decomposition_type,
-                .decomposition_mapping = try allocator.dupe(
-                    u21,
-                    decomposition_mapping[0..decomposition_mapping_len],
-                ),
-                .numeric_type = numeric_type,
-                .numeric_value_decimal = numeric_value_decimal,
-                .numeric_value_digit = numeric_value_digit,
-                .numeric_value_numeric = try allocator.dupe(u8, numeric_numeric_str),
-                .is_bidi_mirrored = is_bidi_mirrored,
-                .unicode_1_name = try allocator.dupe(u8, unicode_1_name),
-                .simple_uppercase_mapping = simple_uppercase_mapping,
-                .simple_lowercase_mapping = simple_lowercase_mapping,
-                .simple_titlecase_mapping = simple_titlecase_mapping,
-            };
+            const row: Row = undefined;
+            setField(
+                allocator,
+                &row,
+                "name",
+                cp,
+                name,
+                backing,
+                tracking,
+            );
+            setField(allocator, &row, "name", cp, name, backing, tracking);
+            setBuiltField(&row, "general_category", general_category);
+            setBuiltField(&row, "canonical_combining_class", canonical_combining_class);
+            setBuiltField(&row, "bidi_class", bidi_class);
+            setBuiltField(&row, "decomposition_type", decomposition_type);
+            setField(
+                allocator,
+                &row,
+                "decomposition_mapping",
+                cp,
+                decomposition_mapping,
+                backing,
+                tracking,
+            );
+            setBuiltField(&row, "numeric_type", numeric_type);
+            setOptionalField(&row, "numeric_value_decimal", numeric_value_decimal);
+            setOptionalField(&row, "numeric_value_digit", numeric_value_digit);
+            setField(
+                allocator,
+                &row,
+                "numeric_value_numeric",
+                cp,
+                numeric_value_numeric,
+                backing,
+                tracking,
+            );
+            setBuiltField(&row, "is_bidi_mirrored", is_bidi_mirrored);
+            setField(
+                allocator,
+                &row,
+                "unicode_1_name",
+                cp,
+                unicode_1_name,
+                backing,
+                tracking,
+            );
+            setShiftField(&row, "simple_uppercase_mapping", cp, simple_uppercase_mapping);
+            setShiftField(&row, "simple_lowercase_mapping", cp, simple_lowercase_mapping);
+            setShiftField(&row, "simple_titlecase_mapping", cp, simple_titlecase_mapping);
 
             // Handle range entries with "First>" and "Last>"
             if (std.mem.endsWith(u8, name_str, "First>")) {
-                range_data = data;
+                range_row = row;
             }
 
-            unicode_data[cp] = data;
-            next_cp = cp + 1;
+            rows.appendAssumeCapacity(range_row.?);
         }
 
         // Fill any remaining gaps at the end with default values
-        for (next_cp..config.max_code_point + 1) |cp_usize| {
-            const cp: u21 = @intCast(cp_usize);
-            unicode_data[cp_usize] = .{
-                .decomposition_mapping = try allocator.dupe(u21, &.{cp}),
-                .simple_uppercase_mapping = cp,
-                .simple_titlecase_mapping = cp,
-                .simple_lowercase_mapping = cp,
-            };
+        for (rows.len..config.num_code_points) |_| {
+            rows.appendAssumeCapacity(default_row);
         }
     }
 };
+
+const general_category_map = std.StaticStringMap(types.GeneralCategory).initComptime(.{
+    .{ "Lu", .letter_uppercase },
+    .{ "Ll", .letter_lowercase },
+    .{ "Lt", .letter_titlecase },
+    .{ "Lm", .letter_modifier },
+    .{ "Lo", .letter_other },
+    .{ "Mn", .mark_nonspacing },
+    .{ "Mc", .mark_spacing_combining },
+    .{ "Me", .mark_enclosing },
+    .{ "Nd", .number_decimal_digit },
+    .{ "Nl", .number_letter },
+    .{ "No", .number_other },
+    .{ "Pc", .punctuation_connector },
+    .{ "Pd", .punctuation_dash },
+    .{ "Ps", .punctuation_open },
+    .{ "Pe", .punctuation_close },
+    .{ "Pi", .punctuation_initial_quote },
+    .{ "Pf", .punctuation_final_quote },
+    .{ "Po", .punctuation_other },
+    .{ "Sm", .symbol_math },
+    .{ "Sc", .symbol_currency },
+    .{ "Sk", .symbol_modifier },
+    .{ "So", .symbol_other },
+    .{ "Zs", .separator_space },
+    .{ "Zl", .separator_line },
+    .{ "Zp", .separator_paragraph },
+    .{ "Cc", .other_control },
+    .{ "Cf", .other_format },
+    .{ "Cs", .other_surrogate },
+    .{ "Co", .other_private_use },
+    .{ "Cn", .other_not_assigned },
+});
+
+const bidi_class_map = std.StaticStringMap(types.BidiClass).initComptime(.{
+    .{ "L", .left_to_right },
+    .{ "LRE", .left_to_right_embedding },
+    .{ "LRO", .left_to_right_override },
+    .{ "R", .right_to_left },
+    .{ "AL", .right_to_left_arabic },
+    .{ "RLE", .right_to_left_embedding },
+    .{ "RLO", .right_to_left_override },
+    .{ "PDF", .pop_directional_format },
+    .{ "EN", .european_number },
+    .{ "ES", .european_number_separator },
+    .{ "ET", .european_number_terminator },
+    .{ "AN", .arabic_number },
+    .{ "CS", .common_number_separator },
+    .{ "NSM", .nonspacing_mark },
+    .{ "BN", .boundary_neutral },
+    .{ "B", .paragraph_separator },
+    .{ "S", .segment_separator },
+    .{ "WS", .whitespace },
+    .{ "ON", .other_neutrals },
+    .{ "LRI", .left_to_right_isolate },
+    .{ "RLI", .right_to_left_isolate },
+    .{ "FSI", .first_strong_isolate },
+    .{ "PDI", .pop_directional_isolate },
+});
 
 const EmojiVs = struct {
     pub fn build(

@@ -1,5 +1,5 @@
 const std = @import("std");
-const types = @import("types.zig");
+const storage = @import("storage.zig");
 const config = @import("config.zig");
 const build_config = @import("build_config");
 const inlineAssert = config.quirks.inlineAssert;
@@ -11,13 +11,13 @@ pub const std_options: std.Options = .{
         .info,
 };
 
-const fields_and_unused = if (config.is_updating_ucd) updating_ucd_fields else build_config.fields;
-const unresolved_tables = if (config.is_updating_ucd) updating_ucd_tables else build_config.tables;
+const fields_and_unused = if (config.is_updating_ucd) &updating_ucd_fields else build_config.fields;
+const unresolved_tables = if (config.is_updating_ucd) &updating_ucd_tables else build_config.tables;
 const build_components_and_unused = if (config.is_updating_ucd) config.build_components else build_config.build_components;
 const get_components = if (config.is_updating_ucd) config.get_components else build_config.get_components;
-const all_components = build_components_and_unused.* ++ get_components.*;
+const all_components = build_components_and_unused ++ get_components;
 
-fn visitField(comptime used: [fields_and_unused.len]bool, comptime field: []const u8) void {
+fn visitField(comptime used: *[fields_and_unused.len]bool, comptime field: []const u8) void {
     const i = config.fieldIndex(fields_and_unused, field);
     if (!used[i]) {
         used[i] = true;
@@ -29,12 +29,12 @@ fn visitField(comptime used: [fields_and_unused.len]bool, comptime field: []cons
 }
 
 const is_field_used = blk: {
-    const used: [fields_and_unused.len]bool = @splat(false);
+    var used: [fields_and_unused.len]bool = @splat(false);
     for (unresolved_tables) |table| {
-        for (table.fields) |f| visitField(used, f);
+        for (table.fields) |f| visitField(&used, f);
     }
     for (get_components) |component| {
-        for (component.inputs) |f| visitField(used, f);
+        for (component.inputs) |f| visitField(&used, f);
     }
     break :blk used;
 };
@@ -91,7 +91,7 @@ const row_fields = blk: {
     break :blk result[0..i];
 };
 
-fn visitComponentFor(comptime used: [all_components.len]bool, comptime field: []const u8) void {
+fn visitComponentFor(comptime used: *[all_components.len]bool, comptime field: []const u8) void {
     const i = config.componentIndexFor(all_components, field);
     if (!used[i]) {
         used[i] = true;
@@ -275,9 +275,8 @@ pub fn main() !void {
         \\//! This file is auto-generated. Do not edit.
         \\
         \\const std = @import("std");
-        \\const types = @import("types.zig");
-        \\const types_x = @import("types.x.zig");
         \\const config = @import("config.zig");
+        \\const storage = @import("storage.zig");
         \\const build_config = @import("build_config");
         \\
         \\pub const get_components = build_config.get_components;
@@ -447,7 +446,7 @@ pub fn main() !void {
 
         if (table.stages == .three) {
             try writer.print(
-                \\types.Table3({s}_Stage1, {s}_Stage2, {s}_Row){{
+                \\storage.Table3({s}_Stage1, {s}_Stage2, {s}_Row){{
                 \\        .stage1 = &{s}_stage1,
                 \\        .stage2 = &{s}_stage2,
                 \\        .stage3 = &{s}_stage3,
@@ -463,7 +462,7 @@ pub fn main() !void {
             });
         } else {
             try writer.print(
-                \\types.Table2({s}_Stage1, {s}_Row){{
+                \\storage.Table2({s}_Stage1, {s}_Row){{
                 \\        .stage1 = &{s}_stage1,
                 \\        .stage2 = &{s}_stage2,
                 \\    }},
@@ -602,7 +601,7 @@ pub fn writeTableRows(
     slice: std.MultiArrayList(AllRow).Slice,
 ) !void {
     const is_packed: [table.fields.len]bool = @splat(false);
-    const Row = types.Row(
+    const Row = storage.Row(
         config.selectFields(fields, table.fields),
         is_packed,
         table.packing,
@@ -684,7 +683,7 @@ pub fn writeTableRows(
     const prefix, const TypePrefix = try tablePrefix(table, table_index, allocator);
 
     try writer.print(
-        \\const {s}_Row = types.Row(
+        \\const {s}_Row = storage.Row(
         \\    config.selectFields(
         \\        fields,
         \\        .{{
@@ -794,7 +793,7 @@ pub fn writeTableRows(
             inline for (@typeInfo(Row).@"struct".fields) |field| {
                 try writer.print("    .{s} = ", .{field.name});
 
-                try types.writeField(field.type, writer, @field(row, field.name));
+                try storage.writeField(field.type, writer, @field(row, field.name));
 
                 try writer.writeAll(",\n");
             }
@@ -855,17 +854,19 @@ const updating_ucd_fields = brk: {
         }
     }
 
-    break :brk &ucd_fields;
+    break :brk ucd_fields;
 };
 
 const updating_ucd_tables = [_]config.Table{
     .{
-        .fields = blk: {
-            var ucd_fields: [updating_ucd_fields.len][:0]const u8 = undefined;
-            for (updating_ucd_fields, 0..) |f, i| {
-                ucd_fields[i] = f.name;
-            }
-            break :blk ucd_fields;
-        },
+        .fields = &updatingUcdFieldNames(),
     },
 };
+
+fn updatingUcdFieldNames() [updating_ucd_fields.len][:0]const u8 {
+    var ucd_fields: [updating_ucd_fields.len][:0]const u8 = undefined;
+    for (updating_ucd_fields, 0..) |f, i| {
+        ucd_fields[i] = f.name;
+    }
+    return ucd_fields;
+}

@@ -272,8 +272,7 @@ fn computeEmojiOddOrEven(
     }
 }
 
-// Types must be marked `pub`
-pub const EmojiOddOrEven = enum(u2) {
+const EmojiOddOrEven = enum(u2) {
     not_emoji,
     even_emoji,
     odd_emoji,

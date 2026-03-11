@@ -1,8 +1,5 @@
 const std = @import("std");
 const config = @import("config.zig");
-const config_x = @import("config.x.zig");
-const types = @import("types.zig");
-const d = config.default;
 
 const Allocator = std.mem.Allocator;
 pub const log_level = .debug;
@@ -75,8 +72,7 @@ fn computeEmojiOddOrEven(
     }
 }
 
-// Types must be marked `pub`
-pub const EmojiOddOrEven = enum(u2) {
+const EmojiOddOrEven = enum(u2) {
     not_emoji,
     even_emoji,
     odd_emoji,
@@ -117,7 +113,7 @@ fn computeInfo(
     tracking: anytype,
 ) Allocator.Error!void {
     var single_item_buffer: [1]u21 = undefined;
-    types.fieldInit(
+    config.setField(
         "uppercase_mapping_first_char",
         cp,
         data,
@@ -136,7 +132,7 @@ fn computeInfo(
         buffer[data.numeric_value_numeric.len - i - 1] = digit;
     }
 
-    try types.sliceFieldInit(
+    try config.setField(
         "numeric_value_numeric_reversed",
         allocator,
         cp,
@@ -156,7 +152,7 @@ fn computeOptEmojiOddOrEven(
 ) Allocator.Error!void {
     _ = allocator;
     _ = b;
-    types.fieldInit(
+    config.setField(
         "opt_emoji_odd_or_even",
         cp,
         data,
@@ -207,7 +203,7 @@ fn computeNextOrPrev(
         };
     }
 
-    types.fieldInit(
+    config.setField(
         "next_or_prev",
         cp,
         data,
@@ -239,7 +235,7 @@ fn computeNextOrPrevDirect(
 ) Allocator.Error!void {
     _ = allocator;
     _ = b;
-    types.fieldInit(
+    config.setField(
         "next_or_prev_direct",
         cp,
         data,
@@ -268,7 +264,7 @@ fn computeBidiPairedBracketDirect(
 ) Allocator.Error!void {
     _ = allocator;
     _ = b;
-    types.fieldInit(
+    config.setField(
         "bidi_paired_bracket_direct",
         cp,
         data,
@@ -283,7 +279,7 @@ const bidi_paired_bracket_direct = config.Extension{
     .fields = &.{
         .{
             .name = "bidi_paired_bracket_direct",
-            .type = types.BidiPairedBracket,
+            .type = config.types.BidiPairedBracket,
         },
     },
 };
@@ -302,7 +298,7 @@ fn computeMaybeBit(
         maybe = cp % 2 == 0;
     }
 
-    types.fieldInit(
+    config.setField(
         "maybe_bit",
         cp,
         data,
@@ -351,7 +347,7 @@ fn computeCanonicalDecomposition(
     else
         &[_]u21{};
 
-    try types.sliceFieldInit(
+    try config.setField(
         "canonical_decomposition_mapping",
         allocator,
         cp,
@@ -362,148 +358,148 @@ fn computeCanonicalDecomposition(
     );
 }
 
-pub const tables = [_]config.Table{
-    .{
-        .extensions = &.{
-            foo,
-            emoji_odd_or_even,
-            info,
-            next_or_prev,
-            next_or_prev_direct,
-            bidi_paired_bracket_direct,
-            canonical_decomposition,
-        },
-        .fields = &.{
-            foo.field("foo"),
-            emoji_odd_or_even.field("emoji_odd_or_even"),
-            info.field("uppercase_mapping_first_char"),
-            info.field("has_simple_lowercase"),
-            info.field("numeric_value_numeric_reversed"),
-            next_or_prev.field("next_or_prev"),
-            next_or_prev_direct.field("next_or_prev_direct"),
-            bidi_paired_bracket_direct.field("bidi_paired_bracket_direct"),
-            d.field("name").override(.{
-                .embedded_len = 15,
-                .max_offset = 996337,
-            }),
-            d.field("grapheme_break"),
-            d.field("special_lowercase_mapping"),
-            canonical_decomposition.field("canonical_decomposition_mapping"),
-            d.field("decomposition_type"),
-            d.field("decomposition_mapping"),
-        },
-    },
-    .{
-        .stages = .two,
-        .fields = &.{
-            d.field("general_category"),
-            d.field("case_folding_simple"),
-        },
-    },
-    .{
-        .name = "pack",
-        .packing = .@"packed",
-        .extensions = &.{
-            emoji_odd_or_even,
-            opt_emoji_odd_or_even,
-            maybe_bit,
-        },
-        .fields = &.{
-            opt_emoji_odd_or_even.field("opt_emoji_odd_or_even"),
-            maybe_bit.field("maybe_bit"),
-            d.field("bidi_paired_bracket"),
-        },
-    },
-    .{
-        .name = "checks",
-        .extensions = &.{},
-        .fields = &.{
-            d.field("simple_uppercase_mapping"),
-            d.field("is_alphabetic"),
-            d.field("is_lowercase"),
-            d.field("is_uppercase"),
-            d.field("is_emoji_vs_base"),
-            d.field("is_emoji_modifier_base"),
-            d.field("is_composition_exclusion"),
-            d.field("is_bidi_mirrored"),
-            d.field("is_math"),
-            d.field("is_cased"),
-            d.field("is_case_ignorable"),
-            d.field("changes_when_lowercased"),
-            d.field("changes_when_uppercased"),
-            d.field("changes_when_titlecased"),
-            d.field("changes_when_casefolded"),
-            d.field("changes_when_casemapped"),
-            d.field("is_id_start"),
-            d.field("is_id_continue"),
-            d.field("is_xid_start"),
-            d.field("is_xid_continue"),
-            d.field("is_default_ignorable"),
-            d.field("is_grapheme_extend"),
-            d.field("is_grapheme_base"),
-            d.field("is_grapheme_link"),
-            d.field("is_emoji"),
-            d.field("is_emoji_presentation"),
-            d.field("is_emoji_modifier"),
-            d.field("is_emoji_component"),
-            d.field("is_extended_pictographic"),
-        },
-    },
-    .{
-        .name = "misc",
-        .extensions = &.{},
-        .fields = &.{
-            d.field("joining_type"),
-            d.field("joining_group"),
-            d.field("east_asian_width"),
-            d.field("canonical_combining_class"),
-            d.field("numeric_type"),
-            d.field("numeric_value_decimal"),
-            d.field("numeric_value_digit"),
-            d.field("simple_titlecase_mapping"),
-            d.field("simple_lowercase_mapping"),
-            d.field("original_grapheme_break"),
-            d.field("indic_conjunct_break"),
-            d.field("indic_positional_category"),
-            d.field("indic_syllabic_category"),
-            d.field("bidi_mirroring"),
-        },
-    },
-    .{
-        .name = "case",
-        .extensions = &.{},
-        .fields = &.{
-            d.field("unicode_1_name"),
-            d.field("has_special_casing"),
-            d.field("case_folding_full"),
-            d.field("case_folding_turkish_only"),
-            d.field("case_folding_common_only"),
-            d.field("case_folding_simple_only"),
-            d.field("case_folding_full_only"),
-            d.field("special_titlecase_mapping"),
-            d.field("special_uppercase_mapping"),
-            d.field("lowercase_mapping"),
-            d.field("titlecase_mapping"),
-        },
-    },
-    .{
-        .name = "needed_for_tests_and_build_build_config",
-        .extensions = &.{
-            config_x.wcwidth,
-            config_x.grapheme_break_no_control,
-        },
-        .fields = &config._resolveFields(
-            config_x,
-            &.{
-                "wcwidth_standalone",
-                "wcwidth_zero_in_grapheme",
-                "grapheme_break_no_control",
-                "special_casing_condition",
-                "bidi_class",
-                "block",
-                "script",
-            },
-            &.{ "wcwidth", "grapheme_break_no_control" },
-        ),
-    },
-};
+//pub const tables = [_]config.Table{
+//    .{
+//        .extensions = &.{
+//            foo,
+//            emoji_odd_or_even,
+//            info,
+//            next_or_prev,
+//            next_or_prev_direct,
+//            bidi_paired_bracket_direct,
+//            canonical_decomposition,
+//        },
+//        .fields = &.{
+//            foo.field("foo"),
+//            emoji_odd_or_even.field("emoji_odd_or_even"),
+//            info.field("uppercase_mapping_first_char"),
+//            info.field("has_simple_lowercase"),
+//            info.field("numeric_value_numeric_reversed"),
+//            next_or_prev.field("next_or_prev"),
+//            next_or_prev_direct.field("next_or_prev_direct"),
+//            bidi_paired_bracket_direct.field("bidi_paired_bracket_direct"),
+//            d.field("name").override(.{
+//                .embedded_len = 15,
+//                .max_offset = 996337,
+//            }),
+//            d.field("grapheme_break"),
+//            d.field("special_lowercase_mapping"),
+//            canonical_decomposition.field("canonical_decomposition_mapping"),
+//            d.field("decomposition_type"),
+//            d.field("decomposition_mapping"),
+//        },
+//    },
+//    .{
+//        .stages = .two,
+//        .fields = &.{
+//            d.field("general_category"),
+//            d.field("case_folding_simple"),
+//        },
+//    },
+//    .{
+//        .name = "pack",
+//        .packing = .@"packed",
+//        .extensions = &.{
+//            emoji_odd_or_even,
+//            opt_emoji_odd_or_even,
+//            maybe_bit,
+//        },
+//        .fields = &.{
+//            opt_emoji_odd_or_even.field("opt_emoji_odd_or_even"),
+//            maybe_bit.field("maybe_bit"),
+//            d.field("bidi_paired_bracket"),
+//        },
+//    },
+//    .{
+//        .name = "checks",
+//        .extensions = &.{},
+//        .fields = &.{
+//            d.field("simple_uppercase_mapping"),
+//            d.field("is_alphabetic"),
+//            d.field("is_lowercase"),
+//            d.field("is_uppercase"),
+//            d.field("is_emoji_vs_base"),
+//            d.field("is_emoji_modifier_base"),
+//            d.field("is_composition_exclusion"),
+//            d.field("is_bidi_mirrored"),
+//            d.field("is_math"),
+//            d.field("is_cased"),
+//            d.field("is_case_ignorable"),
+//            d.field("changes_when_lowercased"),
+//            d.field("changes_when_uppercased"),
+//            d.field("changes_when_titlecased"),
+//            d.field("changes_when_casefolded"),
+//            d.field("changes_when_casemapped"),
+//            d.field("is_id_start"),
+//            d.field("is_id_continue"),
+//            d.field("is_xid_start"),
+//            d.field("is_xid_continue"),
+//            d.field("is_default_ignorable"),
+//            d.field("is_grapheme_extend"),
+//            d.field("is_grapheme_base"),
+//            d.field("is_grapheme_link"),
+//            d.field("is_emoji"),
+//            d.field("is_emoji_presentation"),
+//            d.field("is_emoji_modifier"),
+//            d.field("is_emoji_component"),
+//            d.field("is_extended_pictographic"),
+//        },
+//    },
+//    .{
+//        .name = "misc",
+//        .extensions = &.{},
+//        .fields = &.{
+//            d.field("joining_type"),
+//            d.field("joining_group"),
+//            d.field("east_asian_width"),
+//            d.field("canonical_combining_class"),
+//            d.field("numeric_type"),
+//            d.field("numeric_value_decimal"),
+//            d.field("numeric_value_digit"),
+//            d.field("simple_titlecase_mapping"),
+//            d.field("simple_lowercase_mapping"),
+//            d.field("original_grapheme_break"),
+//            d.field("indic_conjunct_break"),
+//            d.field("indic_positional_category"),
+//            d.field("indic_syllabic_category"),
+//            d.field("bidi_mirroring"),
+//        },
+//    },
+//    .{
+//        .name = "case",
+//        .extensions = &.{},
+//        .fields = &.{
+//            d.field("unicode_1_name"),
+//            d.field("has_special_casing"),
+//            d.field("case_folding_full"),
+//            d.field("case_folding_turkish_only"),
+//            d.field("case_folding_common_only"),
+//            d.field("case_folding_simple_only"),
+//            d.field("case_folding_full_only"),
+//            d.field("special_titlecase_mapping"),
+//            d.field("special_uppercase_mapping"),
+//            d.field("lowercase_mapping"),
+//            d.field("titlecase_mapping"),
+//        },
+//    },
+//    .{
+//        .name = "needed_for_tests_and_build_build_config",
+//        .extensions = &.{
+//            config_x.wcwidth,
+//            config_x.grapheme_break_no_control,
+//        },
+//        .fields = &config._resolveFields(
+//            config_x,
+//            &.{
+//                "wcwidth_standalone",
+//                "wcwidth_zero_in_grapheme",
+//                "grapheme_break_no_control",
+//                "special_casing_condition",
+//                "bidi_class",
+//                "block",
+//                "script",
+//            },
+//            &.{ "wcwidth", "grapheme_break_no_control" },
+//        ),
+//    },
+//};
