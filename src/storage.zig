@@ -19,6 +19,7 @@ pub fn Row(
     comptime fields_is_packed: []const bool,
     comptime table_packing: config.Table.Packing,
 ) type {
+    @setEvalBranchQuota(50_000);
     var row_fields: [fields.len]std.builtin.Type.StructField = undefined;
 
     for (fields, fields_is_packed, 0..) |field, is_field_packed, i| {
@@ -83,7 +84,7 @@ pub fn DeclStruct(
     return @Type(.{
         .@"struct" = .{
             .layout = .auto,
-            .fields = &struct_fields[0..i],
+            .fields = struct_fields[0..i],
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_tuple = false,
         },
@@ -176,7 +177,7 @@ pub fn Slice(
         const Self = @This();
         pub const T = @typeInfo(c.type).pointer.child;
         const Offset = std.math.IntFittingRange(0, max_offset);
-        const ShiftSingleItem = if (c.cp_packing == .shift) Shift(c, .unpacked) else void;
+        const ShiftSingleItem = if (c.cp_packing == .shift) Shift(c, false) else void;
         const Len = std.math.IntFittingRange(0, max_len);
 
         pub const Tracking = SliceTracking(T, max_len);

@@ -40,8 +40,46 @@ const is_field_used = blk: {
     break :blk used;
 };
 
-const fields = blk: {
-    var result: [fields_and_unused.len]config.Field = undefined;
+const fields: []const config.Field = &_fields();
+const field_names: []const [:0]const u8 = &fieldNames();
+const row_fields_and_backing: []const usize = &rowFieldsAndBacking();
+const row_fields: []const usize = &rowFields();
+
+fn visitComponentFor(comptime used: *[all_components.len]bool, comptime field: []const u8) void {
+    @setEvalBranchQuota(50_000);
+    const i = config.componentIndexFor(all_components, field);
+    if (!used[i]) {
+        used[i] = true;
+        for (all_components[i].inputs) |input| {
+            visitComponentFor(used, input);
+        }
+    }
+}
+
+const is_component_used = blk: {
+    var used: [all_components.len]bool = @splat(false);
+    for (unresolved_tables) |table| {
+        for (table.fields) |f| visitComponentFor(&used, f);
+    }
+    for (get_components) |component| {
+        for (component.inputs) |f| visitComponentFor(&used, f);
+    }
+    break :blk used;
+};
+
+const build_components: []const config.Component = &buildComponents();
+const fields_is_packed: []const bool = &fieldsIsPacked();
+
+fn _fieldsLen() usize {
+    var n: usize = 0;
+    for (is_field_used) |used| {
+        if (used) n += 1;
+    }
+    return n;
+}
+
+fn _fields() [_fieldsLen()]config.Field {
+    var result: [_fieldsLen()]config.Field = undefined;
     var i: usize = 0;
     for (fields_and_unused, is_field_used) |f, used| {
         if (used) {
@@ -49,33 +87,63 @@ const fields = blk: {
             i += 1;
         }
     }
-    break :blk result[0..i];
-};
+    return result;
+}
 
-const field_names = blk: {
-    var result: [fields.len][]const u8 = undefined;
+fn fieldNames() [fields.len][:0]const u8 {
+    var result: [fields.len][:0]const u8 = undefined;
     for (fields, 0..) |field, i| {
         result[i] = field.name;
     }
-    break :blk &result;
-};
+    return result;
+}
 
-const row_fields_and_backing = blk: {
-    var result: [fields.len]usize = undefined;
+fn rowFieldsAndBackingLen() usize {
+    @setEvalBranchQuota(50_000);
+    var n: usize = 0;
+    for (fields) |field| {
+        const c = config.componentIndexFor(all_components, field.name);
+        const component = all_components[c];
+        if (@hasDecl(component.Impl, "build")) {
+            n += 1;
+        }
+    }
+    return n;
+}
+
+fn rowFieldsAndBacking() [rowFieldsAndBackingLen()]usize {
+    @setEvalBranchQuota(50_000);
+    var result: [rowFieldsAndBackingLen()]usize = undefined;
     var i: usize = 0;
     for (fields, 0..) |field, f| {
         const c = config.componentIndexFor(all_components, field.name);
         const component = all_components[c];
-        if (@hasDecl(component, "build")) {
+        if (@hasDecl(component.Impl, "build")) {
             result[i] = f;
             i += 1;
         }
     }
-    break :blk result[0..i];
-};
+    return result;
+}
 
-const row_fields = blk: {
-    var result: [row_fields_and_backing.len]usize = undefined;
+fn rowFieldsLen() usize {
+    @setEvalBranchQuota(50_000);
+    var n: usize = 0;
+    for (row_fields_and_backing) |f| {
+        const field = fields[f].name;
+        const c = config.componentIndexFor(build_components_and_unused, field);
+        const component = build_components_and_unused[c];
+        const is_row_field = for (component.fields) |cfield| {
+            if (std.mem.eql(u8, cfield, field)) break true;
+        } else false;
+        if (is_row_field) n += 1;
+    }
+    return n;
+}
+
+fn rowFields() [rowFieldsLen()]usize {
+    @setEvalBranchQuota(50_000);
+    var result: [rowFieldsLen()]usize = undefined;
     var i: usize = 0;
     for (row_fields_and_backing) |f| {
         const field = fields[f].name;
@@ -89,51 +157,32 @@ const row_fields = blk: {
             i += 1;
         }
     }
-    break :blk result[0..i];
-};
-
-fn visitComponentFor(comptime used: *[all_components.len]bool, comptime field: []const u8) void {
-    const i = config.componentIndexFor(all_components, field);
-    if (!used[i]) {
-        used[i] = true;
-        for (all_components[i].inputs) |input| {
-            visitField(used, input);
-        }
-    }
+    return result;
 }
 
-const is_component_used = blk: {
-    const used: [all_components.len]bool = @splat(false);
-    for (unresolved_tables) |table| {
-        for (table.fields) |f| visitComponentFor(used, f);
+fn buildComponentsLen() usize {
+    var n: usize = 0;
+    for (all_components, is_component_used) |component, used| {
+        if (used and @hasDecl(component.Impl, "build")) {
+            n += 1;
+        }
     }
-    for (get_components) |component| {
-        for (component.inputs) |f| visitComponentFor(used, f);
-    }
-    break :blk used;
-};
+    return n;
+}
 
-const build_components = blk: {
-    var result: [all_components.len]type = undefined;
+fn buildComponents() [buildComponentsLen()]config.Component {
+    var result: [buildComponentsLen()]config.Component = undefined;
     var i: usize = 0;
     for (all_components, is_component_used) |component, used| {
-        if (used and @hasDecl(component, "build")) {
+        if (used and @hasDecl(component.Impl, "build")) {
             result[i] = component;
             i += 1;
         }
     }
-    break :blk result[0..i];
-};
+    return result;
+}
 
-const tables = blk: {
-    var ts: [unresolved_tables.len]config.Table = undefined;
-    for (unresolved_tables, 0..) |table, i| {
-        ts[i] = table.resolve(fields);
-    }
-    break :blk ts;
-};
-
-const fields_is_packed = blk: {
+fn fieldsIsPacked() [fields.len]bool {
     var is_packed: [fields.len]bool = @splat(false);
     for (tables) |table| {
         if (table.packing == .@"packed") {
@@ -143,10 +192,22 @@ const fields_is_packed = blk: {
             }
         }
     }
-    break :blk &is_packed;
+    return is_packed;
+}
+
+const tables = blk: {
+    var ts: [unresolved_tables.len]config.Table = undefined;
+    for (unresolved_tables, 0..) |table, i| {
+        ts[i] = table.resolve(fields);
+    }
+    break :blk ts;
 };
 
 const AllRow = config.Row(fields, fields_is_packed, row_fields);
+const AllRowMultiArrayList = blk: {
+    @setEvalBranchQuota(500_000);
+    break :blk std.MultiArrayList(AllRow);
+};
 const Backing = config.Backing(fields, fields_is_packed, row_fields_and_backing);
 const Tracking = config.Tracking(fields, fields_is_packed, row_fields_and_backing);
 
@@ -164,93 +225,93 @@ pub fn main() !void {
 
     std.log.debug("Writing to file: {s}", .{output_path});
 
-    var rows: std.MultiArrayList(AllRow) = .empty;
-    var slice = rows.slice();
+    var rows: AllRowMultiArrayList = .empty;
+    const slice = rows.slice();
     try rows.ensureTotalCapacity(allocator, config.num_code_points);
     var backing: Backing = undefined;
     var tracking: Tracking = undefined;
 
     inline for (build_components) |component| {
-        const component_inputs = config.selectFieldIndexes(
+        const component_inputs = comptime config.selectFieldIndexes(
             fields,
             component.inputs,
         );
-        const component_fields = config.selectFieldIndexes(
+        const component_fields = comptime config.selectFieldIndexes(
             fields,
             component.fields,
         );
-        const component_backing_only = config.selectFieldIndexes(
+        const component_backing_only = comptime config.selectFieldIndexes(
             fields,
             component.backing_only_fields,
         );
 
-        const input_fields = config.intersect(row_fields, component_inputs);
-        const inputs = config.multiSliceSubset(
+        const input_fields = comptime config.intersect(row_fields, &component_inputs);
+        var inputs = config.multiSliceSubset(
             fields,
             fields_is_packed,
             row_fields,
-            input_fields,
+            &input_fields,
             slice,
         );
 
-        const build_fields = config.intersect(component_fields, row_fields);
+        const build_fields = comptime config.intersect(&component_fields, row_fields);
         const builds = config.multiSliceSubset(
             fields,
             fields_is_packed,
             row_fields,
-            build_fields,
+            &build_fields,
             slice,
         );
 
-        const component_outputs = component_fields.* ++ component_backing_only.*;
-        const component_union = component_inputs.* ++ component_outputs;
-        const backing_fields = config.intersect(
+        const component_outputs = component_fields ++ component_backing_only;
+        const component_union = component_inputs ++ component_outputs;
+        const backing_fields = comptime config.intersect(
             &component_union,
             row_fields_and_backing,
         );
         const BackingSubset = config.Backing(
             fields,
             fields_is_packed,
-            backing_fields,
+            &backing_fields,
         );
-        const backing_input_fields = config.intersect(
+        const backing_input_fields = comptime config.intersect(
             row_fields_and_backing,
-            component_inputs,
+            &component_inputs,
         );
-        const backing_output_fields = config.intersect(
+        const backing_output_fields = comptime config.intersect(
             row_fields_and_backing,
             &component_outputs,
         );
-        const backing_inputs = config.selectAt(
+        const backing_inputs = comptime config.selectAt(
             [:0]const u8,
             field_names,
-            backing_input_fields,
+            &backing_input_fields,
         );
-        const backing_outputs = config.selectAt(
+        const backing_outputs = comptime config.selectAt(
             [:0]const u8,
             field_names,
-            backing_output_fields,
+            &backing_output_fields,
         );
 
         const TrackingSubset = config.Tracking(
             fields,
             fields_is_packed,
-            backing_fields,
+            &backing_fields,
         );
 
         inputs.len = config.num_code_points;
         var backing_subset: BackingSubset = undefined;
         var tracking_subset: TrackingSubset = undefined;
-        for (backing_inputs) |input| {
+        for (&backing_inputs) |input| {
             @field(backing_subset, input) = @field(backing, input);
             @field(tracking_subset, input) = @field(tracking, input);
         }
 
-        try component.build(
+        try component.Impl.build(
             fields,
             fields_is_packed,
-            input_fields,
-            build_fields,
+            &input_fields,
+            &build_fields,
             allocator,
             inputs,
             builds,
@@ -258,7 +319,7 @@ pub fn main() !void {
             &tracking_subset,
         );
 
-        for (backing_outputs) |output| {
+        for (&backing_outputs) |output| {
             @field(backing, output) = @field(backing_subset, output);
             @field(tracking, output) = @field(tracking_subset, output);
         }
@@ -600,12 +661,13 @@ pub fn writeTableRows(
     table_index: usize,
     allocator: std.mem.Allocator,
     writer: *std.Io.Writer,
-    slice: std.MultiArrayList(AllRow).Slice,
+    slice: AllRowMultiArrayList.Slice,
 ) !void {
     const is_packed: [table.fields.len]bool = @splat(false);
+    const selected_fields = comptime config.selectFields(fields, table.fields);
     const Row = storage.Row(
-        config.selectFields(fields, table.fields),
-        is_packed,
+        &selected_fields,
+        &is_packed,
         table.packing,
     );
 
@@ -634,7 +696,7 @@ pub fn writeTableRows(
 
         inline for (table.fields) |field| {
             const sfield = comptime std.meta.stringToEnum(
-                std.MultiArrayList(AllRow).Field,
+                AllRowMultiArrayList.Field,
                 field,
             ).?;
             @field(r, field) = slice.items(sfield)[cp];

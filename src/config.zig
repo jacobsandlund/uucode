@@ -376,9 +376,9 @@ pub const Table = struct {
         };
 
         const fields_is_packed: [fs.len]bool = @splat(false);
-        const RowUnpacked = storage.Row(fs, fields_is_packed, .unpacked);
+        const RowUnpacked = storage.Row(&fs, &fields_is_packed, .unpacked);
         const RowPacked = if (can_be_packed)
-            storage.Row(fs, fields_is_packed, .@"packed")
+            storage.Row(&fs, &fields_is_packed, .@"packed")
         else
             RowUnpacked;
 
@@ -442,11 +442,9 @@ pub fn Row(
     comptime fs_is_packed: []const bool,
     comptime indexes: []const usize,
 ) type {
-    return storage.Row(
-        selectAt(Field, fs, indexes),
-        selectAt(bool, fs_is_packed, indexes),
-        .unpacked,
-    );
+    const selected_fs = selectAt(Field, fs, indexes);
+    const selected_packed = selectAt(bool, fs_is_packed, indexes);
+    return storage.Row(&selected_fs, &selected_packed, .unpacked);
 }
 
 fn MultiArray(
@@ -471,11 +469,9 @@ fn DeclStruct(
     comptime selected_fields: []const usize,
     comptime decl: []const u8,
 ) type {
-    return storage.DeclStruct(
-        selectAt(Field, fs, selected_fields),
-        selectAt(bool, fs_is_packed, selected_fields),
-        decl,
-    );
+    const selected_fs = selectAt(Field, fs, selected_fields);
+    const selected_packed = selectAt(bool, fs_is_packed, selected_fields);
+    return storage.DeclStruct(&selected_fs, &selected_packed, decl);
 }
 
 pub fn Backing(
@@ -538,21 +534,21 @@ pub fn FieldFor(comptime fs: []const Field, comptime name: []const u8) type {
     return storage.Field(field(fs, name), false);
 }
 
-pub fn selectFieldIndexes(comptime fs: []const Field, comptime select: []const []const u8) []const usize {
+pub fn selectFieldIndexes(comptime fs: []const Field, comptime select: []const []const u8) [select.len]usize {
     var result: [select.len]usize = undefined;
     for (select, 0..) |f, i| {
         result[i] = fieldIndex(fs, f);
     }
-    return &result;
+    return result;
 }
 
-pub fn selectFields(comptime fs: []const Field, comptime select: []const []const u8) []const Field {
+pub fn selectFields(comptime fs: []const Field, comptime select: []const []const u8) [select.len]Field {
     var result: [select.len]Field = undefined;
     const indexes = selectFieldIndexes(fs, select);
     for (indexes, 0..) |f, i| {
         result[i] = fs[f];
     }
-    return &result;
+    return result;
 }
 
 pub fn mergeFields(comptime a: []const Field, comptime b: []const Field) [mergeFieldsLen(a, b)]Field {
@@ -587,16 +583,29 @@ fn mergeFieldsLen(comptime a: []const Field, comptime b: []const Field) usize {
     return count;
 }
 
-pub fn selectAt(comptime T: type, all: []const T, select: []const usize) []const T {
-    var result: [select]T = undefined;
+pub fn selectAt(comptime T: type, comptime all: []const T, comptime select: []const usize) [select.len]T {
+    var result: [select.len]T = undefined;
     for (select, 0..) |s, i| {
         result[i] = all[s];
     }
-    return &result;
+    return result;
 }
 
-pub fn intersect(comptime a: []const usize, comptime b: []const usize) []const usize {
-    var result: [if (a.len < b.len) a.len else b.len]usize = undefined;
+fn intersectLen(comptime a: []const usize, comptime b: []const usize) usize {
+    var count: usize = 0;
+    for (a) |av| {
+        for (b) |bv| {
+            if (av == bv) {
+                count += 1;
+                break;
+            }
+        }
+    }
+    return count;
+}
+
+pub fn intersect(comptime a: []const usize, comptime b: []const usize) [intersectLen(a, b)]usize {
+    var result: [intersectLen(a, b)]usize = undefined;
     var i: usize = 0;
     for (a) |av| {
         for (b) |bv| {
@@ -607,7 +616,7 @@ pub fn intersect(comptime a: []const usize, comptime b: []const usize) []const u
             }
         }
     }
-    return result[0..i];
+    return result;
 }
 
 pub fn componentIndexFor(comptime cs: []const Component, comptime field_name: []const u8) usize {
@@ -628,15 +637,44 @@ pub fn componentFor(comptime cs: []const Component, comptime field_name: []const
     return cs[i];
 }
 
-pub fn mergeComponents(comptime a: []const Component, comptime b: []const Component) []const Component {
-    var result: [a.len + b.len]Component = undefined;
+fn mergeComponentsLen(comptime a: []const Component, comptime b: []const Component) usize {
+    var count: usize = 0;
+    var bi: usize = 0;
+    loop_a: for (a) |ac| {
+        comptime var fs: [ac.fields.len][:0]const u8 = ac.fields.*;
+        comptime var backing_only: [ac.backing_only_fields.len][:0]const u8 = ac.backing_only_fields.*;
+        comptime var fs_slice: [][:0]const u8 = &fs;
+        comptime var backing_only_slice: [][:0]const u8 = &backing_only;
+
+        for (b, 0..) |bc, j| {
+            if (bc.partiallyMatches(&fs_slice, &backing_only_slice)) {
+                if (j < bi) {
+                    @compileError("Component (at least partially) matches a component earlier in 'b'");
+                }
+                count += j + 1 - bi;
+                bi = j + 1;
+
+                if (fs_slice.len == 0 and backing_only_slice.len == 0) {
+                    continue :loop_a;
+                }
+            }
+        }
+
+        count += 1;
+    }
+    count += b.len - bi;
+    return count;
+}
+
+pub fn mergeComponents(comptime a: []const Component, comptime b: []const Component) [mergeComponentsLen(a, b)]Component {
+    var result: [mergeComponentsLen(a, b)]Component = undefined;
     var i: usize = 0;
     var bi: usize = 0;
     loop_a: for (a) |ac| {
         comptime var fs: [ac.fields.len][:0]const u8 = ac.fields.*;
         comptime var backing_only: [ac.backing_only_fields.len][:0]const u8 = ac.backing_only_fields.*;
-        comptime var fs_slice = &fs;
-        comptime var backing_only_slice = &backing_only;
+        comptime var fs_slice: [][:0]const u8 = &fs;
+        comptime var backing_only_slice: [][:0]const u8 = &backing_only;
 
         for (b, 0..) |bc, j| {
             if (bc.partiallyMatches(&fs_slice, &backing_only_slice)) {
@@ -656,11 +694,14 @@ pub fn mergeComponents(comptime a: []const Component, comptime b: []const Compon
             }
         }
 
+        const remaining_fields = fs_slice[0..fs_slice.len].*;
+        const remaining_backing = backing_only_slice[0..backing_only_slice.len].*;
+
         result[i] = .{
             .Impl = ac.Impl,
             .inputs = ac.inputs,
-            .fields = fs_slice,
-            .backing_only_fields = backing_only_slice,
+            .fields = &remaining_fields,
+            .backing_only_fields = &remaining_backing,
         };
         i += 1;
     }
@@ -669,7 +710,7 @@ pub fn mergeComponents(comptime a: []const Component, comptime b: []const Compon
         i += 1;
     }
 
-    return result[0..i];
+    return result;
 }
 
 pub inline fn setBuiltField(
