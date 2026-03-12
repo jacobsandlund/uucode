@@ -1,5 +1,6 @@
 const std = @import("std");
 const storage = @import("storage.zig");
+const multi_slice = @import("multi_slice.zig");
 pub const quirks = @import("quirks.zig");
 pub const components = @import("components.zig");
 pub const fields = @import("fields.zig").fields;
@@ -447,20 +448,12 @@ pub fn Row(
     return storage.Row(&selected_fs, &selected_packed, .unpacked);
 }
 
-fn MultiArray(
-    comptime fs: []const Field,
-    comptime fs_is_packed: []const bool,
-    comptime selected_fields: []const usize,
-) type {
-    return std.MultiArrayList(Row(fs, fs_is_packed, selected_fields));
-}
-
 pub fn MultiSlice(
     comptime fs: []const Field,
     comptime fs_is_packed: []const bool,
     comptime selected_fields: []const usize,
 ) type {
-    return MultiArray(fs, fs_is_packed, selected_fields).Slice;
+    return multi_slice.MultiSlice(Row(fs, fs_is_packed, selected_fields));
 }
 
 fn DeclStruct(
@@ -497,25 +490,7 @@ pub fn multiSliceSubset(
     comptime subset_fields: []const usize,
     source: MultiSlice(fs, fs_is_packed, array_fields),
 ) MultiSlice(fs, fs_is_packed, subset_fields) {
-    const subset_positions = comptime blk: {
-        var positions: [subset_fields.len]usize = undefined;
-        for (subset_fields, 0..) |sf, i| {
-            positions[i] = for (array_fields, 0..) |af, j| {
-                if (af == sf) break j;
-            } else {
-                @compileError("subset field not found in array fields");
-            };
-        }
-        break :blk positions;
-    };
-
-    var result: MultiSlice(fs, fs_is_packed, subset_fields) = undefined;
-    inline for (subset_positions, 0..) |src_idx, dst_idx| {
-        result.ptrs[dst_idx] = source.ptrs[src_idx];
-    }
-    result.len = source.len;
-    result.capacity = source.capacity;
-    return result;
+    return source.subset(Row(fs, fs_is_packed, subset_fields));
 }
 
 pub fn fieldIndex(comptime fs: []const Field, comptime name: []const u8) usize {

@@ -204,10 +204,7 @@ const tables = blk: {
 };
 
 const AllRow = config.Row(fields, fields_is_packed, row_fields);
-const AllRowMultiArrayList = blk: {
-    @setEvalBranchQuota(500_000);
-    break :blk std.MultiArrayList(AllRow);
-};
+const AllRowSlice = config.MultiSlice(fields, fields_is_packed, row_fields);
 const Backing = config.Backing(fields, fields_is_packed, row_fields_and_backing);
 const Tracking = config.Tracking(fields, fields_is_packed, row_fields_and_backing);
 
@@ -225,9 +222,7 @@ pub fn main() !void {
 
     std.log.debug("Writing to file: {s}", .{output_path});
 
-    var rows: AllRowMultiArrayList = .empty;
-    const slice = rows.slice();
-    try rows.ensureTotalCapacity(allocator, config.num_code_points);
+    var slice = try AllRowSlice.initCapacity(allocator, config.num_code_points);
     var backing: Backing = undefined;
     var tracking: Tracking = undefined;
 
@@ -255,7 +250,7 @@ pub fn main() !void {
         );
 
         const build_fields = comptime config.intersect(&component_fields, row_fields);
-        const builds = config.multiSliceSubset(
+        var builds = config.multiSliceSubset(
             fields,
             fields_is_packed,
             row_fields,
@@ -314,7 +309,7 @@ pub fn main() !void {
             &build_fields,
             allocator,
             inputs,
-            builds,
+            &builds,
             &backing_subset,
             &tracking_subset,
         );
@@ -325,7 +320,7 @@ pub fn main() !void {
         }
     }
 
-    rows.len = config.num_code_points;
+    slice.len = config.num_code_points;
 
     const build_components_end = try std.time.Instant.now();
     std.log.debug("build_components.build time: {d}ms", .{build_components_end.since(total_start) / std.time.ns_per_ms});
@@ -661,7 +656,7 @@ pub fn writeTableRows(
     table_index: usize,
     allocator: std.mem.Allocator,
     writer: *std.Io.Writer,
-    slice: AllRowMultiArrayList.Slice,
+    slice: AllRowSlice,
 ) !void {
     const is_packed: [table.fields.len]bool = @splat(false);
     const selected_fields = comptime config.selectFields(fields, table.fields);
@@ -696,7 +691,7 @@ pub fn writeTableRows(
 
         inline for (table.fields) |field| {
             const sfield = comptime std.meta.stringToEnum(
-                AllRowMultiArrayList.Field,
+                AllRowSlice.Field,
                 field,
             ).?;
             @field(r, field) = slice.items(sfield)[cp];
