@@ -15,7 +15,7 @@ const fields_and_unused = if (config.is_updating_ucd) &updating_ucd_fields else 
 const unresolved_tables = if (config.is_updating_ucd) &updating_ucd_tables else build_config.tables;
 const build_components_and_unused = if (config.is_updating_ucd) config.build_components else build_config.build_components;
 const get_components = if (config.is_updating_ucd) config.get_components else build_config.get_components;
-const all_components = build_components_and_unused ++ get_components;
+const all_components: []const config.Component = &(build_components_and_unused[0..build_components_and_unused.len].* ++ get_components[0..get_components.len].*);
 
 fn visitField(comptime used: *[fields_and_unused.len]bool, comptime field: []const u8) void {
     @setEvalBranchQuota(50_000);

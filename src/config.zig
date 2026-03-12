@@ -720,7 +720,12 @@ pub inline fn setBuiltField(
 ) void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
     if (@hasField(R, name)) {
-        @field(container, name) = value;
+        const F = @FieldType(R, name);
+        if (@TypeOf(value) == @Type(.enum_literal)) {
+            @field(container, name) = @field(F, @tagName(value));
+        } else {
+            @field(container, name) = value;
+        }
     }
 }
 
@@ -731,11 +736,10 @@ pub inline fn setOptionalField(
 ) void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
     if (@hasField(R, name)) {
-        const F = @typeInfo(@FieldType(R, name));
-        const info = @typeInfo(F);
-        comptime switch (info) {
-            .optional => {
-                if (info.child == u21) {
+        const F = @FieldType(R, name);
+        switch (@typeInfo(F)) {
+            .optional => |opt| {
+                if (opt.child == u21) {
                     @compileError("setOptionalField cannot be used with ?u21");
                 }
                 @field(container, name) = value;
@@ -746,8 +750,8 @@ pub inline fn setOptionalField(
                 }
                 @field(container, name) = .init(value);
             },
-            else => @compileError("setOptionalField cannot be used with type" ++ @tagName(info)),
-        };
+            else => @compileError("setOptionalField cannot be used with type " ++ @typeName(F)),
+        }
     }
 }
 
@@ -759,29 +763,28 @@ pub inline fn setShiftField(
 ) void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
     if (@hasField(R, name)) {
-        const F = @typeInfo(@FieldType(R, name));
-        const info = @typeInfo(F);
-        comptime switch (info) {
+        const F = @FieldType(R, name);
+        switch (@typeInfo(F)) {
             .@"struct" => {
                 if (!@hasDecl(F, "unshift") or !@hasDecl(F, "init")) {
                     @compileError("setShiftField cannot be used with struct without unshift+init");
                 }
                 @field(container, name) = .init(cp, value);
             },
-            .optional => {
-                if (info.child != u21) {
-                    @compileError("setOptionalField with optional must be ?u21");
+            .optional => |opt| {
+                if (opt.child != u21) {
+                    @compileError("setShiftField with optional must be ?u21");
                 }
                 @field(container, name) = value;
             },
             .int => {
                 if (F != u21) {
-                    @compileError("setOptionalField with int must be u21");
+                    @compileError("setShiftField with int must be u21");
                 }
                 @field(container, name) = value;
             },
-            else => @compileError("setOptionalField cannot be used with type" ++ @tagName(info)),
-        };
+            else => @compileError("setShiftField cannot be used with type " ++ @typeName(F)),
+        }
     }
 }
 
@@ -799,13 +802,12 @@ pub inline fn setField(
         return;
     }
 
-    const F = @typeInfo(@FieldType(R, name));
-    const info = @typeInfo(F);
+    const F = @FieldType(R, name);
 
-    comptime switch (info) {
+    switch (@typeInfo(F)) {
         .@"struct" => {
             if (@hasDecl(F, "init")) {
-                const params = @typeInfo(@FieldType(F, "init")).@"fn".params;
+                const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
                 if (params.len == 1) {
                     @field(container, name) = .init(value);
                 } else if (params.len == 2) {
@@ -813,15 +815,15 @@ pub inline fn setField(
                 } else if (params.len == 4) {
                     @field(container, name) = .init(
                         allocator,
-                        @field(backing, field),
-                        &@field(tracking, field),
+                        @field(backing, name),
+                        &@field(tracking, name),
                         value,
                     );
                 } else if (params.len == 5) {
                     @field(container, name) = .init(
                         allocator,
-                        @field(backing, field),
-                        &@field(tracking, field),
+                        @field(backing, name),
+                        &@field(tracking, name),
                         value,
                         cp,
                     );
@@ -834,13 +836,13 @@ pub inline fn setField(
         },
         .@"union" => {
             if (@hasDecl(F, "init")) {
-                const params = @typeInfo(@FieldType(F, "init")).@"fn".params;
+                const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
                 if (params.len == 1) {
                     @field(container, name) = .init(value);
                 } else if (params.len == 2) {
                     @field(container, name) = .init(cp, value);
                 } else {
-                    @compileError(std.fmt.comptimePrint("setField cannot be used with struct with init taking {d} parameters", .{params.len}));
+                    @compileError(std.fmt.comptimePrint("setField cannot be used with union with init taking {d} parameters", .{params.len}));
                 }
             } else {
                 @field(container, name) = value;
@@ -856,15 +858,15 @@ pub inline fn setField(
         => {
             @field(container, name) = value;
         },
-        else => @compileError("setField cannot be used with type" ++ @tagName(info)),
-    };
+        else => @compileError("setField cannot be used with type " ++ @typeName(F)),
+    }
     const Track = @typeInfo(@TypeOf(tracking)).pointer.child;
-    if (@hasField(Track, field)) {
-        const params = @typeInfo(@TypeOf(@FieldType(Track, field).track)).@"fn".params;
+    if (@hasField(Track, name)) {
+        const params = @typeInfo(@TypeOf(@FieldType(Track, name).track)).@"fn".params;
         if (params.len == 3) {
-            @field(Track, field).track(cp, value);
+            @field(tracking, name).track(cp, value);
         } else if (params.len == 2) {
-            @field(Track, field).track(value);
+            @field(tracking, name).track(value);
         } else {
             @compileError("Tracking `track` must take 2 or 3 parameters (including self)");
         }
