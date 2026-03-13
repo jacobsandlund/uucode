@@ -730,6 +730,24 @@ pub fn mergeComponents(comptime a: []const Component, comptime b: []const Compon
     return result;
 }
 
+inline fn trackField(tracking: anytype, comptime name: []const u8, cp: u21, value: anytype) void {
+    if (@TypeOf(tracking) == void) return;
+    const Track = @typeInfo(@TypeOf(tracking)).pointer.child;
+    if (@hasField(Track, name)) {
+        const FT = @FieldType(Track, name);
+        if (@hasDecl(FT, "track")) {
+            const params = @typeInfo(@TypeOf(FT.track)).@"fn".params;
+            if (params.len == 3) {
+                @field(tracking, name).track(cp, value);
+            } else if (params.len == 2) {
+                @field(tracking, name).track(value);
+            } else {
+                @compileError("Tracking `track` must take 2 or 3 parameters (including self)");
+            }
+        }
+    }
+}
+
 pub inline fn initBuiltField(comptime F: type, value: anytype) F {
     if (@TypeOf(value) == @Type(.enum_literal)) {
         return @field(F, @tagName(value));
@@ -748,7 +766,9 @@ pub inline fn setBuiltField(
     }
 }
 
-pub inline fn initOptionalField(comptime F: type, value: anytype) F {
+pub inline fn initOptionalField(comptime R: type, comptime name: []const u8, value: anytype, tracking: anytype) @FieldType(R, name) {
+    trackField(tracking, name, 0, value);
+    const F = @FieldType(R, name);
     switch (@typeInfo(F)) {
         .optional => |opt| {
             if (opt.child == u21) {
@@ -770,14 +790,17 @@ pub inline fn setOptionalField(
     container: anytype,
     comptime name: []const u8,
     value: anytype,
+    tracking: anytype,
 ) void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
     if (@hasField(R, name)) {
-        @field(container, name) = initOptionalField(@FieldType(R, name), value);
+        @field(container, name) = initOptionalField(R, name, value, tracking);
     }
 }
 
-pub inline fn initShiftField(comptime F: type, cp: u21, value: anytype) F {
+pub inline fn initShiftField(comptime R: type, comptime name: []const u8, cp: u21, value: anytype, tracking: anytype) @FieldType(R, name) {
+    trackField(tracking, name, cp, value);
+    const F = @FieldType(R, name);
     switch (@typeInfo(F)) {
         .@"struct" => {
             if (@hasDecl(F, "init")) {
@@ -814,14 +837,17 @@ pub inline fn setShiftField(
     comptime name: []const u8,
     cp: u21,
     value: anytype,
+    tracking: anytype,
 ) void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
     if (@hasField(R, name)) {
-        @field(container, name) = initShiftField(@FieldType(R, name), cp, value);
+        @field(container, name) = initShiftField(R, name, cp, value, tracking);
     }
 }
 
-pub inline fn initField(comptime F: type, cp: u21, value: anytype) F {
+pub inline fn initField(comptime R: type, comptime name: []const u8, cp: u21, value: anytype, tracking: anytype) @FieldType(R, name) {
+    trackField(tracking, name, cp, value);
+    const F = @FieldType(R, name);
     switch (@typeInfo(F)) {
         .@"struct" => {
             if (@hasDecl(F, "init")) {
@@ -858,9 +884,7 @@ pub inline fn initField(comptime F: type, cp: u21, value: anytype) F {
         .array,
         .vector,
         .@"enum",
-        => {
-            return value;
-        },
+        => return value,
         else => @compileError("initField cannot be used with type " ++ @typeName(F)),
     }
 }
@@ -885,7 +909,8 @@ pub inline fn setField(
             if (@hasDecl(F, "init")) {
                 const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
                 if (params.len <= 2) {
-                    @field(container, name) = initField(F, cp, value);
+                    @field(container, name) = initField(R, name, cp, value, tracking);
+                    return;
                 } else if (params.len == 3) {
                     @field(container, name) = try .init(
                         allocator,
@@ -903,11 +928,13 @@ pub inline fn setField(
                     @compileError(std.fmt.comptimePrint("setField cannot be used with struct with init taking {d} parameters", .{params.len}));
                 }
             } else {
-                @field(container, name) = initField(F, cp, value);
+                @field(container, name) = initField(R, name, cp, value, tracking);
+                return;
             }
         },
         .@"union" => {
-            @field(container, name) = initField(F, cp, value);
+            @field(container, name) = initField(R, name, cp, value, tracking);
+            return;
         },
 
         .bool,
@@ -917,23 +944,10 @@ pub inline fn setField(
         .vector,
         .@"enum",
         => {
-            @field(container, name) = initField(F, cp, value);
+            @field(container, name) = initField(R, name, cp, value, tracking);
+            return;
         },
         else => @compileError("setField cannot be used with type " ++ @typeName(F)),
-    }
-    const Track = @typeInfo(@TypeOf(tracking)).pointer.child;
-    if (@hasField(Track, name)) {
-        const FT = @FieldType(Track, name);
-        if (@hasDecl(FT, "track")) {
-            const params = @typeInfo(@TypeOf(FT.track)).@"fn".params;
-            if (params.len == 3) {
-                @field(tracking, name).track(cp, value);
-            } else if (params.len == 2) {
-                @field(tracking, name).track(value);
-            } else {
-                @compileError("Tracking `track` must take 2 or 3 parameters (including self)");
-            }
-        }
     }
 }
 

@@ -184,25 +184,22 @@ const UnicodeData = struct {
         _ = backing;
 
         const Row = config.Row(fields, fields_is_packed, build_fields);
-        const default_row: Row = comptime blk: {
-            var row: Row = undefined;
-            setBuiltField(&row, "name", .empty);
-            setBuiltField(&row, "general_category", .other_not_assigned);
-            setBuiltField(&row, "canonical_combining_class", 0);
-            setBuiltField(&row, "bidi_class", .left_to_right);
-            setBuiltField(&row, "decomposition_type", .default);
-            setBuiltField(&row, "decomposition_mapping", .same);
-            setBuiltField(&row, "numeric_type", .none);
-            setOptionalField(&row, "numeric_value_decimal", null);
-            setOptionalField(&row, "numeric_value_digit", null);
-            setBuiltField(&row, "numeric_value_numeric", .empty);
-            setBuiltField(&row, "is_bidi_mirrored", false);
-            setBuiltField(&row, "unicode_1_name", .empty);
-            setBuiltField(&row, "simple_uppercase_mapping", .same);
-            setBuiltField(&row, "simple_lowercase_mapping", .same);
-            setBuiltField(&row, "simple_titlecase_mapping", .same);
-            break :blk row;
-        };
+        var default_row: Row = undefined;
+        setBuiltField(&default_row, "name", .empty);
+        setBuiltField(&default_row, "general_category", .other_not_assigned);
+        setBuiltField(&default_row, "canonical_combining_class", 0);
+        setBuiltField(&default_row, "bidi_class", .left_to_right);
+        setBuiltField(&default_row, "decomposition_type", .default);
+        setBuiltField(&default_row, "decomposition_mapping", .same);
+        setBuiltField(&default_row, "numeric_type", .none);
+        setOptionalField(&default_row, "numeric_value_decimal", null, tracking);
+        setOptionalField(&default_row, "numeric_value_digit", null, tracking);
+        setBuiltField(&default_row, "numeric_value_numeric", .empty);
+        setBuiltField(&default_row, "is_bidi_mirrored", false);
+        setBuiltField(&default_row, "unicode_1_name", .empty);
+        setBuiltField(&default_row, "simple_uppercase_mapping", .same);
+        setBuiltField(&default_row, "simple_lowercase_mapping", .same);
+        setBuiltField(&default_row, "simple_titlecase_mapping", .same);
 
         const file_path = "ucd/UnicodeData.txt";
 
@@ -382,8 +379,8 @@ const UnicodeData = struct {
                 tracking,
             );
             setBuiltField(&row, "numeric_type", numeric_type);
-            setOptionalField(&row, "numeric_value_decimal", numeric_value_decimal);
-            setOptionalField(&row, "numeric_value_digit", numeric_value_digit);
+            setOptionalField(&row, "numeric_value_decimal", numeric_value_decimal, tracking);
+            setOptionalField(&row, "numeric_value_digit", numeric_value_digit, tracking);
             try setField(
                 allocator,
                 &row,
@@ -401,9 +398,9 @@ const UnicodeData = struct {
                 unicode_1_name,
                 tracking,
             );
-            setShiftField(&row, "simple_uppercase_mapping", cp, simple_uppercase_mapping);
-            setShiftField(&row, "simple_lowercase_mapping", cp, simple_lowercase_mapping);
-            setShiftField(&row, "simple_titlecase_mapping", cp, simple_titlecase_mapping);
+            setShiftField(&row, "simple_uppercase_mapping", cp, simple_uppercase_mapping, tracking);
+            setShiftField(&row, "simple_lowercase_mapping", cp, simple_lowercase_mapping, tracking);
+            setShiftField(&row, "simple_titlecase_mapping", cp, simple_titlecase_mapping, tracking);
 
             // Handle range entries with "First>" and "Last>"
             if (std.mem.endsWith(u8, name_str, "First>")) {
@@ -497,9 +494,9 @@ const CaseFolding = struct {
         const Row = config.Row(fields, fields_is_packed, build_fields);
         const default_row: Row = comptime blk: {
             var row: Row = undefined;
-            setShiftField(&row, "case_folding_turkish_only", 0, null);
-            setShiftField(&row, "case_folding_common_only", 0, null);
-            setShiftField(&row, "case_folding_simple_only", 0, null);
+            setBuiltField(&row, "case_folding_turkish_only", .null);
+            setBuiltField(&row, "case_folding_common_only", .null);
+            setBuiltField(&row, "case_folding_simple_only", .null);
             setBuiltField(&row, "case_folding_full_only", .empty);
             break :blk row;
         };
@@ -545,15 +542,15 @@ const CaseFolding = struct {
             switch (status) {
                 'S' => {
                     inlineAssert(mapping_len == 1);
-                    setShiftField(&row, "case_folding_simple_only", cp, mapping[0]);
+                    setShiftField(&row, "case_folding_simple_only", cp, mapping[0], tracking);
                 },
                 'C' => {
                     inlineAssert(mapping_len == 1);
-                    setShiftField(&row, "case_folding_common_only", cp, mapping[0]);
+                    setShiftField(&row, "case_folding_common_only", cp, mapping[0], tracking);
                 },
                 'T' => {
                     inlineAssert(mapping_len == 1);
-                    setShiftField(&row, "case_folding_turkish_only", cp, mapping[0]);
+                    setShiftField(&row, "case_folding_turkish_only", cp, mapping[0], tracking);
                 },
                 'F' => {
                     inlineAssert(mapping_len > 1);
@@ -1240,12 +1237,12 @@ const BidiPairedBracket = struct {
     ) !void {
         _ = inputs;
         _ = backing;
-        _ = tracking;
+
+        const Row = config.Row(fields, fields_is_packed, build_fields);
 
         rows.len = config.num_code_points;
-        const F = @TypeOf(rows.*).FieldType(.bidi_paired_bracket);
         const items = rows.items(.bidi_paired_bracket);
-        @memset(items, config.initField(F, 0, @as(types.BidiPairedBracket, .none)));
+        @memset(items, config.initField(Row, "bidi_paired_bracket", 0, @as(types.BidiPairedBracket, .none), tracking));
 
         const file_path = "ucd/BidiBrackets.txt";
 
@@ -1273,7 +1270,7 @@ const BidiPairedBracket = struct {
                 else => unreachable,
             };
 
-            items[op] = config.initField(F, @intCast(op), bracket_type);
+            items[op] = config.initField(Row, "bidi_paired_bracket", @intCast(op), bracket_type, tracking);
         }
     }
 };
@@ -1292,12 +1289,12 @@ const BidiMirroring = struct {
     ) !void {
         _ = inputs;
         _ = backing;
-        _ = tracking;
+
+        const Row = config.Row(fields, fields_is_packed, build_fields);
 
         rows.len = config.num_code_points;
-        const F = @TypeOf(rows.*).FieldType(.bidi_mirroring);
         const items = rows.items(.bidi_mirroring);
-        @memset(items, config.initShiftField(F, 0, null));
+        @memset(items, config.initShiftField(Row, "bidi_mirroring", 0, null, tracking));
 
         const file_path = "ucd/BidiMirroring.txt";
 
@@ -1318,7 +1315,7 @@ const BidiMirroring = struct {
             const cp = try parseCp(cp_str);
             const paired = try parseCp(paired_cp_str);
 
-            items[cp] = config.initShiftField(F, @intCast(cp), paired);
+            items[cp] = config.initShiftField(Row, "bidi_mirroring", @intCast(cp), paired, tracking);
         }
     }
 };
@@ -2400,7 +2397,6 @@ const CaseFoldingSimple = struct {
     ) !void {
         _ = allocator;
         _ = backing;
-        _ = tracking;
 
         rows.len = config.num_code_points;
         for (0..config.num_code_points) |i| {
@@ -2412,7 +2408,7 @@ const CaseFoldingSimple = struct {
                 cp;
 
             var row = rows.get(i);
-            setShiftField(&row, "case_folding_simple", cp, d);
+            setShiftField(&row, "case_folding_simple", cp, d, tracking);
             rows.set(i, row);
         }
     }
