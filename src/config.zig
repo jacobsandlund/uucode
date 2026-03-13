@@ -39,7 +39,6 @@ pub const Field = struct {
     max_value: isize = 0,
 
     // For custom fields
-    MutableBacking: ?type = null,
     Backing: ?type = null,
     Tracking: ?type = null,
 
@@ -252,7 +251,7 @@ pub const Component = struct {
     //     inputs: config.MultiSlice(fields, fields_is_packed, input_fields),
     //     rows: config.MultiSlice(fields, fields_is_packed, build_fields),
     //     backing: anytype, // Backing,
-    //     tracking: anytype, // Tracking,
+    //     tracking: anytype, // *Tracking,
     // ) config.Error!void;
     //
     // // Computes the field value at runtime from the inputs and/or backing
@@ -769,7 +768,6 @@ pub inline fn setField(
     comptime name: []const u8,
     cp: u21,
     value: anytype,
-    backing: anytype,
     tracking: anytype,
 ) void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
@@ -787,17 +785,15 @@ pub inline fn setField(
                     @field(container, name) = .init(value);
                 } else if (params.len == 2) {
                     @field(container, name) = .init(cp, value);
-                } else if (params.len == 4) {
+                } else if (params.len == 3) {
                     @field(container, name) = .init(
                         allocator,
-                        @field(backing, name),
                         &@field(tracking, name),
                         value,
                     );
-                } else if (params.len == 5) {
+                } else if (params.len == 4) {
                     @field(container, name) = .init(
                         allocator,
-                        @field(backing, name),
                         &@field(tracking, name),
                         value,
                         cp,

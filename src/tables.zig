@@ -206,7 +206,6 @@ const tables = blk: {
 const AllRow = config.Row(fields, fields_is_packed, row_fields);
 const AllRowSlice = config.MultiSlice(fields, fields_is_packed, row_fields);
 const Backing = config.Backing(fields, fields_is_packed, row_fields_and_backing);
-const Tracking = config.Tracking(fields, fields_is_packed, row_fields_and_backing);
 
 pub fn main() !void {
     const total_start = try std.time.Instant.now();
@@ -224,7 +223,8 @@ pub fn main() !void {
 
     var slice = try AllRowSlice.initCapacity(allocator, config.num_code_points);
     var backing: Backing = undefined;
-    var tracking: Tracking = undefined;
+
+    var all_okay = true;
 
     inline for (build_components) |component| {
         const component_inputs = comptime config.selectFieldIndexes(
@@ -259,16 +259,6 @@ pub fn main() !void {
         );
 
         const component_outputs = component_fields ++ component_backing_only;
-        const component_union = component_inputs ++ component_outputs;
-        const backing_fields = comptime config.intersect(
-            &component_union,
-            row_fields_and_backing,
-        );
-        const BackingSubset = config.Backing(
-            fields,
-            fields_is_packed,
-            &backing_fields,
-        );
         const backing_input_fields = comptime config.intersect(
             row_fields_and_backing,
             &component_inputs,
@@ -288,19 +278,36 @@ pub fn main() !void {
             &backing_output_fields,
         );
 
-        const TrackingSubset = config.Tracking(
+        const BackingSubset = config.Backing(
             fields,
             fields_is_packed,
-            &backing_fields,
+            &backing_input_fields,
         );
 
-        inputs.len = config.num_code_points;
         var backing_subset: BackingSubset = undefined;
-        var tracking_subset: TrackingSubset = undefined;
         for (&backing_inputs) |input| {
             @field(backing_subset, input) = @field(backing, input);
-            @field(tracking_subset, input) = @field(tracking, input);
         }
+
+        const Tracking = config.Tracking(
+            fields,
+            fields_is_packed,
+            &backing_output_fields,
+        );
+
+        var tracking: Tracking = undefined;
+
+        inline for (@typeInfo(Tracking).@"struct".fields) |field| {
+            const F = @FieldType(Tracking, field.name);
+            if (@hasDecl(F, "init")) {
+                const f = config.field(fields, field.name);
+                @field(tracking, field.name) = try .init(allocator, f);
+            } else {
+                @field(tracking, field.name) = .{};
+            }
+        }
+
+        inputs.len = config.num_code_points;
 
         try component.Impl.build(
             fields,
@@ -311,12 +318,17 @@ pub fn main() !void {
             inputs,
             &builds,
             &backing_subset,
-            &tracking_subset,
+            &tracking,
         );
 
         for (&backing_outputs) |output| {
-            @field(backing, output) = @field(backing_subset, output);
-            @field(tracking, output) = @field(tracking_subset, output);
+            const t = @field(tracking, output);
+            const f = config.field(fields, output);
+            if (!t.okay(f.runtime())) {
+                all_okay = false;
+            }
+            @field(backing, output) = try t.toOwnedBacking(allocator);
+            t.deinit(allocator);
         }
     }
 
@@ -324,6 +336,10 @@ pub fn main() !void {
 
     const build_components_end = try std.time.Instant.now();
     std.log.debug("build_components.build time: {d}ms", .{build_components_end.since(total_start) / std.time.ns_per_ms});
+
+    if (!all_okay) {
+        @panic("Tracking returned !okay. See above for details");
+    }
 
     var out_file = try std.fs.cwd().createFile(output_path, .{});
     defer out_file.close();
@@ -345,39 +361,8 @@ pub fn main() !void {
         \\
     );
 
-    var fields_okay = true;
-
     inline for (fields) |f| {
         try writer.print("    .{s},\n", .{f.name});
-        const r = f.runtime();
-
-        if (@hasField(Tracking, f.name)) {
-            const t = @field(tracking, f.name);
-            if (config.is_updating_ucd) {
-                const min_config = t.minBitsConfig(r);
-                if (!config.field(f.name).runtime().eql(min_config)) {
-                    std.debug.print("Unequal!\n", .{});
-                    var buffer: [4096]u8 = undefined;
-                    var stderr_writer = std.fs.File.stderr().writer(&buffer);
-                    var w = &stderr_writer.interface;
-                    try w.writeAll(
-                        \\
-                        \\Update default config in `config.zig` with the correct field config:
-                        \\
-                    );
-                    try min_config.write(w);
-                    try w.flush();
-                }
-            } else {
-                if (!r.compareActual(t.actualConfig(r))) {
-                    fields_okay = false;
-                }
-            }
-        }
-    }
-
-    if (!fields_okay) {
-        @panic("Field config doesn't match actual. See above for details");
     }
 
     try writer.writeAll(

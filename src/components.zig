@@ -181,6 +181,7 @@ const UnicodeData = struct {
         tracking: anytype,
     ) !void {
         _ = inputs;
+        _ = backing;
 
         const Row = config.Row(fields, fields_is_packed, build_fields);
         const default_row: Row = comptime blk: {
@@ -365,10 +366,9 @@ const UnicodeData = struct {
                 "name",
                 cp,
                 name,
-                backing,
-                tracking,
+                &tracking,
             );
-            setField(allocator, &row, "name", cp, name, backing, tracking);
+            setField(allocator, &row, "name", cp, name, &tracking);
             setBuiltField(&row, "general_category", general_category);
             setBuiltField(&row, "canonical_combining_class", canonical_combining_class);
             setBuiltField(&row, "bidi_class", bidi_class);
@@ -379,8 +379,7 @@ const UnicodeData = struct {
                 "decomposition_mapping",
                 cp,
                 decomposition_mapping,
-                backing,
-                tracking,
+                &tracking,
             );
             setBuiltField(&row, "numeric_type", numeric_type);
             setOptionalField(&row, "numeric_value_decimal", numeric_value_decimal);
@@ -391,8 +390,7 @@ const UnicodeData = struct {
                 "numeric_value_numeric",
                 cp,
                 numeric_value_numeric,
-                backing,
-                tracking,
+                &tracking,
             );
             setBuiltField(&row, "is_bidi_mirrored", is_bidi_mirrored);
             setField(
@@ -401,8 +399,7 @@ const UnicodeData = struct {
                 "unicode_1_name",
                 cp,
                 unicode_1_name,
-                backing,
-                tracking,
+                &tracking,
             );
             setShiftField(&row, "simple_uppercase_mapping", cp, simple_uppercase_mapping);
             setShiftField(&row, "simple_lowercase_mapping", cp, simple_lowercase_mapping);
@@ -495,6 +492,7 @@ const CaseFolding = struct {
         tracking: anytype,
     ) !void {
         _ = inputs;
+        _ = backing;
 
         const Row = config.Row(fields, fields_is_packed, build_fields);
         const default_row: Row = comptime blk: {
@@ -565,8 +563,7 @@ const CaseFolding = struct {
                         "case_folding_full_only",
                         cp,
                         mapping[0..mapping_len],
-                        backing,
-                        tracking,
+                        &tracking,
                     );
                 },
                 else => unreachable,
@@ -589,6 +586,7 @@ const SpecialCasing = struct {
         tracking: anytype,
     ) !void {
         _ = inputs;
+        _ = backing;
 
         const Row = config.Row(fields, fields_is_packed, build_fields);
         const default_row: Row = comptime blk: {
@@ -678,10 +676,10 @@ const SpecialCasing = struct {
 
             var row = rows.get(cp);
             setBuiltField(&row, "has_special_casing", true);
-            setField(allocator, &row, "special_lowercase_mapping", cp, lower_mapping[0..lower_mapping_len], backing, tracking);
-            setField(allocator, &row, "special_titlecase_mapping", cp, title_mapping[0..title_mapping_len], backing, tracking);
-            setField(allocator, &row, "special_uppercase_mapping", cp, upper_mapping[0..upper_mapping_len], backing, tracking);
-            setField(allocator, &row, "special_casing_condition", cp, conditions[0..conditions_len], backing, tracking);
+            setField(allocator, &row, "special_lowercase_mapping", cp, lower_mapping[0..lower_mapping_len], &tracking);
+            setField(allocator, &row, "special_titlecase_mapping", cp, title_mapping[0..title_mapping_len], &tracking);
+            setField(allocator, &row, "special_uppercase_mapping", cp, upper_mapping[0..upper_mapping_len], &tracking);
+            setField(allocator, &row, "special_casing_condition", cp, conditions[0..conditions_len], &tracking);
             rows.set(cp, row);
         }
     }
@@ -2439,14 +2437,14 @@ const CaseFoldingFull = struct {
             const common_only = input.case_folding_common_only.unshift(cp);
 
             const mapping = if (full_only.len > 0)
-                full_only.sliceWith(@field(backing, "case_folding_full_only"), &buffer, cp)
+                full_only.sliceWith(backing.case_folding_full_only, &buffer, cp)
             else blk: {
                 buffer[0] = common_only orelse cp;
                 break :blk &buffer;
             };
 
             var row = rows.get(i);
-            setField(allocator, &row, "case_folding_full", cp, mapping, backing, tracking);
+            setField(allocator, &row, "case_folding_full", cp, mapping, &tracking);
             rows.set(i, row);
         }
     }
@@ -2472,14 +2470,14 @@ const LowercaseMapping = struct {
 
             var buffer: [1]u21 = undefined;
             const mapping = if (use_special)
-                input.special_lowercase_mapping.sliceWith(@field(backing, "special_lowercase_mapping"), &buffer, cp)
+                input.special_lowercase_mapping.sliceWith(backing.special_lowercase_mapping, &buffer, cp)
             else blk: {
                 buffer[0] = input.simple_lowercase_mapping.unshift(cp);
                 break :blk &buffer;
             };
 
             var row = rows.get(i);
-            setField(allocator, &row, "lowercase_mapping", cp, mapping, backing, tracking);
+            setField(allocator, &row, "lowercase_mapping", cp, mapping, &tracking);
             rows.set(i, row);
         }
     }
@@ -2505,14 +2503,14 @@ const TitlecaseMapping = struct {
 
             var buffer: [1]u21 = undefined;
             const mapping = if (use_special)
-                input.special_titlecase_mapping.sliceWith(@field(backing, "special_titlecase_mapping"), &buffer, cp)
+                input.special_titlecase_mapping.sliceWith(backing.special_titlecase_mapping, &buffer, cp)
             else blk: {
                 buffer[0] = input.simple_titlecase_mapping.unshift(cp);
                 break :blk &buffer;
             };
 
             var row = rows.get(i);
-            setField(allocator, &row, "titlecase_mapping", cp, mapping, backing, tracking);
+            setField(allocator, &row, "titlecase_mapping", cp, mapping, &tracking);
             rows.set(i, row);
         }
     }
@@ -2538,14 +2536,14 @@ const UppercaseMapping = struct {
 
             var buffer: [1]u21 = undefined;
             const mapping = if (use_special)
-                input.special_uppercase_mapping.sliceWith(@field(backing, "special_uppercase_mapping"), &buffer, cp)
+                input.special_uppercase_mapping.sliceWith(backing.special_uppercase_mapping, &buffer, cp)
             else blk: {
                 buffer[0] = input.simple_uppercase_mapping.unshift(cp);
                 break :blk &buffer;
             };
 
             var row = rows.get(i);
-            setField(allocator, &row, "uppercase_mapping", cp, mapping, backing, tracking);
+            setField(allocator, &row, "uppercase_mapping", cp, mapping, &tracking);
             rows.set(i, row);
         }
     }

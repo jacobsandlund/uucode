@@ -202,7 +202,6 @@ pub fn Slice(
 
         inline fn initInner(
             allocator: Allocator,
-            backing: []T,
             tracking: *Tracking,
             s: []const T,
         ) Allocator.Error!Self {
@@ -225,12 +224,12 @@ pub fn Slice(
                     };
                 }
 
-                const offset = tracking.max_offset;
+                const items = tracking.backing.items;
+                const offset = items.len;
                 gop.value_ptr.* = offset;
-                @memcpy(backing[offset .. offset + s.len], s);
-                gop.key_ptr.* = backing[offset .. offset + s.len];
+                tracking.backing.appendSliceAssumeCapacity(s);
+                gop.key_ptr.* = items[offset .. offset + s.len];
                 tracking.len_counts[s.len - 1] += 1;
-                tracking.max_offset += s.len;
 
                 return .{
                     .len = len,
@@ -264,7 +263,6 @@ pub fn Slice(
 
         pub fn _init(
             allocator: Allocator,
-            backing: []T,
             tracking: *Tracking,
             s: []const T,
         ) Allocator.Error!Self {
@@ -272,12 +270,11 @@ pub fn Slice(
                 @compileError("init is only supported for direct packing: use initFor instead");
             }
 
-            return .initInner(allocator, backing, tracking, s);
+            return .initInner(allocator, tracking, s);
         }
 
         pub fn _initShift(
             allocator: Allocator,
-            backing: []T,
             tracking: *Tracking,
             s: []const T,
             cp: u21,
@@ -296,7 +293,7 @@ pub fn Slice(
                     },
                 };
             } else {
-                return .initInner(allocator, backing, tracking, s);
+                return .initInner(allocator, tracking, s);
             }
         }
 
@@ -307,7 +304,7 @@ pub fn Slice(
 
         fn _slice(
             self: *const Self,
-            backing: []const T,
+            backing: Backing,
         ) []const T {
             // Repeat the two return cases, first with two `comptime` checks,
             // then with a runtime if/else
@@ -324,7 +321,7 @@ pub fn Slice(
 
         pub fn sliceWith(
             self: *const Self,
-            backing: []const T,
+            backing: Backing,
             single_item_buffer: *[1]T,
             cp: u21,
         ) []const T {
@@ -441,9 +438,35 @@ pub fn Slice(
     };
 }
 
+fn basicTrackingOkay(tracking: anytype, field: config.Field.Runtime) bool {
+    if (config.is_updating_ucd) {
+        const min_config = tracking.minBitsConfig(field);
+        if (!config.field(config.fields, field.name).runtime().eql(min_config)) {
+            std.debug.print("Unequal!\n", .{});
+            var buffer: [4096]u8 = undefined;
+            var stderr_writer = std.fs.File.stderr().writer(&buffer);
+            var w = &stderr_writer.interface;
+            try w.writeAll(
+                \\
+                \\Update default config in `config.zig` with the correct field config:
+                \\
+            );
+            try min_config.write(w);
+            try w.flush();
+            return false;
+        }
+    } else {
+        if (!field.compareActual(tracking.actualConfig(field))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 pub fn SliceTracking(comptime T: type, comptime max_len: usize) type {
     return struct {
-        max_offset: usize = 0,
+        backing: std.ArrayList(T),
         max_len: usize = 0,
         offset_map: SliceMap(T, usize) = .empty,
         len_counts: [max_len]usize = [_]usize{0} ** max_len,
@@ -451,8 +474,23 @@ pub fn SliceTracking(comptime T: type, comptime max_len: usize) type {
 
         const Self = @This();
 
+        pub fn init(allocator: Allocator, field: config.Field) !Self {
+            return .{
+                .backing = try std.ArrayList(T).initCapacity(allocator, field.max_offset),
+            };
+        }
+
+        pub fn toOwnedBacking(self: *Self, allocator: Allocator) ![]T {
+            return self.backing.toOwnedSlice(allocator);
+        }
+
         pub fn deinit(self: *Self, allocator: Allocator) void {
+            self.backing.deinit(allocator);
             self.offset_map.deinit(allocator);
+        }
+
+        pub fn okay(self: *const Self, field: config.Field.Runtime) bool {
+            return basicTrackingOkay(self, field);
         }
 
         pub fn actualConfig(
@@ -543,6 +581,10 @@ pub const ShiftTracking = struct {
         }
     }
 
+    pub fn okay(self: *const ShiftTracking, field: config.Field.Runtime) bool {
+        return basicTrackingOkay(self, field);
+    }
+
     pub fn actualConfig(self: *const ShiftTracking, c: config.Field.Runtime) config.Field.Runtime {
         return c.override(.{
             .shift_low = self.shift_low,
@@ -567,6 +609,10 @@ pub const UnionShiftTracking = struct {
         switch (value) {
             inline else => |v| if (@TypeOf(v) == u21) self.shift.track(cp, v),
         }
+    }
+
+    pub fn okay(self: *const UnionShiftTracking, field: config.Field.Runtime) bool {
+        return basicTrackingOkay(self, field);
     }
 
     pub fn actualConfig(self: *const UnionShiftTracking, c: config.Field.Runtime) config.Field.Runtime {
@@ -666,6 +712,10 @@ pub fn OptionalTracking(comptime Optional: type) type {
                     self.min_value = d;
                 }
             }
+        }
+
+        pub fn okay(self: *const Self, field: config.Field.Runtime) bool {
+            return basicTrackingOkay(self, field);
         }
 
         pub fn actualConfig(self: *const Self, c: config.Field.Runtime) config.Field.Runtime {
