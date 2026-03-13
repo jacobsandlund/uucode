@@ -225,11 +225,13 @@ pub fn Slice(
                     };
                 }
 
-                const items = tracking.backing.items;
-                const offset = items.len;
+                const offset = tracking.backing.items.len;
                 gop.value_ptr.* = offset;
+                if (offset + s.len > tracking.backing.capacity) {
+                    std.debug.print("Offset + len > capacity: {d} > {d}; field = {s}\n", .{ offset + s.len, tracking.backing.capacity, c.name });
+                }
                 tracking.backing.appendSliceAssumeCapacity(s);
-                gop.key_ptr.* = items[offset .. offset + s.len];
+                gop.key_ptr.* = tracking.backing.items[offset .. offset + s.len];
                 tracking.len_counts[s.len - 1] += 1;
 
                 return .{
@@ -444,7 +446,7 @@ fn basicTrackingOkay(tracking: anytype, comptime field: config.Field) !bool {
     if (config.is_updating_ucd) {
         const min_config = tracking.minBitsConfig(r);
         if (!config.field(config.fields, field.name).runtime().eql(min_config)) {
-            std.debug.print("Unequal!\n", .{});
+            std.debug.print("\nUnequal!\n", .{});
             var buffer: [4096]u8 = undefined;
             var stderr_writer = std.fs.File.stderr().writer(&buffer);
             var w = &stderr_writer.interface;
@@ -734,6 +736,7 @@ pub fn OptionalTracking(comptime Optional: type) type {
 }
 
 pub fn Shift(comptime c: config.Field, comptime is_packed: bool) type {
+    @setEvalBranchQuota(100_000);
     const is_optional = @typeInfo(c.type) == .optional;
 
     if (c.kind() == .shift and !((is_optional and @typeInfo(c.type).optional.child == u21) or

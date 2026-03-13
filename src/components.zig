@@ -378,7 +378,7 @@ const UnicodeData = struct {
                 &row,
                 "decomposition_mapping",
                 cp,
-                &decomposition_mapping,
+                decomposition_mapping[0..decomposition_mapping_len],
                 tracking,
             );
             setBuiltField(&row, "numeric_type", numeric_type);
@@ -410,7 +410,7 @@ const UnicodeData = struct {
                 range_row = row;
             }
 
-            rows.append(range_row.?);
+            rows.append(row);
         }
 
         // Fill any remaining gaps at the end with default values
@@ -1243,8 +1243,9 @@ const BidiPairedBracket = struct {
         _ = tracking;
 
         rows.len = config.num_code_points;
+        const F = @TypeOf(rows.*).FieldType(.bidi_paired_bracket);
         const items = rows.items(.bidi_paired_bracket);
-        @memset(items, .none);
+        @memset(items, config.initField(F, 0, @as(types.BidiPairedBracket, .none)));
 
         const file_path = "ucd/BidiBrackets.txt";
 
@@ -1272,7 +1273,7 @@ const BidiPairedBracket = struct {
                 else => unreachable,
             };
 
-            items[op] = bracket_type;
+            items[op] = config.initField(F, @intCast(op), bracket_type);
         }
     }
 };
@@ -1294,8 +1295,9 @@ const BidiMirroring = struct {
         _ = tracking;
 
         rows.len = config.num_code_points;
+        const F = @TypeOf(rows.*).FieldType(.bidi_mirroring);
         const items = rows.items(.bidi_mirroring);
-        @memset(items, null);
+        @memset(items, config.initShiftField(F, 0, null));
 
         const file_path = "ucd/BidiMirroring.txt";
 
@@ -1316,7 +1318,7 @@ const BidiMirroring = struct {
             const cp = try parseCp(cp_str);
             const paired = try parseCp(paired_cp_str);
 
-            items[cp] = paired;
+            items[cp] = config.initShiftField(F, @intCast(cp), paired);
         }
     }
 };
@@ -2392,7 +2394,7 @@ const CaseFoldingSimple = struct {
         comptime build_fields: []const usize,
         allocator: std.mem.Allocator,
         inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
         backing: anytype,
         tracking: anytype,
     ) !void {
@@ -2424,7 +2426,7 @@ const CaseFoldingFull = struct {
         comptime build_fields: []const usize,
         allocator: std.mem.Allocator,
         inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
         backing: anytype,
         tracking: anytype,
     ) !void {
@@ -2458,7 +2460,7 @@ const LowercaseMapping = struct {
         comptime build_fields: []const usize,
         allocator: std.mem.Allocator,
         inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
         backing: anytype,
         tracking: anytype,
     ) !void {
@@ -2491,7 +2493,7 @@ const TitlecaseMapping = struct {
         comptime build_fields: []const usize,
         allocator: std.mem.Allocator,
         inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
         backing: anytype,
         tracking: anytype,
     ) !void {
@@ -2524,7 +2526,7 @@ const UppercaseMapping = struct {
         comptime build_fields: []const usize,
         allocator: std.mem.Allocator,
         inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
         backing: anytype,
         tracking: anytype,
     ) !void {
@@ -2557,7 +2559,7 @@ const GraphemeBreakDerived = struct {
         comptime build_fields: []const usize,
         allocator: std.mem.Allocator,
         inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
         backing: anytype,
         tracking: anytype,
     ) !void {

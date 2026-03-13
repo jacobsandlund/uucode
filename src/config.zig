@@ -730,6 +730,13 @@ pub fn mergeComponents(comptime a: []const Component, comptime b: []const Compon
     return result;
 }
 
+pub inline fn initBuiltField(comptime F: type, value: anytype) F {
+    if (@TypeOf(value) == @Type(.enum_literal)) {
+        return @field(F, @tagName(value));
+    }
+    return value;
+}
+
 pub inline fn setBuiltField(
     container: anytype,
     comptime name: []const u8,
@@ -737,12 +744,25 @@ pub inline fn setBuiltField(
 ) void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
     if (@hasField(R, name)) {
-        const F = @FieldType(R, name);
-        if (@TypeOf(value) == @Type(.enum_literal)) {
-            @field(container, name) = @field(F, @tagName(value));
-        } else {
-            @field(container, name) = value;
-        }
+        @field(container, name) = initBuiltField(@FieldType(R, name), value);
+    }
+}
+
+pub inline fn initOptionalField(comptime F: type, value: anytype) F {
+    switch (@typeInfo(F)) {
+        .optional => |opt| {
+            if (opt.child == u21) {
+                @compileError("initOptionalField cannot be used with ?u21");
+            }
+            return value;
+        },
+        .@"struct" => {
+            if (!@hasDecl(F, "unpack") or !@hasDecl(F, "init")) {
+                @compileError("initOptionalField cannot be used with struct without unpack+init");
+            }
+            return F.init(value);
+        },
+        else => @compileError("initOptionalField cannot be used with type " ++ @typeName(F)),
     }
 }
 
@@ -753,22 +773,39 @@ pub inline fn setOptionalField(
 ) void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
     if (@hasField(R, name)) {
-        const F = @FieldType(R, name);
-        switch (@typeInfo(F)) {
-            .optional => |opt| {
-                if (opt.child == u21) {
-                    @compileError("setOptionalField cannot be used with ?u21");
+        @field(container, name) = initOptionalField(@FieldType(R, name), value);
+    }
+}
+
+pub inline fn initShiftField(comptime F: type, cp: u21, value: anytype) F {
+    switch (@typeInfo(F)) {
+        .@"struct" => {
+            if (@hasDecl(F, "init")) {
+                const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
+                if (params.len == 1) {
+                    return F.init(value);
+                } else if (params.len == 2) {
+                    return F.init(cp, value);
+                } else {
+                    @compileError(std.fmt.comptimePrint("initShiftField cannot be used with struct with init taking {d} parameters", .{params.len}));
                 }
-                @field(container, name) = value;
-            },
-            .@"struct" => {
-                if (!@hasDecl(F, "unpack") or !@hasDecl(F, "init")) {
-                    @compileError("setOptionalField cannot be used with struct without unpack+init");
-                }
-                @field(container, name) = .init(value);
-            },
-            else => @compileError("setOptionalField cannot be used with type " ++ @typeName(F)),
-        }
+            } else {
+                @compileError("initShiftField cannot be used with struct without init");
+            }
+        },
+        .optional => |opt| {
+            if (opt.child != u21) {
+                @compileError("initShiftField with optional must be ?u21");
+            }
+            return value;
+        },
+        .int => {
+            if (F != u21) {
+                @compileError("initShiftField with int must be u21");
+            }
+            return value;
+        },
+        else => @compileError("initShiftField cannot be used with type " ++ @typeName(F)),
     }
 }
 
@@ -780,28 +817,51 @@ pub inline fn setShiftField(
 ) void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
     if (@hasField(R, name)) {
-        const F = @FieldType(R, name);
-        switch (@typeInfo(F)) {
-            .@"struct" => {
-                if (!@hasDecl(F, "unshift") or !@hasDecl(F, "init")) {
-                    @compileError("setShiftField cannot be used with struct without unshift+init");
+        @field(container, name) = initShiftField(@FieldType(R, name), cp, value);
+    }
+}
+
+pub inline fn initField(comptime F: type, cp: u21, value: anytype) F {
+    switch (@typeInfo(F)) {
+        .@"struct" => {
+            if (@hasDecl(F, "init")) {
+                const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
+                if (params.len == 1) {
+                    return F.init(value);
+                } else if (params.len == 2) {
+                    return F.init(cp, value);
+                } else {
+                    @compileError(std.fmt.comptimePrint("initField cannot be used with struct with init taking {d} parameters", .{params.len}));
                 }
-                @field(container, name) = .init(cp, value);
-            },
-            .optional => |opt| {
-                if (opt.child != u21) {
-                    @compileError("setShiftField with optional must be ?u21");
+            } else {
+                return value;
+            }
+        },
+        .@"union" => {
+            if (@hasDecl(F, "init")) {
+                const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
+                if (params.len == 1) {
+                    return F.init(value);
+                } else if (params.len == 2) {
+                    return F.init(cp, value);
+                } else {
+                    @compileError(std.fmt.comptimePrint("initField cannot be used with union with init taking {d} parameters", .{params.len}));
                 }
-                @field(container, name) = value;
-            },
-            .int => {
-                if (F != u21) {
-                    @compileError("setShiftField with int must be u21");
-                }
-                @field(container, name) = value;
-            },
-            else => @compileError("setShiftField cannot be used with type " ++ @typeName(F)),
-        }
+            } else {
+                return value;
+            }
+        },
+
+        .bool,
+        .int,
+        .float,
+        .array,
+        .vector,
+        .@"enum",
+        => {
+            return value;
+        },
+        else => @compileError("initField cannot be used with type " ++ @typeName(F)),
     }
 }
 
@@ -824,10 +884,8 @@ pub inline fn setField(
         .@"struct" => {
             if (@hasDecl(F, "init")) {
                 const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
-                if (params.len == 1) {
-                    @field(container, name) = .init(value);
-                } else if (params.len == 2) {
-                    @field(container, name) = .init(cp, value);
+                if (params.len <= 2) {
+                    @field(container, name) = initField(F, cp, value);
                 } else if (params.len == 3) {
                     @field(container, name) = try .init(
                         allocator,
@@ -845,22 +903,11 @@ pub inline fn setField(
                     @compileError(std.fmt.comptimePrint("setField cannot be used with struct with init taking {d} parameters", .{params.len}));
                 }
             } else {
-                @field(container, name) = value;
+                @field(container, name) = initField(F, cp, value);
             }
         },
         .@"union" => {
-            if (@hasDecl(F, "init")) {
-                const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
-                if (params.len == 1) {
-                    @field(container, name) = .init(value);
-                } else if (params.len == 2) {
-                    @field(container, name) = .init(cp, value);
-                } else {
-                    @compileError(std.fmt.comptimePrint("setField cannot be used with union with init taking {d} parameters", .{params.len}));
-                }
-            } else {
-                @field(container, name) = value;
-            }
+            @field(container, name) = initField(F, cp, value);
         },
 
         .bool,
@@ -870,7 +917,7 @@ pub inline fn setField(
         .vector,
         .@"enum",
         => {
-            @field(container, name) = value;
+            @field(container, name) = initField(F, cp, value);
         },
         else => @compileError("setField cannot be used with type " ++ @typeName(F)),
     }

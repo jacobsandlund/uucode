@@ -268,14 +268,19 @@ pub fn main() !void {
             &component_outputs,
         );
 
-        const BackingSubset = config.Backing(
+        const BackingInputSubset = config.Backing(
             fields,
             fields_is_packed,
             &backing_input_fields,
         );
+        const BackingOutputSubset = config.Backing(
+            fields,
+            fields_is_packed,
+            &backing_output_fields,
+        );
 
-        var backing_subset: BackingSubset = undefined;
-        inline for (@typeInfo(BackingSubset).@"struct".fields) |field| {
+        var backing_subset: BackingInputSubset = undefined;
+        inline for (@typeInfo(BackingInputSubset).@"struct".fields) |field| {
             @field(backing_subset, field.name) = @field(backing, field.name);
         }
 
@@ -317,7 +322,7 @@ pub fn main() !void {
             if (!try t.okay(f)) {
                 all_okay = false;
             }
-            if (@hasField(BackingSubset, field.name)) {
+            if (@hasField(BackingOutputSubset, field.name)) {
                 @field(backing, field.name) = try t.toOwnedBacking(allocator);
             }
             t.deinit(allocator);
@@ -406,15 +411,24 @@ pub fn main() !void {
         } else {
             try writer.writeAll("&.{");
 
-            if (@hasDecl(T, "write")) {
-                for (b) |item| {
-                    try item.write(writer);
-                    try writer.print(",");
-                }
-            } else {
-                for (b) |item| {
-                    try writer.print("{},", .{item});
-                }
+            switch (@typeInfo(T)) {
+                .@"struct", .@"union", .@"enum", .@"opaque" => {
+                    if (@hasDecl(T, "write")) {
+                        for (b) |item| {
+                            try item.write(writer);
+                            try writer.print(",");
+                        }
+                    } else {
+                        for (b) |item| {
+                            try writer.print("{},", .{item});
+                        }
+                    }
+                },
+                else => {
+                    for (b) |item| {
+                        try writer.print("{},", .{item});
+                    }
+                },
             }
 
             try writer.writeAll(
@@ -667,6 +681,7 @@ pub fn writeTableRows(
         var r: Row = undefined;
 
         inline for (table.fields) |field| {
+            @setEvalBranchQuota(500_000);
             const sfield = comptime std.meta.stringToEnum(
                 AllRowSlice.Field,
                 field,
