@@ -66,12 +66,13 @@ pub fn DeclStruct(
             switch (@typeInfo(F)) {
                 .@"struct", .@"union", .@"enum" => {
                     if (@hasDecl(F, decl)) {
+                        const DeclType = @field(F, decl);
                         struct_fields[i] = .{
                             .name = field.name,
-                            .type = F,
+                            .type = DeclType,
                             .default_value_ptr = null,
                             .is_comptime = false,
-                            .alignment = @alignOf(F),
+                            .alignment = @alignOf(DeclType),
                         };
                         i += 1;
                     }
@@ -438,9 +439,10 @@ pub fn Slice(
     };
 }
 
-fn basicTrackingOkay(tracking: anytype, field: config.Field.Runtime) bool {
+fn basicTrackingOkay(tracking: anytype, comptime field: config.Field) !bool {
+    const r = field.runtime();
     if (config.is_updating_ucd) {
-        const min_config = tracking.minBitsConfig(field);
+        const min_config = tracking.minBitsConfig(r);
         if (!config.field(config.fields, field.name).runtime().eql(min_config)) {
             std.debug.print("Unequal!\n", .{});
             var buffer: [4096]u8 = undefined;
@@ -456,7 +458,7 @@ fn basicTrackingOkay(tracking: anytype, field: config.Field.Runtime) bool {
             return false;
         }
     } else {
-        if (!field.compareActual(tracking.actualConfig(field))) {
+        if (!r.compareActual(tracking.actualConfig(field))) {
             return false;
         }
     }
@@ -489,7 +491,7 @@ pub fn SliceTracking(comptime T: type, comptime max_len: usize) type {
             self.offset_map.deinit(allocator);
         }
 
-        pub fn okay(self: *const Self, field: config.Field.Runtime) bool {
+        pub fn okay(self: *const Self, comptime field: config.Field) !bool {
             return basicTrackingOkay(self, field);
         }
 
@@ -501,7 +503,7 @@ pub fn SliceTracking(comptime T: type, comptime max_len: usize) type {
                 .shift_low = self.shift.shift_low,
                 .shift_high = self.shift.shift_high,
                 .max_len = self.max_len,
-                .max_offset = self.max_offset,
+                .max_offset = self.backing.items.len,
             });
         }
 
@@ -548,7 +550,7 @@ pub fn SliceTracking(comptime T: type, comptime max_len: usize) type {
                 }
             }
 
-            inlineAssert(current_max_offset == self.max_offset);
+            inlineAssert(current_max_offset == self.backing.items.len);
 
             return c.override(.{
                 .shift_low = actual.shift_low,
@@ -581,7 +583,7 @@ pub const ShiftTracking = struct {
         }
     }
 
-    pub fn okay(self: *const ShiftTracking, field: config.Field.Runtime) bool {
+    pub fn okay(self: *const ShiftTracking, comptime field: config.Field) !bool {
         return basicTrackingOkay(self, field);
     }
 
@@ -611,7 +613,7 @@ pub const UnionShiftTracking = struct {
         }
     }
 
-    pub fn okay(self: *const UnionShiftTracking, field: config.Field.Runtime) bool {
+    pub fn okay(self: *const UnionShiftTracking, comptime field: config.Field) !bool {
         return basicTrackingOkay(self, field);
     }
 
@@ -714,7 +716,7 @@ pub fn OptionalTracking(comptime Optional: type) type {
             }
         }
 
-        pub fn okay(self: *const Self, field: config.Field.Runtime) bool {
+        pub fn okay(self: *const Self, comptime field: config.Field) !bool {
             return basicTrackingOkay(self, field);
         }
 

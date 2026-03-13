@@ -1,7 +1,7 @@
 const config = @import("config.zig");
 const types = @import("types.zig");
 
-pub const fields = [_]config.Field{
+pub const fields: []const config.Field = &.{
     // UnicodeData
     .{
         .name = "name",

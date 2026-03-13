@@ -128,6 +128,49 @@ pub const Field = struct {
 
             return is_okay;
         }
+
+        pub fn write(self: Runtime, writer: *std.io.Writer) !void {
+            try writer.print(
+                \\.{{
+                \\    .name = "{s}",
+                \\    .type = "{s}",
+                \\
+            , .{ self.name, self.type });
+
+            if (self.cp_packing != .direct or
+                self.shift_low != 0 or
+                self.shift_high != 0)
+            {
+                try writer.print(
+                    \\    .cp_packing = .{s},
+                    \\    .shift_low = {},
+                    \\    .shift_high = {},
+                    \\
+                , .{ @tagName(self.cp_packing), self.shift_low, self.shift_high });
+            }
+
+            if (self.max_len != 0) {
+                try writer.print(
+                    \\    .max_len = {},
+                    \\    .max_offset = {},
+                    \\    .embedded_len = {},
+                    \\
+                , .{ self.max_len, self.max_offset, self.embedded_len });
+            }
+
+            if (self.min_value != 0 or self.max_value != 0) {
+                try writer.print(
+                    \\    .min_value = {},
+                    \\    .max_value = {},
+                    \\
+                , .{ self.min_value, self.max_value });
+            }
+
+            try writer.writeAll(
+                \\},
+                \\
+            );
+        }
     };
 
     pub const Kind = enum {
@@ -769,7 +812,7 @@ pub inline fn setField(
     cp: u21,
     value: anytype,
     tracking: anytype,
-) void {
+) !void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
     if (!@hasField(R, name)) {
         return;
@@ -786,13 +829,13 @@ pub inline fn setField(
                 } else if (params.len == 2) {
                     @field(container, name) = .init(cp, value);
                 } else if (params.len == 3) {
-                    @field(container, name) = .init(
+                    @field(container, name) = try .init(
                         allocator,
                         &@field(tracking, name),
                         value,
                     );
                 } else if (params.len == 4) {
-                    @field(container, name) = .init(
+                    @field(container, name) = try .init(
                         allocator,
                         &@field(tracking, name),
                         value,
@@ -833,13 +876,16 @@ pub inline fn setField(
     }
     const Track = @typeInfo(@TypeOf(tracking)).pointer.child;
     if (@hasField(Track, name)) {
-        const params = @typeInfo(@TypeOf(@FieldType(Track, name).track)).@"fn".params;
-        if (params.len == 3) {
-            @field(tracking, name).track(cp, value);
-        } else if (params.len == 2) {
-            @field(tracking, name).track(value);
-        } else {
-            @compileError("Tracking `track` must take 2 or 3 parameters (including self)");
+        const FT = @FieldType(Track, name);
+        if (@hasDecl(FT, "track")) {
+            const params = @typeInfo(@TypeOf(FT.track)).@"fn".params;
+            if (params.len == 3) {
+                @field(tracking, name).track(cp, value);
+            } else if (params.len == 2) {
+                @field(tracking, name).track(value);
+            } else {
+                @compileError("Tracking `track` must take 2 or 3 parameters (including self)");
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const inlineAssert = @import("config.zig").quirks.inlineAssert;
 
 /// A replacement for std.MultiArrayList(T).Slice that supports `append`,
 /// `subset` extraction, handles 0-field structs, and avoids branch quota
@@ -61,7 +62,7 @@ pub fn MultiSlice(comptime T: type) type {
         }
 
         pub fn append(self: *Self, elem: T) void {
-            std.debug.assert(self.len < self.capacity);
+            inlineAssert(self.len < self.capacity);
             self.len += 1;
             self.set(self.len - 1, elem);
         }

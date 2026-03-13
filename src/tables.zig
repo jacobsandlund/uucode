@@ -267,16 +267,6 @@ pub fn main() !void {
             row_fields_and_backing,
             &component_outputs,
         );
-        const backing_inputs = comptime config.selectAt(
-            [:0]const u8,
-            field_names,
-            &backing_input_fields,
-        );
-        const backing_outputs = comptime config.selectAt(
-            [:0]const u8,
-            field_names,
-            &backing_output_fields,
-        );
 
         const BackingSubset = config.Backing(
             fields,
@@ -285,8 +275,8 @@ pub fn main() !void {
         );
 
         var backing_subset: BackingSubset = undefined;
-        for (&backing_inputs) |input| {
-            @field(backing_subset, input) = @field(backing, input);
+        inline for (@typeInfo(BackingSubset).@"struct".fields) |field| {
+            @field(backing_subset, field.name) = @field(backing, field.name);
         }
 
         const Tracking = config.Tracking(
@@ -321,13 +311,15 @@ pub fn main() !void {
             &tracking,
         );
 
-        for (&backing_outputs) |output| {
-            const t = @field(tracking, output);
-            const f = config.field(fields, output);
-            if (!t.okay(f.runtime())) {
+        inline for (@typeInfo(Tracking).@"struct".fields) |field| {
+            const t = &@field(tracking, field.name);
+            const f = config.field(fields, field.name);
+            if (!try t.okay(f)) {
                 all_okay = false;
             }
-            @field(backing, output) = try t.toOwnedBacking(allocator);
+            if (@hasField(BackingSubset, field.name)) {
+                @field(backing, field.name) = try t.toOwnedBacking(allocator);
+            }
             t.deinit(allocator);
         }
     }
