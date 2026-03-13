@@ -46,6 +46,9 @@ pub const build_components: []const config.Component = &.{
             "special_titlecase_mapping",
             "special_uppercase_mapping",
             "special_casing_condition",
+            "special_lowercase_mapping_conditional",
+            "special_titlecase_mapping_conditional",
+            "special_uppercase_mapping_conditional",
         },
     },
     .{
@@ -593,6 +596,9 @@ const SpecialCasing = struct {
             setBuiltField(&row, "special_titlecase_mapping", .empty);
             setBuiltField(&row, "special_uppercase_mapping", .empty);
             setBuiltField(&row, "special_casing_condition", .empty);
+            setBuiltField(&row, "special_lowercase_mapping_conditional", .empty);
+            setBuiltField(&row, "special_titlecase_mapping_conditional", .empty);
+            setBuiltField(&row, "special_uppercase_mapping_conditional", .empty);
             break :blk row;
         };
 
@@ -621,11 +627,13 @@ const SpecialCasing = struct {
             const title_str = std.mem.trim(u8, parts.next().?, " \t\r");
             const upper_str = std.mem.trim(u8, parts.next().?, " \t\r");
 
+            var is_conditional = false;
             var conditions: [6]types.SpecialCasingCondition = undefined;
             var conditions_len: u8 = 0;
             if (parts.next()) |condition_str| {
                 const trimmed_conditions = std.mem.trim(u8, condition_str, " \t\r");
                 if (trimmed_conditions.len > 0) {
+                    is_conditional = true;
                     var condition_parts = std.mem.splitScalar(u8, trimmed_conditions, ' ');
                     while (condition_parts.next()) |condition_part| {
                         const trimmed_condition = std.mem.trim(u8, condition_part, " \t\r");
@@ -643,6 +651,8 @@ const SpecialCasing = struct {
                     }
                 }
             }
+
+            var row = rows.get(cp);
 
             var lower_mapping: [9]u21 = undefined;
             var lower_mapping_len: u8 = 0;
@@ -671,12 +681,17 @@ const SpecialCasing = struct {
                 upper_mapping_len += 1;
             }
 
-            var row = rows.get(cp);
             setBuiltField(&row, "has_special_casing", true);
-            try setField(allocator, &row, "special_lowercase_mapping", cp, lower_mapping[0..lower_mapping_len], tracking);
-            try setField(allocator, &row, "special_titlecase_mapping", cp, title_mapping[0..title_mapping_len], tracking);
-            try setField(allocator, &row, "special_uppercase_mapping", cp, upper_mapping[0..upper_mapping_len], tracking);
-            try setField(allocator, &row, "special_casing_condition", cp, conditions[0..conditions_len], tracking);
+            if (is_conditional) {
+                try setField(allocator, &row, "special_lowercase_mapping_conditional", cp, lower_mapping[0..lower_mapping_len], tracking);
+                try setField(allocator, &row, "special_titlecase_mapping_conditional", cp, title_mapping[0..title_mapping_len], tracking);
+                try setField(allocator, &row, "special_uppercase_mapping_conditional", cp, upper_mapping[0..upper_mapping_len], tracking);
+                try setField(allocator, &row, "special_casing_condition", cp, conditions[0..conditions_len], tracking);
+            } else {
+                try setField(allocator, &row, "special_lowercase_mapping", cp, lower_mapping[0..lower_mapping_len], tracking);
+                try setField(allocator, &row, "special_titlecase_mapping", cp, title_mapping[0..title_mapping_len], tracking);
+                try setField(allocator, &row, "special_uppercase_mapping", cp, upper_mapping[0..upper_mapping_len], tracking);
+            }
             rows.set(cp, row);
         }
     }
