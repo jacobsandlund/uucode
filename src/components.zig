@@ -15,7 +15,6 @@ pub const build_components: []const config.Component = &.{
             "name",
             "general_category",
             "canonical_combining_class",
-            "bidi_class",
             "decomposition_type",
             "decomposition_mapping",
             "numeric_type",
@@ -102,7 +101,11 @@ pub const build_components: []const config.Component = &.{
     .{ .Impl = IndicSyllabicCategory, .fields = &.{"indic_syllabic_category"} },
     .{
         .Impl = CaseFoldingSimple,
-        .inputs = &.{ "case_folding_simple_only", "case_folding_common_only", "case_folding_turkish_only" },
+        .inputs = &.{
+            "case_folding_simple_only",
+            "case_folding_common_only",
+            "case_folding_turkish_only",
+        },
         .fields = &.{"case_folding_simple"},
     },
     .{
@@ -112,22 +115,44 @@ pub const build_components: []const config.Component = &.{
     },
     .{
         .Impl = LowercaseMapping,
-        .inputs = &.{ "has_special_casing", "special_casing_condition", "special_lowercase_mapping", "simple_lowercase_mapping" },
+        .inputs = &.{
+            "has_special_casing",
+            "special_casing_condition",
+            "special_lowercase_mapping",
+            "simple_lowercase_mapping",
+        },
         .fields = &.{"lowercase_mapping"},
     },
     .{
         .Impl = TitlecaseMapping,
-        .inputs = &.{ "has_special_casing", "special_casing_condition", "special_titlecase_mapping", "simple_titlecase_mapping" },
+        .inputs = &.{
+            "has_special_casing",
+            "special_casing_condition",
+            "special_titlecase_mapping",
+            "simple_titlecase_mapping",
+        },
         .fields = &.{"titlecase_mapping"},
     },
     .{
         .Impl = UppercaseMapping,
-        .inputs = &.{ "has_special_casing", "special_casing_condition", "special_uppercase_mapping", "simple_uppercase_mapping" },
+        .inputs = &.{
+            "has_special_casing",
+            "special_casing_condition",
+            "special_uppercase_mapping",
+            "simple_uppercase_mapping",
+        },
         .fields = &.{"uppercase_mapping"},
     },
     .{
         .Impl = GraphemeBreakDerived,
-        .inputs = &.{ "original_grapheme_break", "indic_conjunct_break", "is_emoji_modifier", "is_emoji_modifier_base", "is_extended_pictographic", "is_emoji_component" },
+        .inputs = &.{
+            "original_grapheme_break",
+            "indic_conjunct_break",
+            "is_emoji_modifier",
+            "is_emoji_modifier_base",
+            "is_extended_pictographic",
+            "is_emoji_component",
+        },
         .fields = &.{"grapheme_break"},
     },
 };
@@ -191,7 +216,6 @@ const UnicodeData = struct {
         setBuiltField(&default_row, "name", .empty);
         setBuiltField(&default_row, "general_category", .other_not_assigned);
         setBuiltField(&default_row, "canonical_combining_class", 0);
-        setBuiltField(&default_row, "bidi_class", .left_to_right);
         setBuiltField(&default_row, "decomposition_type", .default);
         setBuiltField(&default_row, "decomposition_mapping", .same);
         setBuiltField(&default_row, "numeric_type", .none);
@@ -247,7 +271,7 @@ const UnicodeData = struct {
             const name_str = parts.next().?; // Field 1
             const general_category_str = parts.next().?; // Field 2
             const canonical_combining_class = try std.fmt.parseInt(u8, parts.next().?, 10); // Field 3
-            const bidi_class_str = parts.next().?; // Field 4
+            _ = parts.next().?; // Field 4: Bidi_Class (handled by DerivedBidiClass component)
             const decomposition_str = parts.next().?; // Field 5: Combined type and mapping
             const numeric_decimal_str = parts.next().?; // Field 6
             const numeric_digit_str = parts.next().?; // Field 7
@@ -266,15 +290,6 @@ const UnicodeData = struct {
                     unreachable;
                 } else {
                     break :blk .other_not_assigned;
-                }
-            };
-
-            const bidi_class = bidi_class_map.get(bidi_class_str) orelse blk: {
-                std.log.err("Unknown bidi class: {s}", .{bidi_class_str});
-                if (!config.is_updating_ucd) {
-                    unreachable;
-                } else {
-                    break :blk .left_to_right;
                 }
             };
 
@@ -371,7 +386,6 @@ const UnicodeData = struct {
             try setAllocField(allocator, &row, "name", cp, name, tracking);
             setBuiltField(&row, "general_category", general_category);
             setBuiltField(&row, "canonical_combining_class", canonical_combining_class);
-            setBuiltField(&row, "bidi_class", bidi_class);
             setBuiltField(&row, "decomposition_type", decomposition_type);
             try setAllocField(
                 allocator,
