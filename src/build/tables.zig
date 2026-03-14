@@ -58,10 +58,13 @@ pub fn main(init: std.process.Init.Minimal) !void {
     defer table_arena.deinit();
     const table_allocator = table_arena.allocator();
 
-    comptime var resolved_tables: [table_configs.len]config.Table = undefined;
-    inline for (table_configs, 0..) |table_config, i| {
-        resolved_tables[i] = table_config.resolve();
-    }
+    const resolved_tables = comptime blk: {
+        var tables: [table_configs.len]config.Table = undefined;
+        for (table_configs, 0..) |table_config, i| {
+            tables[i] = table_config.resolve();
+        }
+        break :blk tables;
+    };
 
     inline for (resolved_tables, 0..) |resolved_table, i| {
         const start = std.Io.Clock.awake.now(io);
