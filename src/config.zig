@@ -338,6 +338,7 @@ pub const Component = struct {
     }
 
     fn partiallyMatches(comptime self: Component, comptime fs: *[][:0]const u8, comptime backing_only: *[][:0]const u8) bool {
+        @setEvalBranchQuota(10_000);
         var matches = false;
         var i: usize = 0;
         for (fs.*) |af| {
@@ -569,6 +570,7 @@ pub fn selectFields(comptime fs: []const Field, comptime select: []const []const
 }
 
 pub fn mergeFields(comptime a: []const Field, comptime b: []const Field) [mergeFieldsLen(a, b)]Field {
+    @setEvalBranchQuota(10_000);
     var result: [mergeFieldsLen(a, b)]Field = undefined;
     var i: usize = 0;
     loop_a: for (a) |af| {
@@ -588,6 +590,7 @@ pub fn mergeFields(comptime a: []const Field, comptime b: []const Field) [mergeF
 }
 
 fn mergeFieldsLen(comptime a: []const Field, comptime b: []const Field) usize {
+    @setEvalBranchQuota(10_000);
     var count: usize = b.len;
     loop_a: for (a) |af| {
         for (b) |bf| {
@@ -609,6 +612,7 @@ pub fn selectAt(comptime T: type, comptime all: []const T, comptime select: []co
 }
 
 fn intersectLen(comptime a: []const usize, comptime b: []const usize) usize {
+    @setEvalBranchQuota(500_000);
     var count: usize = 0;
     for (a) |av| {
         for (b) |bv| {
@@ -622,6 +626,7 @@ fn intersectLen(comptime a: []const usize, comptime b: []const usize) usize {
 }
 
 pub fn intersect(comptime a: []const usize, comptime b: []const usize) [intersectLen(a, b)]usize {
+    @setEvalBranchQuota(500_000);
     var result: [intersectLen(a, b)]usize = undefined;
     var i: usize = 0;
     for (a) |av| {
@@ -658,8 +663,8 @@ fn mergeComponentsLen(comptime a: []const Component, comptime b: []const Compone
     var count: usize = 0;
     var bi: usize = 0;
     loop_a: for (a) |ac| {
-        comptime var fs: [ac.fields.len][:0]const u8 = ac.fields.*;
-        comptime var backing_only: [ac.backing_only_fields.len][:0]const u8 = ac.backing_only_fields.*;
+        comptime var fs: [ac.fields.len][:0]const u8 = ac.fields[0..ac.fields.len].*;
+        comptime var backing_only: [ac.backing_only_fields.len][:0]const u8 = ac.backing_only_fields[0..ac.backing_only_fields.len].*;
         comptime var fs_slice: [][:0]const u8 = &fs;
         comptime var backing_only_slice: [][:0]const u8 = &backing_only;
 
@@ -688,8 +693,8 @@ pub fn mergeComponents(comptime a: []const Component, comptime b: []const Compon
     var i: usize = 0;
     var bi: usize = 0;
     loop_a: for (a) |ac| {
-        comptime var fs: [ac.fields.len][:0]const u8 = ac.fields.*;
-        comptime var backing_only: [ac.backing_only_fields.len][:0]const u8 = ac.backing_only_fields.*;
+        comptime var fs: [ac.fields.len][:0]const u8 = ac.fields[0..ac.fields.len].*;
+        comptime var backing_only: [ac.backing_only_fields.len][:0]const u8 = ac.backing_only_fields[0..ac.backing_only_fields.len].*;
         comptime var fs_slice: [][:0]const u8 = &fs;
         comptime var backing_only_slice: [][:0]const u8 = &backing_only;
 
@@ -865,4 +870,4 @@ pub inline fn setAllocField(
     }
 }
 
-pub const is_updating_ucd = true;
+pub const is_updating_ucd = false;

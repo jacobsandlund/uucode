@@ -6,7 +6,6 @@ pub const ascii = @import("ascii.zig");
 pub const grapheme = @import("grapheme.zig");
 pub const code_point = @import("code_point.zig");
 pub const utf8 = @import("utf8.zig");
-pub const x = @import("x/root.zig");
 const testing = std.testing;
 
 pub const FieldEnum = getpkg.FieldEnum;
@@ -22,7 +21,6 @@ test {
     _ = grapheme;
     _ = code_point;
     _ = utf8;
-    _ = x;
 }
 
 test "name" {
@@ -120,15 +118,6 @@ test "special_casing_condition" {
     const conditions = get(.special_casing_condition, 0x03A3);
     try testing.expectEqual(1, conditions.len);
     try testing.expectEqual(types.SpecialCasingCondition.final_sigma, conditions[0]);
-}
-
-test "special_lowercase_mapping" {
-    var buffer: [1]u21 = undefined;
-
-    // Greek Capital Sigma (U+03A3) which has Final_Sigma condition
-    const mapping = get(.special_lowercase_mapping, 0x03A3).with(&buffer, 0x03A3);
-    try testing.expectEqual(1, mapping.len);
-    try testing.expectEqual(0x03C2, mapping[0]); // Should map to Greek Small Letter Final Sigma
 }
 
 test "info extension" {
@@ -285,23 +274,17 @@ test "case_folding_full" {
 
 test "case_folding_turkish_only" {
     // U+0049 'I' has Turkish-only case folding to U+0131 (ı)
-    const mapping = get(.case_folding_turkish_only, 0x0049);
-    try testing.expectEqual(1, mapping.len);
-    try testing.expectEqual(0x0131, mapping[0]);
+    try testing.expectEqual(0x0131, get(.case_folding_turkish_only, 0x0049).?);
 }
 
 test "case_folding_common_only" {
     // U+0041 'A' has common case folding to U+0061 'a'
-    const mapping = get(.case_folding_common_only, 0x0041);
-    try testing.expectEqual(1, mapping.len);
-    try testing.expectEqual(0x0061, mapping[0]);
+    try testing.expectEqual(0x0061, get(.case_folding_common_only, 0x0041).?);
 }
 
 test "case_folding_simple_only" {
     // U+1E9E (ẞ) has simple-only case folding to U+00DF (ß)
-    const mapping = get(.case_folding_simple_only, 0x1E9E);
-    try testing.expectEqual(1, mapping.len);
-    try testing.expectEqual(0x00DF, mapping[0]);
+    try testing.expectEqual(0x00DF, get(.case_folding_simple_only, 0x1E9E).?);
 }
 
 test "case_folding_full_only" {
@@ -315,6 +298,19 @@ test "case_folding_full_only" {
 test "has_special_casing" {
     try testing.expect(get(.has_special_casing, 0x00DF)); // ß
     try testing.expect(!get(.has_special_casing, 0x0041)); // 'A'
+}
+
+test "special_lowercase_mapping" {
+    var buffer: [1]u21 = undefined;
+
+    // ß (U+00DF) -> 00DF (unconditional, lowercase maps to itself)
+    const mapping_df = get(.special_lowercase_mapping, 0x00DF).with(&buffer, 0x00DF);
+    try testing.expectEqual(1, mapping_df.len);
+    try testing.expectEqual(0x00DF, mapping_df[0]);
+
+    // 'A' has no special casing, should return empty
+    const mapping_a = get(.special_lowercase_mapping, 65).with(&buffer, 65);
+    try testing.expectEqual(0, mapping_a.len);
 }
 
 test "special_titlecase_mapping" {
@@ -335,11 +331,42 @@ test "special_uppercase_mapping" {
     try testing.expectEqual(0x0053, mapping[1]);
 }
 
+test "special_lowercase_mapping_conditional" {
+    var buffer: [1]u21 = undefined;
+    // Greek Capital Sigma (U+03A3) has Final_Sigma condition
+    const mapping = get(.special_lowercase_mapping_conditional, 0x03A3).with(&buffer, 0x03A3);
+    try testing.expectEqual(1, mapping.len);
+    try testing.expectEqual(0x03C2, mapping[0]); // Greek Small Letter Final Sigma
+}
+
+test "special_titlecase_mapping_conditional" {
+    var buffer: [1]u21 = undefined;
+    // Greek Capital Sigma (U+03A3) with Final_Sigma condition -> 03A3 (itself)
+    const mapping = get(.special_titlecase_mapping_conditional, 0x03A3).with(&buffer, 0x03A3);
+    try testing.expectEqual(1, mapping.len);
+    try testing.expectEqual(0x03A3, mapping[0]);
+}
+
+test "special_uppercase_mapping_conditional" {
+    var buffer: [1]u21 = undefined;
+    // Greek Capital Sigma (U+03A3) with Final_Sigma condition -> 03A3 (itself)
+    const mapping = get(.special_uppercase_mapping_conditional, 0x03A3).with(&buffer, 0x03A3);
+    try testing.expectEqual(1, mapping.len);
+    try testing.expectEqual(0x03A3, mapping[0]);
+}
+
 test "lowercase_mapping" {
     var buffer: [1]u21 = undefined;
     const mapping = get(.lowercase_mapping, 0x0041).with(&buffer, 0x0041); // 'A' -> 'a'
     try testing.expectEqual(1, mapping.len);
     try testing.expectEqual(0x0061, mapping[0]);
+}
+
+test "uppercase_mapping" {
+    var buffer: [1]u21 = undefined;
+    const mapping = get(.uppercase_mapping, 0x0061).with(&buffer, 0x0061); // 'a' -> 'A'
+    try testing.expectEqual(1, mapping.len);
+    try testing.expectEqual(0x0041, mapping[0]);
 }
 
 test "titlecase_mapping" {
@@ -464,4 +491,141 @@ test "is_emoji_component" {
 test "is_extended_pictographic" {
     try testing.expect(get(.is_extended_pictographic, 0x1F600)); // 😀
     try testing.expect(!get(.is_extended_pictographic, 0x0041)); // 'A'
+}
+
+test "wcwidth_standalone control characters are width 0" {
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0x0000)); // NULL (C0)
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0x001F)); // UNIT SEPARATOR (C0)
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0x007F)); // DELETE (C0)
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0x0080)); // C1 control
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0x009F)); // C1 control
+}
+
+test "wcwidth_standalone surrogates are width 0" {
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0xD800)); // High surrogate start
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0xDBFF)); // High surrogate end
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0xDC00)); // Low surrogate start
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0xDFFF)); // Low surrogate end
+}
+
+test "wcwidth_standalone line and paragraph separators are width 0" {
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0x2028)); // LINE SEPARATOR (Zl)
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0x2029)); // PARAGRAPH SEPARATOR (Zp)
+}
+
+test "wcwidth_standalone default ignorable characters are width 0" {
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0x200B)); // ZERO WIDTH SPACE
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0x200C)); // ZERO WIDTH NON-JOINER (ZWNJ)
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0x200D)); // ZERO WIDTH JOINER (ZWJ)
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0xFE00)); // VARIATION SELECTOR-1
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0xFE0F)); // VARIATION SELECTOR-16
+    try testing.expectEqual(0, get(.wcwidth_standalone, 0xFEFF)); // ZERO WIDTH NO-BREAK SPACE
+}
+
+test "wcwidth_standalone soft hyphen exception is width 1" {
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x00AD)); // SOFT HYPHEN
+}
+
+test "wcwidth_standalone combining marks are width 1" {
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x0300)); // COMBINING GRAVE ACCENT (Mn)
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x0903)); // DEVANAGARI SIGN VISARGA (Mc)
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x20DD)); // COMBINING ENCLOSING CIRCLE (Me)
+}
+
+test "wcwidth_zero_in_grapheme combining marks" {
+    // mark_nonspacing (Mn) are true
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x0300)); // COMBINING GRAVE ACCENT (Mn)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x0341)); // COMBINING GREEK PERISPOMENI (Mn)
+    // mark_enclosing (Me) are true
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x20DD)); // COMBINING ENCLOSING CIRCLE (Me)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x20DE)); // COMBINING ENCLOSING SQUARE (Me)
+    // mark_spacing_combining (Mc) follow EAW - Neutral=1, so false
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x0903)); // DEVANAGARI SIGN VISARGA (Mc, N)
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x093E)); // DEVANAGARI VOWEL SIGN AA (Mc, N)
+    // mark_spacing_combining with EAW=Wide are width 2, so false
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x302E)); // HANGUL SINGLE DOT TONE MARK (Mc, W)
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x302F)); // HANGUL DOUBLE DOT TONE MARK (Mc, W)
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x16FF0)); // VIETNAMESE ALTERNATE READING MARK CA (Mc, W)
+    try testing.expect(!get(.wcwidth_zero_in_grapheme, 0x16FF1)); // VIETNAMESE ALTERNATE READING MARK NHAY (Mc, W)
+}
+
+test "wcwidth_standalone combining enclosing keycap exception is width 2" {
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x20E3)); // COMBINING ENCLOSING KEYCAP
+}
+
+test "wcwidth_zero_in_grapheme combining enclosing keycap exception is true" {
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x20E3)); // COMBINING ENCLOSING KEYCAP
+}
+
+test "wcwidth_standalone regional indicators are width 2" {
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x1F1E6)); // Regional Indicator A
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x1F1FA)); // Regional Indicator U
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x1F1F8)); // Regional Indicator S
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x1F1FF)); // Regional Indicator Z
+}
+
+test "wcwidth_standalone em dashes have special widths" {
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x2E3A)); // TWO-EM DASH
+    try testing.expectEqual(3, get(.wcwidth_standalone, 0x2E3B)); // THREE-EM DASH
+}
+
+test "wcwidth_standalone ambiguous width characters are width 1" {
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x00A1)); // INVERTED EXCLAMATION MARK (A)
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x00B1)); // PLUS-MINUS SIGN (A)
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x2664)); // WHITE SPADE SUIT (A)
+}
+
+test "wcwidth_standalone east asian wide and fullwidth are width 2" {
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x3000)); // IDEOGRAPHIC SPACE (F)
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0xFF01)); // FULLWIDTH EXCLAMATION MARK (F)
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x4E00)); // CJK UNIFIED IDEOGRAPH (W)
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0xAC00)); // HANGUL SYLLABLE (W)
+}
+
+test "wcwidth_standalone hangul jamo V and T are width 1" {
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x1161)); // HANGUL JUNGSEONG A (V)
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x11A8)); // HANGUL JONGSEONG KIYEOK (T)
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0xD7B0)); // HANGUL JUNGSEONG O-YEO (V)
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0xD7CB)); // HANGUL JONGSEONG NIEUN-RIEUL (T)
+}
+
+test "wcwidth_zero_in_grapheme hangul jamo V and T are true" {
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x1161)); // HANGUL JUNGSEONG A (V)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x11A8)); // HANGUL JONGSEONG KIYEOK (T)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0xD7B0)); // HANGUL JUNGSEONG O-YEO (V)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0xD7CB)); // HANGUL JONGSEONG NIEUN-RIEUL (T)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x16D63)); // KIRAT RAI VOWEL SIGN AA (V)
+}
+
+test "wcwidth_standalone format characters non-DI are width 1" {
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x0600)); // ARABIC NUMBER SIGN (Cf, not DI)
+}
+
+test "wcwidth_zero_in_grapheme format characters non-DI is true" {
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x0600)); // ARABIC NUMBER SIGN (Cf, not DI)
+}
+
+test "wcwidth_standalone prepend characters are width 1" {
+    // Lo Prepend (0D4E)
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x0D4E));
+}
+
+test "wcwidth_zero_in_grapheme prepend characters are true" {
+    // Lo Prepend (0D4E)
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x0D4E));
+}
+
+test "wcwidth_standalone emoji with default text presentation is 1" {
+    // weight lifter
+    try testing.expectEqual(1, get(.wcwidth_standalone, 0x1F3CB));
+}
+
+test "wcwidth_standalone emoji_modifier is 2" {
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x1F3FB)); // 🏻 EMOJI MODIFIER FITZPATRICK TYPE-1-2
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x1F3FF)); // 🏿 EMOJI MODIFIER FITZPATRICK TYPE-6
+}
+
+test "wcwidth_zero_in_grapheme emoji_modifier is true" {
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x1F3FB)); // 🏻 EMOJI MODIFIER FITZPATRICK TYPE-1-2
+    try testing.expect(get(.wcwidth_zero_in_grapheme, 0x1F3FF)); // 🏿 EMOJI MODIFIER FITZPATRICK TYPE-6
 }

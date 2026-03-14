@@ -7,6 +7,7 @@ const setBuiltField = config.setBuiltField;
 const setField = config.setField;
 const setAllocField = config.setAllocField;
 const initField = config.initField;
+const initAllocField = config.initAllocField;
 
 pub const build_components: []const config.Component = &.{
     .{
@@ -154,6 +155,25 @@ pub const build_components: []const config.Component = &.{
             "is_emoji_component",
         },
         .fields = &.{"grapheme_break"},
+    },
+    .{
+        .Impl = GraphemeBreakNoControlComponent,
+        .inputs = &.{"grapheme_break"},
+        .fields = &.{"grapheme_break_no_control"},
+    },
+    .{
+        .Impl = Wcwidth,
+        .inputs = &.{
+            "east_asian_width",
+            "general_category",
+            "grapheme_break",
+            "is_default_ignorable",
+            "is_emoji_modifier",
+        },
+        .fields = &.{
+            "wcwidth_standalone",
+            "wcwidth_zero_in_grapheme",
+        },
     },
 };
 
@@ -2427,7 +2447,10 @@ const CaseFoldingSimple = struct {
         _ = allocator;
         _ = backing;
 
+        const Row = config.Row(fields_list, fields_is_packed, build_fields);
+
         rows.len = config.num_code_points;
+        const items = rows.items(.case_folding_simple);
         for (0..config.num_code_points) |i| {
             const cp: u21 = @intCast(i);
             const input = inputs.get(i);
@@ -2436,9 +2459,7 @@ const CaseFoldingSimple = struct {
                 input.case_folding_turkish_only.unshift(cp) orelse
                 cp;
 
-            var row = rows.get(i);
-            setField(&row, "case_folding_simple", cp, d, tracking);
-            rows.set(i, row);
+            items[i] = initField(Row, "case_folding_simple", cp, d, tracking);
         }
     }
 };
@@ -2455,7 +2476,10 @@ const CaseFoldingFull = struct {
         backing: anytype,
         tracking: anytype,
     ) !void {
+        const Row = config.Row(fields_list, fields_is_packed, build_fields);
+
         rows.len = config.num_code_points;
+        const items = rows.items(.case_folding_full);
         for (0..config.num_code_points) |i| {
             const cp: u21 = @intCast(i);
             var buffer: [1]u21 = undefined;
@@ -2470,9 +2494,7 @@ const CaseFoldingFull = struct {
                 break :blk &buffer;
             };
 
-            var row = rows.get(i);
-            try setAllocField(allocator, &row, "case_folding_full", cp, mapping, tracking);
-            rows.set(i, row);
+            items[i] = try initAllocField(Row, "case_folding_full", allocator, cp, mapping, tracking);
         }
     }
 };
@@ -2489,7 +2511,10 @@ const LowercaseMapping = struct {
         backing: anytype,
         tracking: anytype,
     ) !void {
+        const Row = config.Row(fields_list, fields_is_packed, build_fields);
+
         rows.len = config.num_code_points;
+        const items = rows.items(.lowercase_mapping);
         for (0..config.num_code_points) |i| {
             const cp: u21 = @intCast(i);
             const input = inputs.get(i);
@@ -2503,9 +2528,7 @@ const LowercaseMapping = struct {
                 break :blk &buffer;
             };
 
-            var row = rows.get(i);
-            try setAllocField(allocator, &row, "lowercase_mapping", cp, mapping, tracking);
-            rows.set(i, row);
+            items[i] = try initAllocField(Row, "lowercase_mapping", allocator, cp, mapping, tracking);
         }
     }
 };
@@ -2522,7 +2545,10 @@ const TitlecaseMapping = struct {
         backing: anytype,
         tracking: anytype,
     ) !void {
+        const Row = config.Row(fields_list, fields_is_packed, build_fields);
+
         rows.len = config.num_code_points;
+        const items = rows.items(.titlecase_mapping);
         for (0..config.num_code_points) |i| {
             const cp: u21 = @intCast(i);
             const input = inputs.get(i);
@@ -2536,9 +2562,7 @@ const TitlecaseMapping = struct {
                 break :blk &buffer;
             };
 
-            var row = rows.get(i);
-            try setAllocField(allocator, &row, "titlecase_mapping", cp, mapping, tracking);
-            rows.set(i, row);
+            items[i] = try initAllocField(Row, "titlecase_mapping", allocator, cp, mapping, tracking);
         }
     }
 };
@@ -2555,7 +2579,10 @@ const UppercaseMapping = struct {
         backing: anytype,
         tracking: anytype,
     ) !void {
+        const Row = config.Row(fields_list, fields_is_packed, build_fields);
+
         rows.len = config.num_code_points;
+        const items = rows.items(.uppercase_mapping);
         for (0..config.num_code_points) |i| {
             const cp: u21 = @intCast(i);
             const input = inputs.get(i);
@@ -2569,9 +2596,7 @@ const UppercaseMapping = struct {
                 break :blk &buffer;
             };
 
-            var row = rows.get(i);
-            try setAllocField(allocator, &row, "uppercase_mapping", cp, mapping, tracking);
-            rows.set(i, row);
+            items[i] = try initAllocField(Row, "uppercase_mapping", allocator, cp, mapping, tracking);
         }
     }
 };
@@ -2593,6 +2618,7 @@ const GraphemeBreakDerived = struct {
         _ = tracking;
 
         rows.len = config.num_code_points;
+        const items = rows.items(.grapheme_break);
         for (0..config.num_code_points) |i| {
             const cp: u21 = @intCast(i);
             const input = inputs.get(i);
@@ -2603,7 +2629,6 @@ const GraphemeBreakDerived = struct {
             const original_grapheme_break = input.original_grapheme_break;
             const indic_conjunct_break_val = input.indic_conjunct_break;
 
-            var row = rows.get(i);
             const grapheme_break: types.GraphemeBreak = if (is_emoji_modifier) blk: {
                 inlineAssert(original_grapheme_break == .extend);
                 inlineAssert(!is_extended_pictographic and is_emoji_component);
@@ -2655,7 +2680,108 @@ const GraphemeBreakDerived = struct {
                 },
             };
 
-            setBuiltField(&row, "grapheme_break", grapheme_break);
+            items[i] = grapheme_break;
+        }
+    }
+};
+
+const GraphemeBreakNoControlComponent = struct {
+    pub fn build(
+        comptime fields: []const config.Field,
+        comptime fields_is_packed: []const bool,
+        comptime input_fields: []const usize,
+        comptime build_fields: []const usize,
+        allocator: std.mem.Allocator,
+        inputs: config.MultiSlice(fields, fields_is_packed, input_fields),
+        rows: *config.MultiSlice(fields, fields_is_packed, build_fields),
+        backing: anytype,
+        tracking: anytype,
+    ) !void {
+        _ = allocator;
+        _ = backing;
+        _ = tracking;
+
+        rows.len = config.num_code_points;
+        const items = rows.items(.grapheme_break_no_control);
+        const input_items = inputs.items(.grapheme_break);
+        for (0..config.num_code_points) |i| {
+            items[i] = switch (input_items[i]) {
+                .control, .cr, .lf => .other,
+                inline else => |tag| comptime std.meta.stringToEnum(
+                    types.GraphemeBreakNoControl,
+                    @tagName(tag),
+                ) orelse unreachable,
+            };
+        }
+    }
+};
+
+const Wcwidth = struct {
+    pub fn build(
+        comptime fields: []const config.Field,
+        comptime fields_is_packed: []const bool,
+        comptime input_fields: []const usize,
+        comptime build_fields: []const usize,
+        allocator: std.mem.Allocator,
+        inputs: config.MultiSlice(fields, fields_is_packed, input_fields),
+        rows: *config.MultiSlice(fields, fields_is_packed, build_fields),
+        backing: anytype,
+        tracking: anytype,
+    ) !void {
+        _ = allocator;
+        _ = backing;
+        _ = tracking;
+
+        rows.len = config.num_code_points;
+        for (0..config.num_code_points) |i| {
+            const cp: u21 = @intCast(i);
+            const input = inputs.get(i);
+            var row = rows.get(i);
+            const gc = input.general_category;
+
+            var width: u2 = undefined;
+
+            if (gc == .other_control or
+                gc == .other_surrogate or
+                gc == .separator_line or
+                gc == .separator_paragraph)
+            {
+                width = 0;
+            } else if (cp == 0x00AD) {
+                width = 1;
+            } else if (input.is_default_ignorable) {
+                width = 0;
+            } else if (cp == 0x2E3A) {
+                width = 2;
+            } else if (cp == 0x2E3B) {
+                width = 3;
+            } else if (input.east_asian_width == .wide or input.east_asian_width == .fullwidth) {
+                width = 2;
+            } else if (input.grapheme_break == .regional_indicator) {
+                width = 2;
+            } else {
+                width = 1;
+            }
+
+            if (cp == 0x20E3) {
+                setBuiltField(&row, "wcwidth_standalone", 2);
+            } else {
+                setBuiltField(&row, "wcwidth_standalone", width);
+            }
+
+            if (width == 0 or
+                input.is_emoji_modifier or
+                gc == .mark_nonspacing or
+                gc == .mark_enclosing or
+                input.grapheme_break == .v or
+                input.grapheme_break == .t or
+                input.grapheme_break == .prepend)
+            {
+                setBuiltField(&row, "wcwidth_zero_in_grapheme", true);
+            } else {
+                setBuiltField(&row, "wcwidth_zero_in_grapheme", false);
+            }
+
             rows.set(i, row);
         }
     }

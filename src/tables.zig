@@ -11,15 +11,15 @@ pub const std_options: std.Options = .{
         .info,
 };
 
-const fields_and_unused = if (config.is_updating_ucd) &updating_ucd_fields else build_config.fields;
+const fields: []const config.Field = if (config.is_updating_ucd) &updating_ucd_fields else build_config.fields;
 const unresolved_tables = if (config.is_updating_ucd) &updating_ucd_tables else build_config.tables;
 const build_components_and_unused = if (config.is_updating_ucd) config.build_components else build_config.build_components;
 const get_components = if (config.is_updating_ucd) config.get_components else build_config.get_components;
 const all_components: []const config.Component = &(build_components_and_unused[0..build_components_and_unused.len].* ++ get_components[0..get_components.len].*);
 
-fn visitField(comptime used: *[fields_and_unused.len]bool, comptime field: []const u8) void {
+fn visitField(comptime used: *[fields.len]bool, comptime field: []const u8) void {
     @setEvalBranchQuota(50_000);
-    const i = config.fieldIndex(fields_and_unused, field);
+    const i = config.fieldIndex(fields, field);
     if (!used[i]) {
         used[i] = true;
         const c = config.componentIndexFor(all_components, field);
@@ -30,7 +30,7 @@ fn visitField(comptime used: *[fields_and_unused.len]bool, comptime field: []con
 }
 
 const is_field_used = blk: {
-    var used: [fields_and_unused.len]bool = @splat(false);
+    var used: [fields.len]bool = @splat(false);
     for (unresolved_tables) |table| {
         for (table.fields) |f| visitField(&used, f);
     }
@@ -40,8 +40,7 @@ const is_field_used = blk: {
     break :blk used;
 };
 
-const fields: []const config.Field = &_fields();
-const field_names: []const [:0]const u8 = &fieldNames();
+const used_fields: []const usize = &usedFields();
 const row_fields_and_backing: []const usize = &rowFieldsAndBacking();
 const row_fields: []const usize = &rowFields();
 
@@ -70,7 +69,7 @@ const is_component_used = blk: {
 const build_components: []const config.Component = &buildComponents();
 const fields_is_packed: []const bool = &fieldsIsPacked();
 
-fn _fieldsLen() usize {
+fn usedFieldsLen() usize {
     var n: usize = 0;
     for (is_field_used) |used| {
         if (used) n += 1;
@@ -78,10 +77,10 @@ fn _fieldsLen() usize {
     return n;
 }
 
-fn _fields() [_fieldsLen()]config.Field {
-    var result: [_fieldsLen()]config.Field = undefined;
+fn usedFields() [usedFieldsLen()]usize {
+    var result: [usedFieldsLen()]usize = undefined;
     var i: usize = 0;
-    for (fields_and_unused, is_field_used) |f, used| {
+    for (is_field_used, 0..) |used, f| {
         if (used) {
             result[i] = f;
             i += 1;
@@ -90,19 +89,11 @@ fn _fields() [_fieldsLen()]config.Field {
     return result;
 }
 
-fn fieldNames() [fields.len][:0]const u8 {
-    var result: [fields.len][:0]const u8 = undefined;
-    for (fields, 0..) |field, i| {
-        result[i] = field.name;
-    }
-    return result;
-}
-
 fn rowFieldsAndBackingLen() usize {
     @setEvalBranchQuota(50_000);
     var n: usize = 0;
-    for (fields) |field| {
-        const c = config.componentIndexFor(all_components, field.name);
+    for (used_fields) |f| {
+        const c = config.componentIndexFor(all_components, fields[f].name);
         const component = all_components[c];
         if (@hasDecl(component.Impl, "build")) {
             n += 1;
@@ -115,8 +106,8 @@ fn rowFieldsAndBacking() [rowFieldsAndBackingLen()]usize {
     @setEvalBranchQuota(50_000);
     var result: [rowFieldsAndBackingLen()]usize = undefined;
     var i: usize = 0;
-    for (fields, 0..) |field, f| {
-        const c = config.componentIndexFor(all_components, field.name);
+    for (used_fields) |f| {
+        const c = config.componentIndexFor(all_components, fields[f].name);
         const component = all_components[c];
         if (@hasDecl(component.Impl, "build")) {
             result[i] = f;
@@ -349,21 +340,13 @@ pub fn main() !void {
         \\
         \\const std = @import("std");
         \\const config = @import("config.zig");
+        \\const types = config.types;
         \\const storage = @import("storage.zig");
         \\const build_config = @import("build_config");
         \\
         \\pub const get_components = build_config.get_components;
         \\
-        \\pub const fields = config.selectFields(build_config.fields, &.{
-        \\
-    );
-
-    inline for (fields) |f| {
-        try writer.print("    .{s},\n", .{f.name});
-    }
-
-    try writer.writeAll(
-        \\});
+        \\pub const fields = build_config.fields;
         \\
         \\const fields_is_packed: []const bool = &.{
         \\
@@ -496,9 +479,9 @@ pub fn main() !void {
         if (table.stages == .three) {
             try writer.print(
                 \\storage.Table3({s}_Stage1, {s}_Stage2, {s}_Row){{
-                \\        .stage1 = &{s}_stage1,
-                \\        .stage2 = &{s}_stage2,
-                \\        .stage3 = &{s}_stage3,
+                \\        .stage1 = {s}_stage1,
+                \\        .stage2 = {s}_stage2,
+                \\        .stage3 = {s}_stage3,
                 \\    }},
                 \\
             , .{
@@ -512,8 +495,8 @@ pub fn main() !void {
         } else {
             try writer.print(
                 \\storage.Table2({s}_Stage1, {s}_Row){{
-                \\        .stage1 = &{s}_stage1,
-                \\        .stage2 = &{s}_stage2,
+                \\        .stage1 = {s}_stage1,
+                \\        .stage2 = {s}_stage2,
                 \\    }},
                 \\
             , .{
@@ -735,14 +718,14 @@ pub fn writeTableRows(
 
     try writer.print(
         \\const {s}_Row = storage.Row(
-        \\    config.selectFields(
+        \\    &config.selectFields(
         \\        fields,
-        \\        .{{
+        \\        &.{{
         \\
     , .{TypePrefix});
 
     for (table.fields) |field| {
-        try writer.print("            .{s}\n", .{field});
+        try writer.print("            \"{s}\",\n", .{field});
     }
 
     try writer.print(
@@ -774,9 +757,8 @@ pub fn writeTableRows(
     }
 
     try writer.print(
-        \\}};
         \\
-        \\const {s}_stage1: []{s}_Stage1 align(std.atomic.cache_line) = &.{{
+        \\const {s}_stage1: []const {s}_Stage1 align(std.atomic.cache_line) = &.{{
         \\
     ,
         .{ prefix, TypePrefix },
@@ -791,7 +773,7 @@ pub fn writeTableRows(
             \\
             \\}};
             \\
-            \\const {s}_stage2: []{s}_Stage2 align(std.atomic.cache_line) = &.{{
+            \\const {s}_stage2: []const {s}_Stage2 align(std.atomic.cache_line) = &.{{
             \\
         ,
             .{ prefix, TypePrefix },
@@ -812,21 +794,21 @@ pub fn writeTableRows(
     );
 
     try writer.print(
-        "const {s}_stage{d}: []{s}_Row align(@max(std.atomic.cache_line, @alignOf({s}_Row))) = ",
+        "const {s}_stage{d}: []const {s}_Row align(@max(std.atomic.cache_line, @alignOf({s}_Row))) = ",
         .{ prefix, num_stages, TypePrefix, TypePrefix },
     );
 
     if (@typeInfo(Row).@"struct".layout == .@"packed") {
         const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(Row));
 
-        try writer.print("&@bitCast([_]{s}{{\n", .{@typeName(IntEquivalent)});
+        try writer.print("&@as([{d}]{s}_Row, @bitCast([_]{s}{{\n", .{ rows.len, TypePrefix, @typeName(IntEquivalent) });
 
         for (rows) |row| {
             try writer.print("{d},", .{@as(IntEquivalent, @bitCast(row))});
         }
 
         try writer.writeAll(
-            \\});
+            \\}));
             \\
         );
     } else {

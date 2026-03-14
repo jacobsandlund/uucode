@@ -189,11 +189,7 @@ pub fn Slice(
             Self{
                 .len = 0,
                 .data = .{
-                    .embedded = blk: {
-                        var buffer: [embedded_len]T = undefined;
-                        @memset(&buffer, 0);
-                        break :blk buffer;
-                    },
+                    .embedded = std.mem.zeroes([embedded_len]T),
                 },
             };
         pub const same = if (c.cp_packing == .shift) Self{
@@ -460,7 +456,7 @@ fn basicTrackingOkay(tracking: anytype, comptime field: config.Field) !bool {
             return false;
         }
     } else {
-        if (!r.compareActual(tracking.actualConfig(field))) {
+        if (!r.compareActual(tracking.actualConfig(r))) {
             return false;
         }
     }

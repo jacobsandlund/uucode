@@ -148,7 +148,7 @@ pub fn build(b: *std.Build) void {
         // that I'll be investigating in a follow up commit.
         .Debug,
         null,
-        b.path("src/build/test_build_config.zig"),
+        b.path("src/test/build_config.zig"),
     );
 
     const src_tests = b.addTest(.{
@@ -344,11 +344,18 @@ fn createLibMod(
     build_tables_config: ?*std.Build.Module,
     tables_path: std.Build.LazyPath,
 } {
+    const types_mod = b.createModule(.{
+        .root_source_file = b.path("src/types.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/config.zig"),
         .target = target,
         .optimize = optimize,
     });
+    config_mod.addImport("types.zig", types_mod);
 
     const storage_mod = b.createModule(.{
         .root_source_file = b.path("src/storage.zig"),
@@ -397,6 +404,7 @@ fn createLibMod(
         .optimize = optimize,
     });
 
+    lib_mod.addImport("types.zig", types_mod);
     lib_mod.addImport("config.zig", config_mod);
     lib_mod.addImport("tables", tables_mod);
     lib_mod.addImport("get.zig", get_mod);

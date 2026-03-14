@@ -320,4 +320,11 @@ pub const fields: []const config.Field = &.{
 
     // Indic Syllabic Category
     .{ .name = "indic_syllabic_category", .type = types.IndicSyllabicCategory },
+
+    // GraphemeBreakNoControl (derived from grapheme_break)
+    .{ .name = "grapheme_break_no_control", .type = types.GraphemeBreakNoControl },
+
+    // Wcwidth (derived)
+    .{ .name = "wcwidth_standalone", .type = u2 },
+    .{ .name = "wcwidth_zero_in_grapheme", .type = bool },
 };

@@ -2,7 +2,8 @@
 //! (It also must be separate from `root.zig` so that `storage.zig` can use it to
 //! allow for a better API on `Slice` fields.)
 const std = @import("std");
-const tables = @import("tables").tables;
+const tables_module = @import("tables");
+const tables = tables_module.tables;
 
 fn TableData(comptime Table: anytype) type {
     const DataSlice = if (@hasField(Table, "stage3"))
@@ -43,14 +44,11 @@ fn getTableInfo(comptime table_name: []const u8) std.builtin.Type.StructField {
 }
 
 fn BackingFor(comptime field: []const u8) type {
-    const tableInfo = tableInfoFor(field);
-    const Backing = @FieldType(@FieldType(@TypeOf(tables), tableInfo.name), "backing");
-    return @FieldType(@typeInfo(Backing).pointer.child, field);
+    return @FieldType(tables_module.Backing, field);
 }
 
 pub fn backingFor(comptime field: []const u8) BackingFor(field) {
-    const tableInfo = tableInfoFor(field);
-    return @field(@field(tables, tableInfo.name).backing, field);
+    return @field(tables_module.backing, field);
 }
 
 fn TableFor(comptime field: []const u8) type {
