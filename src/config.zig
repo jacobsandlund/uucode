@@ -617,7 +617,7 @@ pub const Table = struct {
     pub fn field(comptime self: *const Table, comptime name: []const u8) Field {
         @setEvalBranchQuota(20_000);
 
-        return for (self.fields) |f| {
+        return inline for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
                 break f;
             }
@@ -634,7 +634,7 @@ pub const Table = struct {
 
         const can_be_packed = switch (self.packing) {
             .auto, .@"packed" => blk: {
-                for (self.fields) |f| {
+                inline for (self.fields) |f| {
                     if (!f.canBePacked()) {
                         break :blk false;
                     }
@@ -734,7 +734,7 @@ pub const Extension = struct {
     }
 
     pub fn field(comptime self: *const Extension, comptime name: []const u8) Field {
-        return for (self.fields) |f| {
+        return inline for (self.fields) |f| {
             if (std.mem.eql(u8, f.name, name)) {
                 break f;
             }
