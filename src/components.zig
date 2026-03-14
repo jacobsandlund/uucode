@@ -4,9 +4,9 @@ const types = @import("types.zig");
 const inlineAssert = config.quirks.inlineAssert;
 
 const setBuiltField = config.setBuiltField;
-const setOptionalField = config.setOptionalField;
-const setShiftField = config.setShiftField;
 const setField = config.setField;
+const setAllocField = config.setAllocField;
+const initField = config.initField;
 
 pub const build_components: []const config.Component = &.{
     .{
@@ -195,8 +195,8 @@ const UnicodeData = struct {
         setBuiltField(&default_row, "decomposition_type", .default);
         setBuiltField(&default_row, "decomposition_mapping", .same);
         setBuiltField(&default_row, "numeric_type", .none);
-        setOptionalField(&default_row, "numeric_value_decimal", null, tracking);
-        setOptionalField(&default_row, "numeric_value_digit", null, tracking);
+        setField(&default_row, "numeric_value_decimal", 0, null, tracking);
+        setField(&default_row, "numeric_value_digit", 0, null, tracking);
         setBuiltField(&default_row, "numeric_value_numeric", .empty);
         setBuiltField(&default_row, "is_bidi_mirrored", false);
         setBuiltField(&default_row, "unicode_1_name", .empty);
@@ -360,7 +360,7 @@ const UnicodeData = struct {
             }
 
             var row: Row = undefined;
-            try setField(
+            try setAllocField(
                 allocator,
                 &row,
                 "name",
@@ -368,12 +368,12 @@ const UnicodeData = struct {
                 name,
                 tracking,
             );
-            try setField(allocator, &row, "name", cp, name, tracking);
+            try setAllocField(allocator, &row, "name", cp, name, tracking);
             setBuiltField(&row, "general_category", general_category);
             setBuiltField(&row, "canonical_combining_class", canonical_combining_class);
             setBuiltField(&row, "bidi_class", bidi_class);
             setBuiltField(&row, "decomposition_type", decomposition_type);
-            try setField(
+            try setAllocField(
                 allocator,
                 &row,
                 "decomposition_mapping",
@@ -382,9 +382,9 @@ const UnicodeData = struct {
                 tracking,
             );
             setBuiltField(&row, "numeric_type", numeric_type);
-            setOptionalField(&row, "numeric_value_decimal", numeric_value_decimal, tracking);
-            setOptionalField(&row, "numeric_value_digit", numeric_value_digit, tracking);
-            try setField(
+            setField(&row, "numeric_value_decimal", cp, numeric_value_decimal, tracking);
+            setField(&row, "numeric_value_digit", cp, numeric_value_digit, tracking);
+            try setAllocField(
                 allocator,
                 &row,
                 "numeric_value_numeric",
@@ -393,7 +393,7 @@ const UnicodeData = struct {
                 tracking,
             );
             setBuiltField(&row, "is_bidi_mirrored", is_bidi_mirrored);
-            try setField(
+            try setAllocField(
                 allocator,
                 &row,
                 "unicode_1_name",
@@ -401,9 +401,9 @@ const UnicodeData = struct {
                 unicode_1_name,
                 tracking,
             );
-            setShiftField(&row, "simple_uppercase_mapping", cp, simple_uppercase_mapping, tracking);
-            setShiftField(&row, "simple_lowercase_mapping", cp, simple_lowercase_mapping, tracking);
-            setShiftField(&row, "simple_titlecase_mapping", cp, simple_titlecase_mapping, tracking);
+            setField(&row, "simple_uppercase_mapping", cp, simple_uppercase_mapping, tracking);
+            setField(&row, "simple_lowercase_mapping", cp, simple_lowercase_mapping, tracking);
+            setField(&row, "simple_titlecase_mapping", cp, simple_titlecase_mapping, tracking);
 
             // Handle range entries with "First>" and "Last>"
             if (std.mem.endsWith(u8, name_str, "First>")) {
@@ -545,19 +545,19 @@ const CaseFolding = struct {
             switch (status) {
                 'S' => {
                     inlineAssert(mapping_len == 1);
-                    setShiftField(&row, "case_folding_simple_only", cp, mapping[0], tracking);
+                    setField(&row, "case_folding_simple_only", cp, mapping[0], tracking);
                 },
                 'C' => {
                     inlineAssert(mapping_len == 1);
-                    setShiftField(&row, "case_folding_common_only", cp, mapping[0], tracking);
+                    setField(&row, "case_folding_common_only", cp, mapping[0], tracking);
                 },
                 'T' => {
                     inlineAssert(mapping_len == 1);
-                    setShiftField(&row, "case_folding_turkish_only", cp, mapping[0], tracking);
+                    setField(&row, "case_folding_turkish_only", cp, mapping[0], tracking);
                 },
                 'F' => {
                     inlineAssert(mapping_len > 1);
-                    try setField(
+                    try setAllocField(
                         allocator,
                         &row,
                         "case_folding_full_only",
@@ -683,14 +683,14 @@ const SpecialCasing = struct {
 
             setBuiltField(&row, "has_special_casing", true);
             if (is_conditional) {
-                try setField(allocator, &row, "special_lowercase_mapping_conditional", cp, lower_mapping[0..lower_mapping_len], tracking);
-                try setField(allocator, &row, "special_titlecase_mapping_conditional", cp, title_mapping[0..title_mapping_len], tracking);
-                try setField(allocator, &row, "special_uppercase_mapping_conditional", cp, upper_mapping[0..upper_mapping_len], tracking);
-                try setField(allocator, &row, "special_casing_condition", cp, conditions[0..conditions_len], tracking);
+                try setAllocField(allocator, &row, "special_lowercase_mapping_conditional", cp, lower_mapping[0..lower_mapping_len], tracking);
+                try setAllocField(allocator, &row, "special_titlecase_mapping_conditional", cp, title_mapping[0..title_mapping_len], tracking);
+                try setAllocField(allocator, &row, "special_uppercase_mapping_conditional", cp, upper_mapping[0..upper_mapping_len], tracking);
+                try setAllocField(allocator, &row, "special_casing_condition", cp, conditions[0..conditions_len], tracking);
             } else {
-                try setField(allocator, &row, "special_lowercase_mapping", cp, lower_mapping[0..lower_mapping_len], tracking);
-                try setField(allocator, &row, "special_titlecase_mapping", cp, title_mapping[0..title_mapping_len], tracking);
-                try setField(allocator, &row, "special_uppercase_mapping", cp, upper_mapping[0..upper_mapping_len], tracking);
+                try setAllocField(allocator, &row, "special_lowercase_mapping", cp, lower_mapping[0..lower_mapping_len], tracking);
+                try setAllocField(allocator, &row, "special_titlecase_mapping", cp, title_mapping[0..title_mapping_len], tracking);
+                try setAllocField(allocator, &row, "special_uppercase_mapping", cp, upper_mapping[0..upper_mapping_len], tracking);
             }
             rows.set(cp, row);
         }
@@ -1257,7 +1257,7 @@ const BidiPairedBracket = struct {
 
         rows.len = config.num_code_points;
         const items = rows.items(.bidi_paired_bracket);
-        @memset(items, config.initField(Row, "bidi_paired_bracket", 0, @as(types.BidiPairedBracket, .none), tracking));
+        @memset(items, initField(Row, "bidi_paired_bracket", 0, @as(types.BidiPairedBracket, .none), tracking));
 
         const file_path = "ucd/BidiBrackets.txt";
 
@@ -1285,7 +1285,7 @@ const BidiPairedBracket = struct {
                 else => unreachable,
             };
 
-            items[op] = config.initField(Row, "bidi_paired_bracket", @intCast(op), bracket_type, tracking);
+            items[op] = initField(Row, "bidi_paired_bracket", @intCast(op), bracket_type, tracking);
         }
     }
 };
@@ -1309,7 +1309,7 @@ const BidiMirroring = struct {
 
         rows.len = config.num_code_points;
         const items = rows.items(.bidi_mirroring);
-        @memset(items, config.initShiftField(Row, "bidi_mirroring", 0, null, tracking));
+        @memset(items, initField(Row, "bidi_mirroring", 0, null, tracking));
 
         const file_path = "ucd/BidiMirroring.txt";
 
@@ -1330,7 +1330,7 @@ const BidiMirroring = struct {
             const cp = try parseCp(cp_str);
             const paired = try parseCp(paired_cp_str);
 
-            items[cp] = config.initShiftField(Row, "bidi_mirroring", @intCast(cp), paired, tracking);
+            items[cp] = initField(Row, "bidi_mirroring", @intCast(cp), paired, tracking);
         }
     }
 };
@@ -2423,7 +2423,7 @@ const CaseFoldingSimple = struct {
                 cp;
 
             var row = rows.get(i);
-            setShiftField(&row, "case_folding_simple", cp, d, tracking);
+            setField(&row, "case_folding_simple", cp, d, tracking);
             rows.set(i, row);
         }
     }
@@ -2457,7 +2457,7 @@ const CaseFoldingFull = struct {
             };
 
             var row = rows.get(i);
-            try setField(allocator, &row, "case_folding_full", cp, mapping, tracking);
+            try setAllocField(allocator, &row, "case_folding_full", cp, mapping, tracking);
             rows.set(i, row);
         }
     }
@@ -2490,7 +2490,7 @@ const LowercaseMapping = struct {
             };
 
             var row = rows.get(i);
-            try setField(allocator, &row, "lowercase_mapping", cp, mapping, tracking);
+            try setAllocField(allocator, &row, "lowercase_mapping", cp, mapping, tracking);
             rows.set(i, row);
         }
     }
@@ -2523,7 +2523,7 @@ const TitlecaseMapping = struct {
             };
 
             var row = rows.get(i);
-            try setField(allocator, &row, "titlecase_mapping", cp, mapping, tracking);
+            try setAllocField(allocator, &row, "titlecase_mapping", cp, mapping, tracking);
             rows.set(i, row);
         }
     }
@@ -2556,7 +2556,7 @@ const UppercaseMapping = struct {
             };
 
             var row = rows.get(i);
-            try setField(allocator, &row, "uppercase_mapping", cp, mapping, tracking);
+            try setAllocField(allocator, &row, "uppercase_mapping", cp, mapping, tracking);
             rows.set(i, row);
         }
     }

@@ -730,8 +730,37 @@ pub fn mergeComponents(comptime a: []const Component, comptime b: []const Compon
     return result;
 }
 
-inline fn trackField(tracking: anytype, comptime name: []const u8, cp: u21, value: anytype) void {
-    if (@TypeOf(tracking) == void) return;
+pub inline fn initBuiltField(
+    comptime R: type,
+    comptime name: []const u8,
+    value: anytype,
+) @FieldType(R, name) {
+    const F = @FieldType(R, name);
+    if (@TypeOf(value) == @Type(.enum_literal)) {
+        return @field(F, @tagName(value));
+    } else {
+        return value;
+    }
+}
+
+pub inline fn setBuiltField(
+    container: anytype,
+    comptime name: []const u8,
+    value: anytype,
+) void {
+    const R = @typeInfo(@TypeOf(container)).pointer.child;
+    if (@hasField(R, name)) {
+        @field(container, name) = initBuiltField(R, name, value);
+    }
+}
+
+pub inline fn initField(
+    comptime R: type,
+    comptime name: []const u8,
+    cp: u21,
+    value: anytype,
+    tracking: anytype,
+) @FieldType(R, name) {
     const Track = @typeInfo(@TypeOf(tracking)).pointer.child;
     if (@hasField(Track, name)) {
         const FT = @FieldType(Track, name);
@@ -746,63 +775,9 @@ inline fn trackField(tracking: anytype, comptime name: []const u8, cp: u21, valu
             }
         }
     }
-}
-
-pub inline fn initBuiltField(comptime F: type, value: anytype) F {
-    if (@TypeOf(value) == @Type(.enum_literal)) {
-        return @field(F, @tagName(value));
-    }
-    return value;
-}
-
-pub inline fn setBuiltField(
-    container: anytype,
-    comptime name: []const u8,
-    value: anytype,
-) void {
-    const R = @typeInfo(@TypeOf(container)).pointer.child;
-    if (@hasField(R, name)) {
-        @field(container, name) = initBuiltField(@FieldType(R, name), value);
-    }
-}
-
-pub inline fn initOptionalField(comptime R: type, comptime name: []const u8, value: anytype, tracking: anytype) @FieldType(R, name) {
-    trackField(tracking, name, 0, value);
     const F = @FieldType(R, name);
     switch (@typeInfo(F)) {
-        .optional => |opt| {
-            if (opt.child == u21) {
-                @compileError("initOptionalField cannot be used with ?u21");
-            }
-            return value;
-        },
-        .@"struct" => {
-            if (!@hasDecl(F, "unpack") or !@hasDecl(F, "init")) {
-                @compileError("initOptionalField cannot be used with struct without unpack+init");
-            }
-            return F.init(value);
-        },
-        else => @compileError("initOptionalField cannot be used with type " ++ @typeName(F)),
-    }
-}
-
-pub inline fn setOptionalField(
-    container: anytype,
-    comptime name: []const u8,
-    value: anytype,
-    tracking: anytype,
-) void {
-    const R = @typeInfo(@TypeOf(container)).pointer.child;
-    if (@hasField(R, name)) {
-        @field(container, name) = initOptionalField(R, name, value, tracking);
-    }
-}
-
-pub inline fn initShiftField(comptime R: type, comptime name: []const u8, cp: u21, value: anytype, tracking: anytype) @FieldType(R, name) {
-    trackField(tracking, name, cp, value);
-    const F = @FieldType(R, name);
-    switch (@typeInfo(F)) {
-        .@"struct" => {
+        .@"struct", .@"union", .@"enum", .@"opaque" => {
             if (@hasDecl(F, "init")) {
                 const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
                 if (params.len == 1) {
@@ -810,29 +785,26 @@ pub inline fn initShiftField(comptime R: type, comptime name: []const u8, cp: u2
                 } else if (params.len == 2) {
                     return F.init(cp, value);
                 } else {
-                    @compileError(std.fmt.comptimePrint("initShiftField cannot be used with struct with init taking {d} parameters", .{params.len}));
+                    @compileError(std.fmt.comptimePrint("initField cannot be used with container with init taking {d} parameters", .{params.len}));
                 }
             } else {
-                @compileError("initShiftField cannot be used with struct without init");
+                return value;
             }
         },
-        .optional => |opt| {
-            if (opt.child != u21) {
-                @compileError("initShiftField with optional must be ?u21");
-            }
-            return value;
-        },
-        .int => {
-            if (F != u21) {
-                @compileError("initShiftField with int must be u21");
-            }
-            return value;
-        },
-        else => @compileError("initShiftField cannot be used with type " ++ @typeName(F)),
+
+        .optional => return value,
+
+        .bool,
+        .int,
+        .float,
+        .array,
+        .vector,
+        => return value,
+        else => @compileError("initField cannot be used with type " ++ @typeName(F)),
     }
 }
 
-pub inline fn setShiftField(
+pub inline fn setField(
     container: anytype,
     comptime name: []const u8,
     cp: u21,
@@ -841,55 +813,45 @@ pub inline fn setShiftField(
 ) void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
     if (@hasField(R, name)) {
-        @field(container, name) = initShiftField(R, name, cp, value, tracking);
+        @field(container, name) = initField(R, name, cp, value, tracking);
     }
 }
 
-pub inline fn initField(comptime R: type, comptime name: []const u8, cp: u21, value: anytype, tracking: anytype) @FieldType(R, name) {
-    trackField(tracking, name, cp, value);
+pub inline fn initAllocField(
+    comptime R: type,
+    comptime name: []const u8,
+    allocator: std.mem.Allocator,
+    cp: u21,
+    value: anytype,
+    tracking: anytype,
+) !@FieldType(R, name) {
     const F = @FieldType(R, name);
     switch (@typeInfo(F)) {
-        .@"struct" => {
+        .@"struct", .@"union", .@"enum", .@"opaque" => {
             if (@hasDecl(F, "init")) {
                 const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
-                if (params.len == 1) {
-                    return F.init(value);
-                } else if (params.len == 2) {
-                    return F.init(cp, value);
-                } else {
-                    @compileError(std.fmt.comptimePrint("initField cannot be used with struct with init taking {d} parameters", .{params.len}));
+                if (params.len == 3) {
+                    return try .init(
+                        allocator,
+                        &@field(tracking, name),
+                        value,
+                    );
+                } else if (params.len == 4) {
+                    return try .init(
+                        allocator,
+                        &@field(tracking, name),
+                        value,
+                        cp,
+                    );
                 }
-            } else {
-                return value;
             }
         },
-        .@"union" => {
-            if (@hasDecl(F, "init")) {
-                const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
-                if (params.len == 1) {
-                    return F.init(value);
-                } else if (params.len == 2) {
-                    return F.init(cp, value);
-                } else {
-                    @compileError(std.fmt.comptimePrint("initField cannot be used with union with init taking {d} parameters", .{params.len}));
-                }
-            } else {
-                return value;
-            }
-        },
-
-        .bool,
-        .int,
-        .float,
-        .array,
-        .vector,
-        .@"enum",
-        => return value,
-        else => @compileError("initField cannot be used with type " ++ @typeName(F)),
+        else => {},
     }
+    return initField(R, name, cp, value, tracking);
 }
 
-pub inline fn setField(
+pub inline fn setAllocField(
     allocator: std.mem.Allocator,
     container: anytype,
     comptime name: []const u8,
@@ -898,56 +860,8 @@ pub inline fn setField(
     tracking: anytype,
 ) !void {
     const R = @typeInfo(@TypeOf(container)).pointer.child;
-    if (!@hasField(R, name)) {
-        return;
-    }
-
-    const F = @FieldType(R, name);
-
-    switch (@typeInfo(F)) {
-        .@"struct" => {
-            if (@hasDecl(F, "init")) {
-                const params = @typeInfo(@TypeOf(F.init)).@"fn".params;
-                if (params.len <= 2) {
-                    @field(container, name) = initField(R, name, cp, value, tracking);
-                    return;
-                } else if (params.len == 3) {
-                    @field(container, name) = try .init(
-                        allocator,
-                        &@field(tracking, name),
-                        value,
-                    );
-                } else if (params.len == 4) {
-                    @field(container, name) = try .init(
-                        allocator,
-                        &@field(tracking, name),
-                        value,
-                        cp,
-                    );
-                } else {
-                    @compileError(std.fmt.comptimePrint("setField cannot be used with struct with init taking {d} parameters", .{params.len}));
-                }
-            } else {
-                @field(container, name) = initField(R, name, cp, value, tracking);
-                return;
-            }
-        },
-        .@"union" => {
-            @field(container, name) = initField(R, name, cp, value, tracking);
-            return;
-        },
-
-        .bool,
-        .int,
-        .float,
-        .array,
-        .vector,
-        .@"enum",
-        => {
-            @field(container, name) = initField(R, name, cp, value, tracking);
-            return;
-        },
-        else => @compileError("setField cannot be used with type " ++ @typeName(F)),
+    if (@hasField(R, name)) {
+        @field(container, name) = try initAllocField(R, name, allocator, cp, value, tracking);
     }
 }
 
