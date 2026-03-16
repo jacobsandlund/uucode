@@ -189,7 +189,10 @@ pub fn Slice(
             Self{
                 .len = 0,
                 .data = .{
-                    .embedded = std.mem.zeroes([embedded_len]T),
+                    .embedded = @splat(switch (@typeInfo(T)) {
+                        .@"enum" => @enumFromInt(0),
+                        else => 0,
+                    }),
                 },
             };
         pub const same = if (c.cp_packing == .shift) Self{
