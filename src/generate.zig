@@ -194,7 +194,7 @@ const tables = blk: {
     break :blk ts;
 };
 
-const AllRow = config.Row(fields, fields_is_packed, row_fields);
+const AllRow = storage.Row(fields, fields_is_packed, row_fields, .unpacked);
 const AllRowSlice = config.MultiSlice(fields, fields_is_packed, row_fields);
 const Backing = config.Backing(fields, fields_is_packed, row_fields_and_backing);
 
@@ -632,11 +632,11 @@ pub fn writeTableRows(
     writer: *std.Io.Writer,
     slice: AllRowSlice,
 ) !void {
-    const is_packed: [table.fields.len]bool = @splat(false);
-    const selected_fields = comptime config.selectFields(fields, table.fields);
+    const table_field_indexes = comptime config.selectFieldIndexes(fields, table.fields);
     const Row = storage.Row(
-        &selected_fields,
-        &is_packed,
+        fields,
+        fields_is_packed,
+        &table_field_indexes,
         table.packing,
     );
 
@@ -718,27 +718,25 @@ pub fn writeTableRows(
 
     try writer.print(
         \\const {s}_Row = storage.Row(
-        \\    &config.selectFields(
-        \\        fields,
-        \\        &.{{
+        \\    fields,
+        \\    fields_is_packed,
+        \\    &.{{
         \\
     , .{TypePrefix});
 
-    for (table.fields) |field| {
-        try writer.print("            \"{s}\",\n", .{field});
+    inline for (table.fields) |field| {
+        const fi = comptime config.fieldIndex(fields, field);
+        try writer.print("            {d},\n", .{fi});
     }
 
     try writer.print(
-        \\        }},
-        \\    ),
-        \\    &@as([{d}]bool, @splat(false)),
+        \\    }},
         \\    {s},
         \\);
         \\
         \\const {s}_Stage1 = u{};
         \\
     , .{
-        table.fields.len,
         if (table.packing == .@"packed") ".@\"packed\"" else ".unpacked",
         TypePrefix,
         1 + std.math.log2(stage2.items.len),

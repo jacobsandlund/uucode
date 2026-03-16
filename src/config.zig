@@ -570,7 +570,7 @@ pub fn selectFields(comptime fs: []const Field, comptime select: []const []const
 }
 
 pub fn mergeFields(comptime a: []const Field, comptime b: []const Field) [mergeFieldsLen(a, b)]Field {
-    @setEvalBranchQuota(10_000);
+    @setEvalBranchQuota(1_000_000);
     var result: [mergeFieldsLen(a, b)]Field = undefined;
     var i: usize = 0;
     loop_a: for (a) |af| {
@@ -590,7 +590,7 @@ pub fn mergeFields(comptime a: []const Field, comptime b: []const Field) [mergeF
 }
 
 fn mergeFieldsLen(comptime a: []const Field, comptime b: []const Field) usize {
-    @setEvalBranchQuota(10_000);
+    @setEvalBranchQuota(1_000_000);
     var count: usize = b.len;
     loop_a: for (a) |af| {
         for (b) |bf| {

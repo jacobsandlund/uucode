@@ -134,8 +134,8 @@ pub fn build(b: *std.Build) void {
     // b.addModule with an existing module
     _ = b.modules.put(b.dupe("uucode"), mod.lib) catch @panic("OOM");
     _ = b.modules.put(b.dupe("uucode_build_config"), mod.build_config) catch @panic("OOM");
-    if (mod.build_tables_config) |btc| {
-        _ = b.modules.put(b.dupe("uucode_build_tables_config"), btc) catch @panic("OOM");
+    if (mod.gen_build_config) |btc| {
+        _ = b.modules.put(b.dupe("uucode_gen_build_config"), btc) catch @panic("OOM");
     }
     b.addNamedLazyPath("tables.zig", mod.tables_path);
 
@@ -156,8 +156,8 @@ pub fn build(b: *std.Build) void {
         .filters = test_filters,
     });
 
-    const build_tables_tests = b.addTest(.{
-        .root_module = test_mod.build_tables.?,
+    const generate_tests = b.addTest(.{
+        .root_module = test_mod.generate.?,
         .filters = test_filters,
     });
 
@@ -171,7 +171,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const run_src_tests = b.addRunArtifact(src_tests);
-    const run_build_tables_tests = b.addRunArtifact(build_tables_tests);
+    const run_build_tables_tests = b.addRunArtifact(generate_tests);
     const run_build_tests = b.addRunArtifact(build_tests);
 
     const test_step = b.step("test", "Run tests");
@@ -271,9 +271,9 @@ fn buildBuildConfig(
 fn buildTables(
     b: *std.Build,
     build_config_path: std.Build.LazyPath,
-    build_tables_optimize: std.builtin.OptimizeMode,
+    generate_optimize: std.builtin.OptimizeMode,
 ) struct {
-    build_tables: *std.Build.Module,
+    generate: *std.Build.Module,
     build_config: *std.Build.Module,
     tables: std.Build.LazyPath,
 } {
@@ -282,13 +282,13 @@ fn buildTables(
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/config.zig"),
         .target = target,
-        .optimize = build_tables_optimize,
+        .optimize = generate_optimize,
     });
 
     const storage_mod = b.createModule(.{
         .root_source_file = b.path("src/storage.zig"),
         .target = target,
-        .optimize = build_tables_optimize,
+        .optimize = generate_optimize,
     });
 
     config_mod.addImport("storage.zig", storage_mod);
@@ -298,34 +298,35 @@ fn buildTables(
     const build_config_mod = b.createModule(.{
         .root_source_file = build_config_path,
         .target = target,
-        .optimize = build_tables_optimize,
+        .optimize = generate_optimize,
     });
     build_config_mod.addImport("config.zig", config_mod);
+    build_config_mod.addImport("storage.zig", storage_mod);
 
     // Generate tables.zig with build_config
-    const tables_mod = b.createModule(.{
-        .root_source_file = b.path("src/tables.zig"),
+    const gen_mod = b.createModule(.{
+        .root_source_file = b.path("src/generate.zig"),
         .target = b.graph.host,
-        .optimize = build_tables_optimize,
+        .optimize = generate_optimize,
     });
-    const build_tables_exe = b.addExecutable(.{
-        .name = "uucode_build_tables",
-        .root_module = tables_mod,
+    const gen_exe = b.addExecutable(.{
+        .name = "uucode_generate",
+        .root_module = gen_mod,
 
         // Zig's x86 backend is segfaulting, so we choose the LLVM backend always.
         .use_llvm = true,
     });
 
-    tables_mod.addImport("config.zig", config_mod);
-    tables_mod.addImport("storage.zig", storage_mod);
-    tables_mod.addImport("build_config", build_config_mod);
-    const run_build_tables_exe = b.addRunArtifact(build_tables_exe);
-    run_build_tables_exe.setCwd(b.path(""));
-    const tables_path = run_build_tables_exe.addOutputFileArg("tables.zig");
+    gen_mod.addImport("config.zig", config_mod);
+    gen_mod.addImport("storage.zig", storage_mod);
+    gen_mod.addImport("build_config", build_config_mod);
+    const run_gen_exe = b.addRunArtifact(gen_exe);
+    run_gen_exe.setCwd(b.path(""));
+    const tables_path = run_gen_exe.addOutputFileArg("tables.zig");
 
     return .{
         .tables = tables_path,
-        .build_tables = tables_mod,
+        .generate = gen_mod,
         .build_config = build_config_mod,
     };
 }
@@ -334,14 +335,14 @@ fn createLibMod(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
-    build_tables_optimize: std.builtin.OptimizeMode,
+    generate_optimize: std.builtin.OptimizeMode,
     tables_path_opt: ?std.Build.LazyPath,
     build_config_path: std.Build.LazyPath,
 ) struct {
     lib: *std.Build.Module,
     build_config: *std.Build.Module,
-    build_tables: ?*std.Build.Module,
-    build_tables_config: ?*std.Build.Module,
+    gen_build_config: ?*std.Build.Module,
+    generate: ?*std.Build.Module,
     tables_path: std.Build.LazyPath,
 } {
     const types_mod = b.createModule(.{
@@ -371,13 +372,14 @@ fn createLibMod(
         .target = target,
     });
     build_config_mod.addImport("config.zig", config_mod);
+    build_config_mod.addImport("storage.zig", storage_mod);
 
-    var build_tables: ?*std.Build.Module = null;
-    var build_tables_config: ?*std.Build.Module = null;
+    var generate: ?*std.Build.Module = null;
+    var gen_build_config: ?*std.Build.Module = null;
     const tables_path = tables_path_opt orelse blk: {
-        const t = buildTables(b, build_config_path, build_tables_optimize);
-        build_tables = t.build_tables;
-        build_tables_config = t.build_config;
+        const t = buildTables(b, build_config_path, generate_optimize);
+        generate = t.generate;
+        gen_build_config = t.build_config;
         break :blk t.tables;
     };
 
@@ -412,8 +414,8 @@ fn createLibMod(
     return .{
         .lib = lib_mod,
         .build_config = build_config_mod,
-        .build_tables = build_tables,
-        .build_tables_config = build_tables_config,
+        .generate = generate,
+        .gen_build_config = gen_build_config,
         .tables_path = tables_path,
     };
 }

@@ -33,16 +33,6 @@ pub fn hasField(comptime field: []const u8) bool {
     return false;
 }
 
-fn getTableInfo(comptime table_name: []const u8) std.builtin.Type.StructField {
-    inline for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
-        if (std.mem.eql(u8, tableInfo.name, table_name)) {
-            return tableInfo;
-        }
-    }
-
-    @compileError("Table '" ++ table_name ++ "' not found in tables");
-}
-
 fn BackingFor(comptime field: []const u8) type {
     return @FieldType(tables_module.Backing, field);
 }
@@ -61,12 +51,17 @@ fn tableFor(comptime field: []const u8) TableFor(field) {
 }
 
 fn GetTable(comptime table_name: []const u8) type {
-    const tableInfo = getTableInfo(table_name);
-    return @FieldType(@TypeOf(tables), tableInfo.name);
+    inline for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
+        if (std.mem.eql(u8, tableInfo.name, table_name)) {
+            return tableInfo.type;
+        }
+    }
+
+    @compileError("Table '" ++ table_name ++ "' not found in tables");
 }
 
 fn getTable(comptime table_name: []const u8) GetTable(table_name) {
-    return @field(tables, getTableInfo(table_name).name);
+    return @field(tables, table_name);
 }
 
 fn data(comptime table: anytype, cp: u21) TableData(@TypeOf(table)) {
@@ -85,7 +80,7 @@ pub fn getAll(comptime table_name: []const u8, cp: u21) TypeOfAll(table_name) {
 }
 
 pub fn TypeOfAll(comptime table_name: []const u8) type {
-    return TableData(getTableInfo(table_name).type);
+    return TableData(GetTable(table_name));
 }
 
 pub const FieldEnum = blk: {
