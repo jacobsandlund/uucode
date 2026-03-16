@@ -404,6 +404,18 @@ test "wcwidth Devanagari 3 consonants" {
     try std.testing.expectEqual(3, wcwidth(it));
 }
 
+test "wcwidth prepend characters standing alone are width 1" {
+    // Lo Prepend (0D4E)
+    const it = uucode.grapheme.utf8Iterator("\u{0D4E}");
+    try std.testing.expectEqual(1, wcwidth(it));
+}
+
+test "wcwidth prepend characters don't contribute to width in grapheme cluster" {
+    // Lo Prepend (0D4E) + Lo Other (0D39)
+    const it = uucode.grapheme.utf8Iterator("\u{0D4E}\u{0D39}");
+    try std.testing.expectEqual(1, wcwidth(it));
+}
+
 pub fn IteratorNoControl(comptime CodePointIterator: type) type {
     return uucode.grapheme.CustomIterator(
         CodePointIterator,

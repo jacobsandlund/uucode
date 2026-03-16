@@ -468,6 +468,7 @@ pub const tables = [_]config.Table{
             d.field("indic_conjunct_break"),
             d.field("indic_positional_category"),
             d.field("indic_syllabic_category"),
+            d.field("bidi_mirroring"),
         },
     },
     .{
