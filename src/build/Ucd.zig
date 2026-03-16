@@ -197,7 +197,7 @@ pub fn init(allocator: std.mem.Allocator, io: std.Io, comptime table_configs: []
 
     if (comptime needsSectionAny(table_configs, .bidi_mirroring)) {
         self.bidi_mirroring = try allocator.alloc(?u21, n);
-        try parseBidiMirroring(allocator, self.bidi_mirroring);
+        try parseBidiMirroring(allocator, io, self.bidi_mirroring);
     }
 
     if (comptime needsSectionAny(table_configs, .blocks)) {
@@ -922,16 +922,19 @@ fn parseBidiBrackets(
 
 fn parseBidiMirroring(
     allocator: std.mem.Allocator,
+    io: std.Io,
     bidi_mirroring: []?u21,
 ) !void {
     @memset(bidi_mirroring, null);
 
     const file_path = "ucd/BidiMirroring.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
