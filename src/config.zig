@@ -16,9 +16,9 @@ pub const zero_width_joiner = 0x200D;
 
 // The `build_config.zig` needs to set:
 // pub const fields: []const Field
-// pub const tables: []const Table
 // pub const build_components: []const Component
-// pub const get_components: []const Component
+// pub const get_components: []const Component  // Not supported, yet
+// pub const tables: []const Table
 
 pub const Field = struct {
     name: [:0]const u8,
@@ -37,10 +37,6 @@ pub const Field = struct {
     // For PackedOptional fields
     min_value: isize = 0,
     max_value: isize = 0,
-
-    // For custom fields
-    Backing: ?type = null,
-    Tracking: ?type = null,
 
     pub const CpPacking = enum {
         direct,
@@ -133,7 +129,7 @@ pub const Field = struct {
             try writer.print(
                 \\.{{
                 \\    .name = "{s}",
-                \\    .type = "{s}",
+                \\    .type = {s},
                 \\
             , .{ self.name, self.type });
 

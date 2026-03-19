@@ -268,7 +268,7 @@ fn buildBuildConfig(
     return bytes.toOwnedSlice() catch @panic("OOM");
 }
 
-fn buildTables(
+fn generateTables(
     b: *std.Build,
     build_config_path: std.Build.LazyPath,
     generate_optimize: std.builtin.OptimizeMode,
@@ -303,7 +303,6 @@ fn buildTables(
     build_config_mod.addImport("config.zig", config_mod);
     build_config_mod.addImport("storage.zig", storage_mod);
 
-    // Generate tables.zig with build_config
     const gen_mod = b.createModule(.{
         .root_source_file = b.path("src/generate.zig"),
         .target = b.graph.host,
@@ -377,7 +376,7 @@ fn createLibMod(
     var generate: ?*std.Build.Module = null;
     var gen_build_config: ?*std.Build.Module = null;
     const tables_path = tables_path_opt orelse blk: {
-        const t = buildTables(b, build_config_path, generate_optimize);
+        const t = generateTables(b, build_config_path, generate_optimize);
         generate = t.generate;
         gen_build_config = t.build_config;
         break :blk t.tables;

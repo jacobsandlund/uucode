@@ -52,33 +52,22 @@ pub fn DeclStruct(
     var i: usize = 0;
 
     for (fields, fields_is_packed) |field, is_field_packed| {
-        if (@field(field, decl)) |T| {
-            struct_fields[i] = .{
-                .name = field.name,
-                .type = T,
-                .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = @alignOf(T),
-            };
-            i += 1;
-        } else {
-            const F = Field(field, is_field_packed);
-            switch (@typeInfo(F)) {
-                .@"struct", .@"union", .@"enum" => {
-                    if (@hasDecl(F, decl)) {
-                        const DeclType = @field(F, decl);
-                        struct_fields[i] = .{
-                            .name = field.name,
-                            .type = DeclType,
-                            .default_value_ptr = null,
-                            .is_comptime = false,
-                            .alignment = @alignOf(DeclType),
-                        };
-                        i += 1;
-                    }
-                },
-                else => {},
-            }
+        const F = Field(field, is_field_packed);
+        switch (@typeInfo(F)) {
+            .@"struct", .@"union", .@"enum", .@"opaque" => {
+                if (@hasDecl(F, decl)) {
+                    const DeclType = @field(F, decl);
+                    struct_fields[i] = .{
+                        .name = field.name,
+                        .type = DeclType,
+                        .default_value_ptr = null,
+                        .is_comptime = false,
+                        .alignment = @alignOf(DeclType),
+                    };
+                    i += 1;
+                }
+            },
+            else => {},
         }
     }
 

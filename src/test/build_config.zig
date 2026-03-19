@@ -3,19 +3,19 @@ const config = @import("config.zig");
 
 pub const log_level = .debug;
 
-pub const EmojiOddOrEven = enum(u2) {
+const EmojiOddOrEven = enum(u2) {
     not_emoji,
     even_emoji,
     odd_emoji,
 };
 
-pub const NextOrPrev = union(enum) {
+const NextOrPrev = union(enum) {
     none: void,
     next: u21,
     prev: u21,
 };
 
-pub const fields: []const config.Field = &config.mergeFields(config.fields, &.{
+pub const fields = &config.mergeFields(config.fields, &.{
     .{ .name = "foo", .type = u8 },
     .{ .name = "bar_unused", .type = u8 },
     .{ .name = "emoji_odd_or_even", .type = EmojiOddOrEven },
@@ -72,65 +72,62 @@ pub const fields: []const config.Field = &config.mergeFields(config.fields, &.{
     },
 });
 
-pub const build_components: []const config.Component = &config.mergeComponents(
-    config.build_components,
-    &.{
-        .{
-            .Impl = Foo,
-            .inputs = &.{"original_grapheme_break"},
-            .fields = &.{ "foo", "bar_unused" },
+pub const build_components = &config.mergeComponents(config.build_components, &.{
+    .{
+        .Impl = Foo,
+        .inputs = &.{"original_grapheme_break"},
+        .fields = &.{ "foo", "bar_unused" },
+    },
+    .{
+        .Impl = EmojiOddOrEvenComponent,
+        .inputs = &.{"is_emoji"},
+        .fields = &.{"emoji_odd_or_even"},
+    },
+    .{
+        .Impl = Info,
+        .inputs = &.{
+            "uppercase_mapping",
+            "numeric_value_numeric",
+            "numeric_value_decimal",
+            "simple_lowercase_mapping",
         },
-        .{
-            .Impl = EmojiOddOrEvenComponent,
-            .inputs = &.{"is_emoji"},
-            .fields = &.{"emoji_odd_or_even"},
-        },
-        .{
-            .Impl = Info,
-            .inputs = &.{
-                "uppercase_mapping",
-                "numeric_value_numeric",
-                "numeric_value_decimal",
-                "simple_lowercase_mapping",
-            },
-            .fields = &.{
-                "uppercase_mapping_first_char",
-                "has_simple_lowercase",
-                "numeric_value_numeric_reversed",
-            },
-        },
-        .{
-            .Impl = OptEmojiOddOrEven,
-            .inputs = &.{"emoji_odd_or_even"},
-            .fields = &.{"opt_emoji_odd_or_even"},
-        },
-        .{
-            .Impl = NextOrPrevComponent,
-            .fields = &.{"next_or_prev"},
-        },
-        .{
-            .Impl = NextOrPrevDirect,
-            .inputs = &.{"next_or_prev"},
-            .fields = &.{"next_or_prev_direct"},
-        },
-        .{
-            .Impl = BidiPairedBracketDirect,
-            .inputs = &.{"bidi_paired_bracket"},
-            .fields = &.{"bidi_paired_bracket_direct"},
-        },
-        .{
-            .Impl = MaybeBit,
-            .fields = &.{"maybe_bit"},
-        },
-        .{
-            .Impl = CanonicalDecomposition,
-            .inputs = &.{ "decomposition_type", "decomposition_mapping" },
-            .fields = &.{"canonical_decomposition_mapping"},
+        .fields = &.{
+            "uppercase_mapping_first_char",
+            "has_simple_lowercase",
+            "numeric_value_numeric_reversed",
         },
     },
-);
+    .{
+        .Impl = OptEmojiOddOrEven,
+        .inputs = &.{"emoji_odd_or_even"},
+        .fields = &.{"opt_emoji_odd_or_even"},
+    },
+    .{
+        .Impl = NextOrPrevComponent,
+        .fields = &.{"next_or_prev"},
+    },
+    .{
+        .Impl = NextOrPrevDirect,
+        .inputs = &.{"next_or_prev"},
+        .fields = &.{"next_or_prev_direct"},
+    },
+    .{
+        .Impl = BidiPairedBracketDirect,
+        .inputs = &.{"bidi_paired_bracket"},
+        .fields = &.{"bidi_paired_bracket_direct"},
+    },
+    .{
+        .Impl = MaybeBit,
+        .fields = &.{"maybe_bit"},
+    },
+    .{
+        .Impl = CanonicalDecomposition,
+        .inputs = &.{ "decomposition_type", "decomposition_mapping" },
+        .fields = &.{"canonical_decomposition_mapping"},
+    },
+});
 
-pub const get_components: []const config.Component = config.get_components;
+pub const get_components = config.get_components;
 
 pub const tables: []const config.Table = &.{
     .{
