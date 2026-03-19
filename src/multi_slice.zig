@@ -61,6 +61,13 @@ pub fn MultiSlice(comptime T: type) type {
             return result;
         }
 
+        pub fn memset(self: Self, elem: T) void {
+            inline for (fields, 0..) |field_info, i| {
+                const field: Field = @enumFromInt(i);
+                @memset(self.items(field), @field(elem, field_info.name));
+            }
+        }
+
         pub fn append(self: *Self, elem: T) void {
             inlineAssert(self.len < self.capacity);
             self.len += 1;
@@ -156,6 +163,29 @@ test "basic MultiSlice operations" {
 
     ms.set(0, .{ .a = 99, .b = 9 });
     try std.testing.expectEqual(99, ms.items(.a)[0]);
+}
+
+test "memset" {
+    const Row = struct {
+        a: u32,
+        b: u8,
+    };
+    const MS = MultiSlice(Row);
+
+    var ms = try MS.initCapacity(std.testing.allocator, 4);
+    defer std.testing.allocator.free(@as([*]u8, @ptrCast(@alignCast(ms.ptrs[MS.sorted_fields[0]])))[0..MS.capacityInBytes(4)]);
+
+    ms.len = 4;
+    ms.memset(.{ .a = 42, .b = 7 });
+
+    for (0..4) |i| {
+        try std.testing.expectEqual(42, ms.items(.a)[i]);
+        try std.testing.expectEqual(7, ms.items(.b)[i]);
+    }
+
+    ms.memset(.{ .a = 0, .b = 255 });
+    try std.testing.expectEqual(0, ms.items(.a)[0]);
+    try std.testing.expectEqual(255, ms.items(.b)[0]);
 }
 
 test "zero-field struct" {
