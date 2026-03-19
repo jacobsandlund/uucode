@@ -1,9 +1,9 @@
 //! This file defines the low(er)-level `get` method, returning `Data`.
-//! (It also must be separate from `root.zig` so that `types.zig` can use it to
+//! (It also must be separate from `root.zig` so that `storage.zig` can use it to
 //! allow for a better API on `Slice` fields.)
 const std = @import("std");
-const tables = @import("tables").tables;
-const types = @import("types.zig");
+const tables_module = @import("tables");
+const tables = tables_module.tables;
 
 fn TableData(comptime Table: anytype) type {
     const DataSlice = if (@hasField(Table, "stage3"))
@@ -33,25 +33,12 @@ pub fn hasField(comptime field: []const u8) bool {
     return false;
 }
 
-fn getTableInfo(comptime table_name: []const u8) std.builtin.Type.StructField {
-    inline for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
-        if (std.mem.eql(u8, tableInfo.name, table_name)) {
-            return tableInfo;
-        }
-    }
-
-    @compileError("Table '" ++ table_name ++ "' not found in tables");
-}
-
 fn BackingFor(comptime field: []const u8) type {
-    const tableInfo = tableInfoFor(field);
-    const Backing = @FieldType(@FieldType(@TypeOf(tables), tableInfo.name), "backing");
-    return @FieldType(@typeInfo(Backing).pointer.child, field);
+    return @FieldType(tables_module.Backing, field);
 }
 
 pub fn backingFor(comptime field: []const u8) BackingFor(field) {
-    const tableInfo = tableInfoFor(field);
-    return @field(@field(tables, tableInfo.name).backing, field);
+    return @field(tables_module.backing, field);
 }
 
 fn TableFor(comptime field: []const u8) type {
@@ -64,12 +51,17 @@ fn tableFor(comptime field: []const u8) TableFor(field) {
 }
 
 fn GetTable(comptime table_name: []const u8) type {
-    const tableInfo = getTableInfo(table_name);
-    return @FieldType(@TypeOf(tables), tableInfo.name);
+    inline for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
+        if (std.mem.eql(u8, tableInfo.name, table_name)) {
+            return tableInfo.type;
+        }
+    }
+
+    @compileError("Table '" ++ table_name ++ "' not found in tables");
 }
 
 fn getTable(comptime table_name: []const u8) GetTable(table_name) {
-    return @field(tables, getTableInfo(table_name).name);
+    return @field(tables, table_name);
 }
 
 fn data(comptime table: anytype, cp: u21) TableData(@TypeOf(table)) {
@@ -88,7 +80,7 @@ pub fn getAll(comptime table_name: []const u8, cp: u21) TypeOfAll(table_name) {
 }
 
 pub fn TypeOfAll(comptime table_name: []const u8) type {
-    return TableData(getTableInfo(table_name).type);
+    return TableData(GetTable(table_name));
 }
 
 pub const FieldEnum = blk: {

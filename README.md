@@ -121,7 +121,7 @@ uucode.TypeOfAll("0")             // @TypeOf(uucode.getAll("0"))
 uucode.hasField("is_emoji")       // true if `is_emoji` is in one of your tables
 ```
 
-See [src/config.zig](./src/config.zig) for the names of all fields.
+See [src/fields.zig](./src/fields.zig) for the name and type of all fields.
 
 ## Configuration
 
@@ -179,36 +179,23 @@ if (b.lazyDependency("uucode", .{
 }
 ```
 
-### Builtin extensions
+### Advanced configuration
 
-`uucode` includes builtin extensions that add derived properties. Use `extensions` or `extensions_0` through `extensions_9` to include them:
+`uucode` is built on a powerful and flexible component system.
 
-``` zig
-// In `build.zig`:
-if (b.lazyDependency("uucode", .{
-    .target = target,
-    .optimize = optimize,
-    .extensions = @as([]const []const u8, &.{
-        "wcwidth",
-    }),
-    .fields = @as([]const []const u8, &.{
-        // Make sure to also include the extension's fields here:
-        "wcwidth_standalone",
-        "wcwidth_zero_in_grapheme",
-        ...
-        "general_category",
-    }),
-})) |dep| {
-    step.root_module.addImport("uucode", dep.module("uucode"));
-}
+The `build_config.zig` (created for you with the basic configuration, or created by you in the advanced configuration), declares the following:
 
-// In your code:
-uucode.get(.wcwidth_standalone, 0x26F5) // ⛵ == 2
+```zig
+pub const fields: []const Field
+pub const build_components: []const Component
+pub const get_components: []const Component  // Not supported, yet
+pub const tables: []const Table
 ```
 
-See [src/x/config.x.zig](src/x/config.x.zig) for the full list of builtin extensions.
+...and the `Component` and `Table` types both include a slice of field names `fields: []const []const u8`, where the component declares that it builds those fields, and the table declares that it stores the data for those fields.
 
-### Advanced configuration
+See [src/config.zig](./src/config.zig) for the configuration types, [src/generate.zig](./src/generate.zig) for how components are used to generate the `tables.zig`, and [src/components.zig](./src/components.zig) for all builtin components.
+
 
 ``` zig
 ///////////////////////////////////////////////////////////
@@ -229,51 +216,71 @@ b.dependency("uucode", .{
 const std = @import("std");
 const config = @import("config.zig");
 
-// Use `config.x.zig` for builtin extensions:
-const config_x = @import("config.x.zig");
+// Define the fields you use in your components and tables (it's okay to have
+// unused ones).
+pub const fields = &config.mergeFields(config.fields, &.{
+    .{ .name = "emoji_odd_or_even", .type = EmojiOddOrEven },
 
-const d = config.default;
-const wcwidth = config_x.wcwidth;
+    // See `src/config.zig` for everything that can be overriden.
+    // In this example, we're embedding 15 bytes into the `stage3` data,
+    // and only names longer than that need to use the `backing` slice.
+    config.field(config.fields, "name").override(.{
+        .embedded_len = 15,
+        .max_offset = 986096, // run once to get the correct number
+    }),
+});
 
-// Or build your own extension:
-const emoji_odd_or_even = config.Extension{
-    .inputs = &.{"is_emoji"},
-    .compute = &computeEmojiOddOrEven,
-    .fields = &.{
-        .{ .name = "emoji_odd_or_even", .type = EmojiOddOrEven },
+// Define the components you use:
+pub const build_components = &config.mergeComponents(config.build_components, &.{
+    .{
+        .Impl = EmojiOddOrEvenComponent,
+        .inputs = &.{"is_emoji"},
+        .fields = &.{"emoji_odd_or_even"},
     },
+});
+
+const EmojiOddOrEvenComponent = struct {
+    pub fn build(
+        comptime InputRow: type,
+        comptime Row: type,
+        allocator: std.mem.Allocator,
+        inputs: config.MultiSlice(InputRow),
+        rows: *config.MultiSlice(Row),
+        backing: anytype,
+        tracking: anytype,
+    ) !void {
+        // allocator is an ArenaAllocator, so don't worry about freeing
+        _ = allocator;
+
+        // backing is used for Slice types, but could be used for custom types
+        // that need outside-of-table storage
+        _ = backing;
+
+        // tracking is used for some types that need to be configured ahead
+        // of time, like the maximum and minimum value found in the data
+        _ = tracking;
+
+        // If the component only defines one field, it's generally better
+        // to set `rows.len` and then just assign to positions in
+        // `rows.items(.<field>)`. If setting multiple fields, it may be
+        // better to use `rows.append` (see src/components.zig)
+        rows.len = config.num_code_points;
+        const items = rows.items(.emoji_odd_or_even);
+        const input_items = inputs.items(.is_emoji);
+
+        for (0..config.num_code_points) |i| {
+            const cp: u21 = @intCast(i);
+            items[i] = if (!input_items[i])
+                EmojiOddOrEven.not_emoji
+            else if (cp % 2 == 0)
+                EmojiOddOrEven.even_emoji
+            else
+                EmojiOddOrEven.odd_emoji;
+        }
+    }
 };
 
-fn computeEmojiOddOrEven(
-    allocator: std.mem.Allocator,
-    cp: u21,
-    data: anytype,
-    backing: anytype,
-    tracking: anytype,
-) std.mem.Allocator.Error!void {
-    // allocator is an ArenaAllocator, so don't worry about freeing
-    _ = allocator;
-
-    // backing and tracking are only used for slice types (see
-    // src/build/test_build_config.zig for examples).
-    _ = backing;
-    _ = tracking;
-
-    // For simple single-field extensions, assigning directly to `data` is
-    // preferred. For multiple-field extensions, guard assignment with a
-    // `const Data = @TypeOf(data.*);` and
-    // `if (@hasField(Data, "<field_name>"))`
-    if (!data.is_emoji) {
-        data.emoji_odd_or_even = .not_emoji;
-    } else if (cp % 2 == 0) {
-        data.emoji_odd_or_even = .even_emoji;
-    } else {
-        data.emoji_odd_or_even = .odd_emoji;
-    }
-}
-
-// Types must be marked `pub`
-pub const EmojiOddOrEven = enum(u2) {
+const EmojiOddOrEven = enum(u2) {
     not_emoji,
     even_emoji,
     odd_emoji,
@@ -281,7 +288,7 @@ pub const EmojiOddOrEven = enum(u2) {
 
 // Configure tables with the `tables` declaration.
 // The only required field is `fields`, and the rest have reasonable defaults.
-pub const tables = [_]config.Table{
+pub const tables: []const config.Table = &.{
     .{
         // Optional name, to be able to `getAll("foo")` rather than e.g.
         // `getAll("0")`
@@ -297,27 +304,12 @@ pub const tables = [_]config.Table{
         // should be a `packed struct` (.@"packed") or a regular Zig `struct`.
         .packing = .unpacked,
 
-        .extensions = &.{
-            emoji_odd_or_even,
-            wcwidth,
-        },
-
         .fields = &.{
-            // Don't forget to include the extension's fields here.
-            emoji_odd_or_even.field("emoji_odd_or_even"),
-            wcwidth.field("wcwidth_standalone"),
-            wcwidth.field("wcwidth_zero_in_grapheme"),
-
-            // See `src/config.zig` for everything that can be overriden.
-            // In this example, we're embedding 15 bytes into the `stage3` data,
-            // and only names longer than that need to use the `backing` slice.
-            d.field("name").override(.{
-                .embedded_len = 15,
-                .max_offset = 986096, // run once to get the correct number
-            }),
-
-            d.field("general_category"),
-            d.field("block"),
+            "emoji_odd_or_even",
+            "general_category",
+            "block",
+            "wcwidth_standalone",
+            "wcwidth_zero_in_grapheme",
             // ...
         },
     },
@@ -331,32 +323,16 @@ pub const log_level = .debug;
 
 const uucode = @import("uucode");
 
-uucode.get(.wcwidth_standalone, 0x26F5) // ⛵ == 2
-
 uucode.get(.emoji_odd_or_even, 0x1F34B) // 🍋 == .odd_emoji
+
+uucode.get(.wcwidth_standalone, 0x26F5) // ⛵ == 2
 
 ```
 
 For more examples of advanced configuration and extensions, see
-[src/build/test_build_config.zig](./src/build/test_build_config.zig).
+[src/test/build_config.zig](./src/test/build_config.zig).
 
-## Code architecture
-
-The architecture works in a few layers:
-
-* Layer 1 - [src/build/Ucd.zig](./src/build/Ucd.zig): Parses the Unicode Character Database (UCD).
-* Layer 2 - [src/build/tables.zig](./src/build/tables.zig): Generates table data written to a zig file.
-* Layer 3 - [src/root.zig](./src/root.zig): Exposes methods to fetch information from the built tables.
-
-Other important files:
-
-* [src/config.zig](./src/config.zig): Includes configuration for all fields and types for table and extension configuration.
-* [src/types.zig](./src/types.zig): Includes special types for handling slice, optional, union, and "shift" types (u21 fields that often map to themselves).
-* [src/get.zig](./src/get.zig): Comptime heavy code to look up properties given a code point.
-* [src/utf8.zig](./src/utf8.zig): Extracts code points from utf-8 text.
-* [src/grapheme.zig](./src/grapheme.zig): Includes grapheme break logic and a grapheme iterator.
-
-### Special types
+## Special types
 
 `uucode` has a number of special types to handle certain unicode fields.
 
@@ -387,11 +363,11 @@ pub const Field = struct {
 
 The special types are as follows.
 
-#### PackedOptional
+### PackedOptional
 
 This allows for packing an optional field, by fitting the "null" as the `maxInt` of the `IntFittingRange` between the configured `min_value` and `max_value + 1`.
 
-#### Shift
+### Shift
 
 This allows for including `u21` fields without bloating the data required to store the field. A number of unicode fields default to mapping to themselves (e.g. `simple_uppercase_mapping`) or some other code point that might not be too far away in value. The `Shift` type internally stores the _difference_ between the current code point and the `u21` value, and at the time of `get`, adds this difference back to get the actual value.
 
@@ -409,11 +385,11 @@ error: Config for field 'uppercase_mapping_first_char' does not match actual. Se
 thread 38963456 panic: Table config doesn't match actual. See above for details
 ```
 
-#### Union
+### Union
 
 This allows for including `union` fields in packed tables, or with `shift` fields. No special configuration is needed, unless there is a `shift` field, then the above `shift_low` and `shift_high` need to be set.
 
-#### Slice
+### Slice
 
 This allows for including slice fields (`[]const T`). Unsupported for `packed` tables. This can also include a `shift` for when the slice is `u21`, used only when the length is 1.
 

@@ -70,72 +70,6 @@ pub fn build(b: *std.Build) void {
         "Fields to build into table 9 for `get`",
     );
 
-    const extensions = b.option(
-        []const []const u8,
-        "extensions",
-        "Extensions to build into table for `get` (alias for `extensions_0`)",
-    );
-
-    const extensions_0 = b.option(
-        []const []const u8,
-        "extensions_0",
-        "Extensions to build into table 0 for `get`",
-    );
-
-    const extensions_1 = b.option(
-        []const []const u8,
-        "extensions_1",
-        "Extensions to build into table 1 for `get`",
-    );
-
-    const extensions_2 = b.option(
-        []const []const u8,
-        "extensions_2",
-        "Extensions to build into table 2 for `get`",
-    );
-
-    const extensions_3 = b.option(
-        []const []const u8,
-        "extensions_3",
-        "Extensions to build into table 3 for `get`",
-    );
-
-    const extensions_4 = b.option(
-        []const []const u8,
-        "extensions_4",
-        "Extensions to build into table 4 for `get`",
-    );
-
-    const extensions_5 = b.option(
-        []const []const u8,
-        "extensions_5",
-        "Extensions to build into table 5 for `get`",
-    );
-
-    const extensions_6 = b.option(
-        []const []const u8,
-        "extensions_6",
-        "Extensions to build into table 6 for `get`",
-    );
-
-    const extensions_7 = b.option(
-        []const []const u8,
-        "extensions_7",
-        "Extensions to build into table 7 for `get`",
-    );
-
-    const extensions_8 = b.option(
-        []const []const u8,
-        "extensions_8",
-        "Extensions to build into table 8 for `get`",
-    );
-
-    const extensions_9 = b.option(
-        []const []const u8,
-        "extensions_9",
-        "Extensions to build into table 9 for `get`",
-    );
-
     const build_log_level = b.option(
         std.log.Level,
         "build_log_level",
@@ -179,16 +113,6 @@ pub fn build(b: *std.Build) void {
             fields_7,
             fields_8,
             fields_9,
-            extensions orelse extensions_0,
-            extensions_1,
-            extensions_2,
-            extensions_3,
-            extensions_4,
-            extensions_5,
-            extensions_6,
-            extensions_7,
-            extensions_8,
-            extensions_9,
             build_log_level,
         );
 
@@ -210,8 +134,8 @@ pub fn build(b: *std.Build) void {
     // b.addModule with an existing module
     _ = b.modules.put(b.dupe("uucode"), mod.lib) catch @panic("OOM");
     _ = b.modules.put(b.dupe("uucode_build_config"), mod.build_config) catch @panic("OOM");
-    if (mod.build_tables_config) |btc| {
-        _ = b.modules.put(b.dupe("uucode_build_tables_config"), btc) catch @panic("OOM");
+    if (mod.gen_build_config) |btc| {
+        _ = b.modules.put(b.dupe("uucode_gen_build_config"), btc) catch @panic("OOM");
     }
     b.addNamedLazyPath("tables.zig", mod.tables_path);
 
@@ -224,7 +148,7 @@ pub fn build(b: *std.Build) void {
         // that I'll be investigating in a follow up commit.
         .Debug,
         null,
-        b.path("src/build/test_build_config.zig"),
+        b.path("src/test/build_config.zig"),
     );
 
     const src_tests = b.addTest(.{
@@ -232,8 +156,8 @@ pub fn build(b: *std.Build) void {
         .filters = test_filters,
     });
 
-    const build_tables_tests = b.addTest(.{
-        .root_module = test_mod.build_tables.?,
+    const generate_tests = b.addTest(.{
+        .root_module = test_mod.generate.?,
         .filters = test_filters,
     });
 
@@ -247,7 +171,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const run_src_tests = b.addRunArtifact(src_tests);
-    const run_build_tables_tests = b.addRunArtifact(build_tables_tests);
+    const run_build_tables_tests = b.addRunArtifact(generate_tests);
     const run_build_tests = b.addRunArtifact(build_tests);
 
     const test_step = b.step("test", "Run tests");
@@ -268,16 +192,6 @@ fn buildBuildConfig(
     fields_7: ?[]const []const u8,
     fields_8: ?[]const []const u8,
     fields_9: ?[]const []const u8,
-    extensions_0: ?[]const []const u8,
-    extensions_1: ?[]const []const u8,
-    extensions_2: ?[]const []const u8,
-    extensions_3: ?[]const []const u8,
-    extensions_4: ?[]const []const u8,
-    extensions_5: ?[]const []const u8,
-    extensions_6: ?[]const []const u8,
-    extensions_7: ?[]const []const u8,
-    extensions_8: ?[]const []const u8,
-    extensions_9: ?[]const []const u8,
     build_log_level: ?std.log.Level,
 ) []const u8 {
     var bytes = std.Io.Writer.Allocating.init(allocator);
@@ -290,8 +204,10 @@ fn buildBuildConfig(
 
     writer.writeAll(
         \\const config = @import("config.zig");
-        \\const config_x = @import("config.x.zig");
-        \\const d = config.default;
+        \\
+        \\pub const fields = config.fields;
+        \\pub const build_components = config.build_components;
+        \\pub const get_components = config.get_components;
         \\
         \\
     ) catch @panic("OOM");
@@ -305,7 +221,7 @@ fn buildBuildConfig(
     }
 
     writer.writeAll(
-        \\pub const tables = [_]config.Table{
+        \\pub const tables: []const config.Table = &.{
         \\
     ) catch @panic("OOM");
 
@@ -322,60 +238,20 @@ fn buildBuildConfig(
         fields_9,
     };
 
-    const extensions_lists = [_]?[]const []const u8{
-        extensions_0,
-        extensions_1,
-        extensions_2,
-        extensions_3,
-        extensions_4,
-        extensions_5,
-        extensions_6,
-        extensions_7,
-        extensions_8,
-        extensions_9,
-    };
-
-    for (fields_lists, extensions_lists) |fields_opt, extensions_opt| {
+    for (fields_lists) |fields_opt| {
         if (fields_opt) |fields| {
             writer.writeAll(
                 \\    .{
-                \\        .extensions = &.{
-                \\
-            ) catch @panic("OOM");
-
-            if (extensions_opt) |extensions_list| {
-                for (extensions_list) |ext| {
-                    writer.print("            config_x.{s},\n", .{ext}) catch @panic("OOM");
-                }
-            }
-
-            writer.writeAll(
-                \\        },
-                \\        .fields = &config._resolveFields(
-                \\            config_x,
-                \\            &.{
+                \\        .fields = &.{
                 \\
             ) catch @panic("OOM");
 
             for (fields) |f| {
-                writer.print("                \"{s}\",\n", .{f}) catch @panic("OOM");
+                writer.print("            \"{s}\",\n", .{f}) catch @panic("OOM");
             }
 
             writer.writeAll(
-                \\            },
-                \\            &.{
-                \\
-            ) catch @panic("OOM");
-
-            if (extensions_opt) |extensions_list| {
-                for (extensions_list) |ext| {
-                    writer.print("                \"{s}\",\n", .{ext}) catch @panic("OOM");
-                }
-            }
-
-            writer.writeAll(
-                \\            },
-                \\        ),
+                \\        },
                 \\     },
                 \\
             ) catch @panic("OOM");
@@ -392,12 +268,12 @@ fn buildBuildConfig(
     return bytes.toOwnedSlice() catch @panic("OOM");
 }
 
-fn buildTables(
+fn generateTables(
     b: *std.Build,
     build_config_path: std.Build.LazyPath,
-    build_tables_optimize: std.builtin.OptimizeMode,
+    generate_optimize: std.builtin.OptimizeMode,
 ) struct {
-    build_tables: *std.Build.Module,
+    generate: *std.Build.Module,
     build_config: *std.Build.Module,
     tables: std.Build.LazyPath,
 } {
@@ -406,67 +282,50 @@ fn buildTables(
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/config.zig"),
         .target = target,
-        .optimize = build_tables_optimize,
+        .optimize = generate_optimize,
     });
 
-    const types_mod = b.createModule(.{
-        .root_source_file = b.path("src/types.zig"),
+    const storage_mod = b.createModule(.{
+        .root_source_file = b.path("src/storage.zig"),
         .target = target,
-        .optimize = build_tables_optimize,
-    });
-    types_mod.addImport("config.zig", config_mod);
-    config_mod.addImport("types.zig", types_mod);
-
-    const config_x_mod = b.createModule(.{
-        .root_source_file = b.path("src/x/config.x.zig"),
-        .target = target,
-        .optimize = build_tables_optimize,
+        .optimize = generate_optimize,
     });
 
-    const types_x_mod = b.createModule(.{
-        .root_source_file = b.path("src/x/types.x.zig"),
-        .target = target,
-        .optimize = build_tables_optimize,
-    });
-    types_x_mod.addImport("config.x.zig", config_x_mod);
-    config_x_mod.addImport("types.x.zig", types_x_mod);
-    config_x_mod.addImport("types.zig", types_mod);
-    config_x_mod.addImport("config.zig", config_mod);
+    config_mod.addImport("storage.zig", storage_mod);
+    storage_mod.addImport("config.zig", config_mod);
 
     // Create build_config
     const build_config_mod = b.createModule(.{
         .root_source_file = build_config_path,
         .target = target,
-        .optimize = build_tables_optimize,
+        .optimize = generate_optimize,
     });
-    build_config_mod.addImport("types.zig", types_mod);
     build_config_mod.addImport("config.zig", config_mod);
-    build_config_mod.addImport("types.x.zig", types_x_mod);
-    build_config_mod.addImport("config.x.zig", config_x_mod);
+    build_config_mod.addImport("storage.zig", storage_mod);
 
-    // Generate tables.zig with build_config
-    const build_tables_mod = b.createModule(.{
-        .root_source_file = b.path("src/build/tables.zig"),
+    const gen_mod = b.createModule(.{
+        .root_source_file = b.path("src/generate.zig"),
         .target = b.graph.host,
-        .optimize = build_tables_optimize,
+        .optimize = generate_optimize,
     });
-    const build_tables_exe = b.addExecutable(.{
-        .name = "uucode_build_tables",
-        .root_module = build_tables_mod,
+    const gen_exe = b.addExecutable(.{
+        .name = "uucode_generate",
+        .root_module = gen_mod,
 
         // Zig's x86 backend is segfaulting, so we choose the LLVM backend always.
         .use_llvm = true,
     });
-    build_tables_mod.addImport("config.zig", config_mod);
-    build_tables_mod.addImport("build_config", build_config_mod);
-    build_tables_mod.addImport("types.zig", types_mod);
-    const run_build_tables_exe = b.addRunArtifact(build_tables_exe);
-    run_build_tables_exe.setCwd(b.path(""));
-    const tables_path = run_build_tables_exe.addOutputFileArg("tables.zig");
+
+    gen_mod.addImport("config.zig", config_mod);
+    gen_mod.addImport("storage.zig", storage_mod);
+    gen_mod.addImport("build_config", build_config_mod);
+    const run_gen_exe = b.addRunArtifact(gen_exe);
+    run_gen_exe.setCwd(b.path(""));
+    const tables_path = run_gen_exe.addOutputFileArg("tables.zig");
 
     return .{
         .tables = tables_path,
-        .build_tables = build_tables_mod,
+        .generate = gen_mod,
         .build_config = build_config_mod,
     };
 }
@@ -475,61 +334,51 @@ fn createLibMod(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
-    build_tables_optimize: std.builtin.OptimizeMode,
+    generate_optimize: std.builtin.OptimizeMode,
     tables_path_opt: ?std.Build.LazyPath,
     build_config_path: std.Build.LazyPath,
 ) struct {
     lib: *std.Build.Module,
     build_config: *std.Build.Module,
-    build_tables: ?*std.Build.Module,
-    build_tables_config: ?*std.Build.Module,
+    gen_build_config: ?*std.Build.Module,
+    generate: ?*std.Build.Module,
     tables_path: std.Build.LazyPath,
 } {
-    const config_mod = b.createModule(.{
-        .root_source_file = b.path("src/config.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
     const types_mod = b.createModule(.{
         .root_source_file = b.path("src/types.zig"),
         .target = target,
         .optimize = optimize,
     });
-    types_mod.addImport("config.zig", config_mod);
+
+    const config_mod = b.createModule(.{
+        .root_source_file = b.path("src/config.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
     config_mod.addImport("types.zig", types_mod);
 
-    const config_x_mod = b.createModule(.{
-        .root_source_file = b.path("src/x/config.x.zig"),
+    const storage_mod = b.createModule(.{
+        .root_source_file = b.path("src/storage.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    const types_x_mod = b.createModule(.{
-        .root_source_file = b.path("src/x/types.x.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    types_x_mod.addImport("config.x.zig", config_x_mod);
-    config_x_mod.addImport("types.x.zig", types_x_mod);
-    config_x_mod.addImport("types.zig", types_mod);
-    config_x_mod.addImport("config.zig", config_mod);
+    config_mod.addImport("storage.zig", storage_mod);
+    storage_mod.addImport("config.zig", config_mod);
 
     const build_config_mod = b.createModule(.{
         .root_source_file = build_config_path,
         .target = target,
     });
-    build_config_mod.addImport("types.zig", types_mod);
     build_config_mod.addImport("config.zig", config_mod);
-    build_config_mod.addImport("types.x.zig", types_x_mod);
-    build_config_mod.addImport("config.x.zig", config_x_mod);
+    build_config_mod.addImport("storage.zig", storage_mod);
 
-    var build_tables: ?*std.Build.Module = null;
-    var build_tables_config: ?*std.Build.Module = null;
+    var generate: ?*std.Build.Module = null;
+    var gen_build_config: ?*std.Build.Module = null;
     const tables_path = tables_path_opt orelse blk: {
-        const t = buildTables(b, build_config_path, build_tables_optimize);
-        build_tables = t.build_tables;
-        build_tables_config = t.build_config;
+        const t = generateTables(b, build_config_path, generate_optimize);
+        generate = t.generate;
+        gen_build_config = t.build_config;
         break :blk t.tables;
     };
 
@@ -538,9 +387,8 @@ fn createLibMod(
         .target = target,
         .optimize = optimize,
     });
-    tables_mod.addImport("types.zig", types_mod);
-    tables_mod.addImport("types.x.zig", types_x_mod);
     tables_mod.addImport("config.zig", config_mod);
+    tables_mod.addImport("storage.zig", storage_mod);
     tables_mod.addImport("build_config", build_config_mod);
 
     const get_mod = b.createModule(.{
@@ -548,9 +396,8 @@ fn createLibMod(
         .target = target,
         .optimize = optimize,
     });
-    get_mod.addImport("types.zig", types_mod);
     get_mod.addImport("tables", tables_mod);
-    types_mod.addImport("get.zig", get_mod);
+    storage_mod.addImport("get.zig", get_mod);
 
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
@@ -560,15 +407,14 @@ fn createLibMod(
 
     lib_mod.addImport("types.zig", types_mod);
     lib_mod.addImport("config.zig", config_mod);
-    lib_mod.addImport("types.x.zig", types_x_mod);
     lib_mod.addImport("tables", tables_mod);
     lib_mod.addImport("get.zig", get_mod);
 
     return .{
         .lib = lib_mod,
         .build_config = build_config_mod,
-        .build_tables = build_tables,
-        .build_tables_config = build_tables_config,
+        .generate = generate,
+        .gen_build_config = gen_build_config,
         .tables_path = tables_path,
     };
 }
@@ -586,16 +432,6 @@ test "simple build config with just fields/fields_0" {
         null,
         null,
         null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
         .debug,
     );
     defer std.testing.allocator.free(build_config);
@@ -604,25 +440,20 @@ test "simple build config with just fields/fields_0" {
 
     const expected =
         \\const config = @import("config.zig");
-        \\const config_x = @import("config.x.zig");
-        \\const d = config.default;
+        \\
+        \\pub const fields = config.fields;
+        \\pub const build_components = config.build_components;
+        \\pub const get_components = config.get_components;
         \\
         \\pub const log_level = .debug;
         \\
-        \\pub const tables = [_]config.Table{
+        \\pub const tables: []const config.Table = &.{
         \\    .{
-        \\        .extensions = &.{
+        \\        .fields = &.{
+        \\            "name",
+        \\            "is_emoji",
+        \\            "bidi_class",
         \\        },
-        \\        .fields = &config._resolveFields(
-        \\            config_x,
-        \\            &.{
-        \\                "name",
-        \\                "is_emoji",
-        \\                "bidi_class",
-        \\            },
-        \\            &.{
-        \\            },
-        \\        ),
         \\     },
         \\};
         \\
@@ -631,7 +462,7 @@ test "simple build config with just fields/fields_0" {
     try std.testing.expect(std.mem.eql(u8, build_config, expected));
 }
 
-test "complex build config with all fields_0 through fields_9 and extensions_0 through extensions_9" {
+test "complex build config with all fields_0 through fields_9" {
     const build_config = buildBuildConfig(
         std.testing.allocator,
         &.{ "name", "field_0a", "field_0b" },
@@ -644,16 +475,6 @@ test "complex build config with all fields_0 through fields_9 and extensions_0 t
         &.{ "special_lowercase_mapping", "field_7a", "field_7b", "field_7c" },
         &.{ "lowercase_mapping", "field_8" },
         &.{ "uppercase_mapping", "field_9" },
-        &.{ "ext_0a", "ext_0b" },
-        &.{"ext_1"},
-        &.{ "ext_2a", "ext_2b" },
-        &.{"ext_3"},
-        &.{ "ext_4a", "ext_4b", "ext_4c" },
-        &.{"ext_5"},
-        &.{"ext_6"},
-        &.{ "ext_7a", "ext_7b" },
-        &.{"ext_8"},
-        &.{"ext_9"},
         .info,
     );
     defer std.testing.allocator.free(build_config);
@@ -662,72 +483,42 @@ test "complex build config with all fields_0 through fields_9 and extensions_0 t
 
     const substrings = [_][]const u8{
         "pub const log_level = .info;",
-        "Table{",
-        "extensions",
-        "config_x.ext_0a",
-        "config_x.ext_0b",
+        "pub const tables: []const config.Table = &.{",
+        ".fields =",
         "name",
         "field_0a",
         "field_0b",
-        "\"ext_0a\"",
-        "\"ext_0b\"",
-        "extensions",
-        "config_x.ext_1",
+        ".fields =",
         "general_category",
         "field_1",
-        "\"ext_1\"",
-        "extensions",
-        "config_x.ext_2a",
-        "config_x.ext_2b",
+        ".fields =",
         "decomposition_type",
         "field_2a",
         "field_2b",
-        "\"ext_2a\"",
-        "\"ext_2b\"",
-        "extensions",
-        "config_x.ext_3",
+        ".fields =",
         "numeric_type",
         "field_3",
-        "\"ext_3\"",
-        "extensions",
-        "config_x.ext_4a",
-        "config_x.ext_4b",
-        "config_x.ext_4c",
+        ".fields =",
         "unicode_1_name",
         "field_4a",
         "field_4b",
-        "\"ext_4a\"",
-        "\"ext_4b\"",
-        "\"ext_4c\"",
-        "extensions",
-        "config_x.ext_5",
+        ".fields =",
         "simple_lowercase_mapping",
         "field_5",
-        "\"ext_5\"",
-        "extensions",
-        "config_x.ext_6",
+        ".fields =",
         "case_folding_simple",
         "field_6",
-        "\"ext_6\"",
-        "extensions",
-        "config_x.ext_7a",
-        "config_x.ext_7b",
+        ".fields =",
         "special_lowercase_mapping",
         "field_7a",
         "field_7b",
         "field_7c",
-        "\"ext_7a\"",
-        "\"ext_7b\"",
-        "extensions",
-        "config_x.ext_8",
+        ".fields =",
         "lowercase_mapping",
         "field_8",
-        "\"ext_8\"",
-        "extensions",
-        "config_x.ext_9",
+        ".fields =",
         "uppercase_mapping",
         "field_9",
-        "\"ext_9\"",
         "};",
     };
 
