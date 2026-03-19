@@ -264,13 +264,11 @@ const setAllocField = config.setAllocField;
 
 const Foo = struct {
     pub fn build(
-        comptime fields_list: []const config.Field,
-        comptime fields_is_packed: []const bool,
-        comptime input_fields: []const usize,
-        comptime build_fields: []const usize,
+        comptime InputRow: type,
+        comptime Row: type,
         allocator: std.mem.Allocator,
-        inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        inputs: config.MultiSlice(InputRow),
+        rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
@@ -300,13 +298,11 @@ const Foo = struct {
 
 const EmojiOddOrEvenComponent = struct {
     pub fn build(
-        comptime fields_list: []const config.Field,
-        comptime fields_is_packed: []const bool,
-        comptime input_fields: []const usize,
-        comptime build_fields: []const usize,
+        comptime InputRow: type,
+        comptime Row: type,
         allocator: std.mem.Allocator,
-        inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        inputs: config.MultiSlice(InputRow),
+        rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
@@ -331,13 +327,11 @@ const EmojiOddOrEvenComponent = struct {
 
 const Info = struct {
     pub fn build(
-        comptime fields_list: []const config.Field,
-        comptime fields_is_packed: []const bool,
-        comptime input_fields: []const usize,
-        comptime build_fields: []const usize,
+        comptime InputRow: type,
+        comptime Row: type,
         allocator: std.mem.Allocator,
-        inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        inputs: config.MultiSlice(InputRow),
+        rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
@@ -383,20 +377,16 @@ const Info = struct {
 
 const OptEmojiOddOrEven = struct {
     pub fn build(
-        comptime fields_list: []const config.Field,
-        comptime fields_is_packed: []const bool,
-        comptime input_fields: []const usize,
-        comptime build_fields: []const usize,
+        comptime InputRow: type,
+        comptime Row: type,
         allocator: std.mem.Allocator,
-        inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        inputs: config.MultiSlice(InputRow),
+        rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
         _ = backing;
-
-        const Row = config.Row(fields_list, fields_is_packed, build_fields);
 
         rows.len = config.num_code_points;
         const items = rows.items(.opt_emoji_odd_or_even);
@@ -420,21 +410,17 @@ const OptEmojiOddOrEven = struct {
 
 const NextOrPrevComponent = struct {
     pub fn build(
-        comptime fields_list: []const config.Field,
-        comptime fields_is_packed: []const bool,
-        comptime input_fields: []const usize,
-        comptime build_fields: []const usize,
+        comptime InputRow: type,
+        comptime Row: type,
         allocator: std.mem.Allocator,
-        inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        inputs: config.MultiSlice(InputRow),
+        rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
         _ = inputs;
         _ = backing;
-
-        const Row = config.Row(fields_list, fields_is_packed, build_fields);
 
         rows.len = config.num_code_points;
         const items = rows.items(.next_or_prev);
@@ -456,13 +442,11 @@ const NextOrPrevComponent = struct {
 
 const NextOrPrevDirect = struct {
     pub fn build(
-        comptime fields_list: []const config.Field,
-        comptime fields_is_packed: []const bool,
-        comptime input_fields: []const usize,
-        comptime build_fields: []const usize,
+        comptime InputRow: type,
+        comptime Row: type,
         allocator: std.mem.Allocator,
-        inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        inputs: config.MultiSlice(InputRow),
+        rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
@@ -482,13 +466,11 @@ const NextOrPrevDirect = struct {
 
 const BidiPairedBracketDirect = struct {
     pub fn build(
-        comptime fields_list: []const config.Field,
-        comptime fields_is_packed: []const bool,
-        comptime input_fields: []const usize,
-        comptime build_fields: []const usize,
+        comptime InputRow: type,
+        comptime Row: type,
         allocator: std.mem.Allocator,
-        inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        inputs: config.MultiSlice(InputRow),
+        rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
@@ -508,21 +490,17 @@ const BidiPairedBracketDirect = struct {
 
 const MaybeBit = struct {
     pub fn build(
-        comptime fields_list: []const config.Field,
-        comptime fields_is_packed: []const bool,
-        comptime input_fields: []const usize,
-        comptime build_fields: []const usize,
+        comptime InputRow: type,
+        comptime Row: type,
         allocator: std.mem.Allocator,
-        inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        inputs: config.MultiSlice(InputRow),
+        rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
         _ = inputs;
         _ = backing;
-
-        const Row = config.Row(fields_list, fields_is_packed, build_fields);
 
         rows.len = config.num_code_points;
         const items = rows.items(.maybe_bit);
@@ -539,18 +517,14 @@ const MaybeBit = struct {
 
 const CanonicalDecomposition = struct {
     pub fn build(
-        comptime fields_list: []const config.Field,
-        comptime fields_is_packed: []const bool,
-        comptime input_fields: []const usize,
-        comptime build_fields: []const usize,
+        comptime InputRow: type,
+        comptime Row: type,
         allocator: std.mem.Allocator,
-        inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        inputs: config.MultiSlice(InputRow),
+        rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
-        const Row = config.Row(fields_list, fields_is_packed, build_fields);
-
         rows.len = config.num_code_points;
         const items = rows.items(.canonical_decomposition_mapping);
         for (0..config.num_code_points) |i| {

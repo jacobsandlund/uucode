@@ -195,7 +195,7 @@ const tables = blk: {
 };
 
 const AllRow = config.Row(fields, fields_is_packed, row_fields);
-const AllRowSlice = config.MultiSlice(fields, fields_is_packed, row_fields);
+const AllRowSlice = config.MultiSlice(AllRow);
 const Backing = config.Backing(fields, fields_is_packed, row_fields_and_backing);
 
 pub fn main() !void {
@@ -232,22 +232,12 @@ pub fn main() !void {
         );
 
         const input_fields = comptime config.intersect(row_fields, &component_inputs);
-        var inputs = config.multiSliceSubset(
-            fields,
-            fields_is_packed,
-            row_fields,
-            &input_fields,
-            slice,
-        );
+        const InputRow = config.Row(fields, fields_is_packed, &input_fields);
+        var inputs = slice.subset(InputRow);
 
         const build_fields = comptime config.intersect(&component_fields, row_fields);
-        var builds = config.multiSliceSubset(
-            fields,
-            fields_is_packed,
-            row_fields,
-            &build_fields,
-            slice,
-        );
+        const ComponentRow = config.Row(fields, fields_is_packed, &build_fields);
+        var builds = slice.subset(ComponentRow);
 
         const component_outputs = component_fields ++ component_backing_only;
         const backing_input_fields = comptime config.intersect(
@@ -296,10 +286,8 @@ pub fn main() !void {
         inputs.len = config.num_code_points;
 
         try component.Impl.build(
-            fields,
-            fields_is_packed,
-            &input_fields,
-            &build_fields,
+            InputRow,
+            ComponentRow,
             allocator,
             inputs,
             &builds,

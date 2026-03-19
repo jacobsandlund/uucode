@@ -241,13 +241,11 @@ pub const build_components = &config.mergeComponents(config.build_components, &.
 
 const EmojiOddOrEvenComponent = struct {
     pub fn build(
-        comptime fields_list: []const config.Field,
-        comptime fields_is_packed: []const bool,
-        comptime input_fields: []const usize,
-        comptime build_fields: []const usize,
+        comptime InputRow: type,
+        comptime Row: type,
         allocator: std.mem.Allocator,
-        inputs: config.MultiSlice(fields_list, fields_is_packed, input_fields),
-        rows: *config.MultiSlice(fields_list, fields_is_packed, build_fields),
+        inputs: config.MultiSlice(InputRow),
+        rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {

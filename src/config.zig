@@ -6,6 +6,8 @@ pub const components = @import("components.zig");
 pub const fields = @import("fields.zig").fields;
 pub const types = @import("types.zig");
 
+pub const MultiSlice = multi_slice.MultiSlice;
+
 pub const build_components = components.build_components;
 pub const get_components = components.get_components;
 
@@ -282,25 +284,22 @@ pub const Component = struct {
     //
     // // Sets the `rows` slices for the selected fields from `Row`
     // pub fn build(
-    //     comptime fields: []const config.Field,
-    //     comptime fields_is_packed: []const bool,
-    //     comptime input_fields: []const usize,
-    //     comptime build_fields: []const usize,
+    //     comptime InputRow: type,
+    //     comptime Row: type,
     //     allocator: std.mem.Allocator,
-    //     inputs: config.MultiSlice(fields, fields_is_packed, input_fields),
-    //     rows: config.MultiSlice(fields, fields_is_packed, build_fields),
+    //     inputs: config.MultiSlice(InputRow),
+    //     rows: *config.MultiSlice(Row),
     //     backing: anytype, // Backing,
     //     tracking: anytype, // *Tracking,
     // ) config.Error!void;
     //
     // // Computes the field value at runtime from the inputs and/or backing
     // pub fn get(
-    //     comptime fields: []const Field,
-    //     comptime field: []const u8,
+    //     comptime field: Field,
     //     cp: u21,
     //     tables: anytype,
     //     backing: anytype,
-    // ) config.FieldFor(fields, field);
+    // ) field.type;
     Impl: type,
 
     inputs: []const [:0]const u8 = &[_][:0]const u8{},
@@ -487,14 +486,6 @@ pub fn Row(
     return storage.Row(&selected_fs, &selected_packed, .unpacked);
 }
 
-pub fn MultiSlice(
-    comptime fs: []const Field,
-    comptime fs_is_packed: []const bool,
-    comptime selected_fields: []const usize,
-) type {
-    return multi_slice.MultiSlice(Row(fs, fs_is_packed, selected_fields));
-}
-
 fn DeclStruct(
     comptime fs: []const Field,
     comptime fs_is_packed: []const bool,
@@ -520,16 +511,6 @@ pub fn Tracking(
     comptime tracking_fields: []const usize,
 ) type {
     return DeclStruct(fs, fs_is_packed, tracking_fields, "Tracking");
-}
-
-pub fn multiSliceSubset(
-    comptime fs: []const Field,
-    comptime fs_is_packed: []const bool,
-    comptime array_fields: []const usize,
-    comptime subset_fields: []const usize,
-    source: MultiSlice(fs, fs_is_packed, array_fields),
-) MultiSlice(fs, fs_is_packed, subset_fields) {
-    return source.subset(Row(fs, fs_is_packed, subset_fields));
 }
 
 pub fn fieldIndex(comptime fs: []const Field, comptime name: []const u8) usize {
