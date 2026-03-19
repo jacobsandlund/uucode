@@ -541,9 +541,7 @@ const CaseFolding = struct {
         };
 
         rows.len = config.num_code_points;
-        for (0..config.num_code_points) |i| {
-            rows.set(i, default_row);
-        }
+        rows.memset(default_row);
 
         const file_path = "ucd/CaseFolding.txt";
 
@@ -634,9 +632,7 @@ const SpecialCasing = struct {
         };
 
         rows.len = config.num_code_points;
-        for (0..config.num_code_points) |i| {
-            rows.set(i, default_row);
-        }
+        rows.memset(default_row);
 
         const file_path = "ucd/SpecialCasing.txt";
 
@@ -777,9 +773,7 @@ const DerivedCoreProperties = struct {
         };
 
         rows.len = config.num_code_points;
-        for (0..config.num_code_points) |i| {
-            rows.set(i, default_row);
-        }
+        rows.memset(default_row);
 
         const file_path = "ucd/DerivedCoreProperties.txt";
 
@@ -1140,9 +1134,7 @@ const EmojiData = struct {
         };
 
         rows.len = config.num_code_points;
-        for (0..config.num_code_points) |i| {
-            rows.set(i, default_row);
-        }
+        rows.memset(default_row);
 
         const file_path = "ucd/emoji/emoji-data.txt";
 
@@ -2635,11 +2627,10 @@ const Wcwidth = struct {
         _ = backing;
         _ = tracking;
 
-        rows.len = config.num_code_points;
         for (0..config.num_code_points) |i| {
             const cp: u21 = @intCast(i);
             const input = inputs.get(i);
-            var row = rows.get(i);
+            var row: Row = undefined;
             const gc = input.general_category;
 
             var width: u2 = undefined;
@@ -2685,7 +2676,7 @@ const Wcwidth = struct {
                 setBuiltField(&row, "wcwidth_zero_in_grapheme", false);
             }
 
-            rows.set(i, row);
+            rows.append(row);
         }
     }
 };

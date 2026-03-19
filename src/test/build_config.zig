@@ -276,10 +276,9 @@ const Foo = struct {
         _ = backing;
         _ = tracking;
 
-        rows.len = config.num_code_points;
         for (0..config.num_code_points) |i| {
             const input = inputs.get(i);
-            var row = rows.get(i);
+            var row: Row = undefined;
             setBuiltField(&row, "foo", switch (input.original_grapheme_break) {
                 .other => @as(u8, 0),
                 .control => @as(u8, 3),
@@ -291,7 +290,7 @@ const Foo = struct {
                 .extend => @as(u8, 4),
                 else => @as(u8, 255),
             });
-            rows.set(i, row);
+            rows.append(row);
         }
     }
 };
@@ -335,11 +334,10 @@ const Info = struct {
         backing: anytype,
         tracking: anytype,
     ) !void {
-        rows.len = config.num_code_points;
         for (0..config.num_code_points) |i| {
             const cp: u21 = @intCast(i);
             const input = inputs.get(i);
-            var row = rows.get(i);
+            var row: Row = undefined;
 
             var single_item_buffer: [1]u21 = undefined;
             setField(
@@ -370,7 +368,7 @@ const Info = struct {
                 tracking,
             );
 
-            rows.set(i, row);
+            rows.append(row);
         }
     }
 };
