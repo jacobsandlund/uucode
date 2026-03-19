@@ -294,6 +294,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
             InputRow,
             ComponentRow,
             allocator,
+            io,
             inputs,
             &builds,
             &backing_subset,

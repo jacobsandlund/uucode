@@ -287,6 +287,7 @@ pub const Component = struct {
     //     comptime InputRow: type,
     //     comptime Row: type,
     //     allocator: std.mem.Allocator,
+    //     io: std.Io,
     //     inputs: config.MultiSlice(InputRow),
     //     rows: *config.MultiSlice(Row),
     //     backing: anytype, // Backing,
