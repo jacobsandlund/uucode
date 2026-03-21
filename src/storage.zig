@@ -4,14 +4,64 @@ const config = @import("config.zig");
 const inlineAssert = config.quirks.inlineAssert;
 const Allocator = std.mem.Allocator;
 
+pub fn RoundedInt(comptime signedness: std.builtin.Signedness, comptime bit_count: u16) type {
+    const rounded_bits = std.mem.alignForward(u16, if (bit_count == 0) 1 else bit_count, 8);
+    return std.meta.Int(signedness, rounded_bits);
+}
+
+pub fn RoundedIntFitting(comptime from: comptime_int, comptime to: comptime_int) type {
+    const Fitting = std.math.IntFittingRange(from, to);
+    const info = @typeInfo(Fitting).int;
+    return RoundedInt(info.signedness, info.bits);
+}
+
+pub fn ShiftInt(
+    comptime shift_low: isize,
+    comptime shift_high: isize,
+    comptime is_optional: bool,
+    comptime is_packed: bool,
+) type {
+    const high = shift_high + @intFromBool(is_optional);
+    if (is_packed) {
+        return std.math.IntFittingRange(shift_low, high);
+    } else {
+        return RoundedIntFitting(shift_low, high);
+    }
+}
+
 pub fn Field(comptime c: config.Field, comptime is_packed: bool) type {
-    return switch (c.kind()) {
-        .slice => if (is_packed) unreachable else Slice(c),
-        .shift => Shift(c, is_packed),
-        .@"union" => Union(c, is_packed),
-        .optional => if (is_packed) PackedOptional(c) else c.type,
-        .basic => c.type,
-    };
+    const is_optional = c.isOptional();
+    const _ShiftInt = if (c.cp_packing == .shift)
+        ShiftInt(
+            c.shift_low,
+            c.shift_high,
+            is_optional,
+            is_packed,
+        )
+    else
+        void;
+
+    switch (c.kind()) {
+        .slice => {
+            if (is_packed) unreachable;
+
+            const Offset = RoundedIntFitting(0, c.max_offset);
+            const Len = RoundedIntFitting(0, c.max_len);
+            return Slice(
+                @typeInfo(c.type).pointer.child,
+                Offset,
+                Len,
+                _ShiftInt,
+                c.embedded_len,
+            );
+        },
+        .shift => {
+            return Shift(_ShiftInt, is_optional, is_packed);
+        },
+        .@"union" => return Union(c, _ShiftInt, is_packed),
+        .optional => return if (is_packed) PackedOptional(c) else c.type,
+        .basic => return c.type,
+    }
 }
 
 pub fn Row(
@@ -48,6 +98,7 @@ pub fn DeclStruct(
     comptime fields_is_packed: []const bool,
     comptime decl: []const u8,
 ) type {
+    @setEvalBranchQuota(fields.len * 100 + 1000);
     var struct_fields: [fields.len]std.builtin.Type.StructField = undefined;
     var i: usize = 0;
 
@@ -140,21 +191,13 @@ pub fn Table2(
 }
 
 pub fn Slice(
-    comptime c: config.Field,
+    comptime T: type,
+    comptime Offset: type,
+    comptime Len: type,
+    comptime _ShiftInt: type,
+    comptime embedded_len: usize,
 ) type {
-    const max_len = c.max_len;
-    const max_offset = c.max_offset;
-    const embedded_len = c.embedded_len;
-
-    if (max_len == 0) {
-        @compileError("Slice with max_len == 0 is not supported due to Zig compiler bug");
-    }
-
-    if (max_offset == 0 and !(embedded_len == max_len or
-        (max_len == 1 and c.cp_packing == .shift)))
-    {
-        @compileError("Slice with max_offset == 0 is only supported if embedded_len is max_len, or max_len is 1 with shift");
-    }
+    const is_shift = _ShiftInt != void;
 
     return struct {
         data: union {
@@ -165,12 +208,12 @@ pub fn Slice(
         len: Len,
 
         const Self = @This();
-        pub const T = @typeInfo(c.type).pointer.child;
-        const Offset = std.math.IntFittingRange(0, max_offset);
-        const ShiftSingleItem = if (c.cp_packing == .shift) Shift(c, false) else void;
-        const Len = std.math.IntFittingRange(0, max_len);
+        const ShiftSingleItem = if (is_shift)
+            Shift(_ShiftInt, false, false)
+        else
+            void;
 
-        pub const Tracking = SliceTracking(T, max_len);
+        pub const Tracking = SliceTracking(T);
         pub const Backing = []const T;
         pub const empty = if (embedded_len == 0)
             Self{ .len = 0, .data = .{ .offset = 0 } }
@@ -184,7 +227,7 @@ pub fn Slice(
                     }),
                 },
             };
-        pub const same = if (c.cp_packing == .shift) Self{
+        pub const same = if (is_shift) Self{
             .data = .{ .shift = .same },
             .len = 1,
         } else void{};
@@ -215,9 +258,6 @@ pub fn Slice(
 
                 const offset = tracking.backing.items.len;
                 gop.value_ptr.* = offset;
-                if (offset + s.len > tracking.backing.capacity) {
-                    std.debug.print("Offset + len > capacity: {d} > {d}; field = {s}\n", .{ offset + s.len, tracking.backing.capacity, c.name });
-                }
                 tracking.backing.appendSliceAssumeCapacity(s);
                 gop.key_ptr.* = tracking.backing.items[offset .. offset + s.len];
                 tracking.len_counts[s.len - 1] += 1;
@@ -257,14 +297,14 @@ pub fn Slice(
             tracking: *Tracking,
             s: []const T,
         ) Allocator.Error!Self {
-            if (c.cp_packing != .direct) {
+            if (is_shift) {
                 @compileError("init is only supported for direct packing: use initFor instead");
             }
 
             return .initInner(allocator, tracking, s);
         }
 
-        pub fn _initShift(
+        fn _initShift(
             allocator: Allocator,
             tracking: *Tracking,
             s: []const T,
@@ -274,7 +314,7 @@ pub fn Slice(
                 tracking.shift.track(cp, s[0]);
             }
 
-            if (c.cp_packing == .shift and s.len == 1) {
+            if (is_shift and s.len == 1) {
                 tracking.max_len = @max(tracking.max_len, 1);
 
                 return .{
@@ -288,18 +328,16 @@ pub fn Slice(
             }
         }
 
-        pub const init = if (c.cp_packing == .direct)
-            _init
+        pub const init = if (is_shift)
+            _initShift
         else
-            _initShift;
+            _init;
 
-        fn _slice(
+        fn _value(
             self: *const Self,
             backing: Backing,
         ) []const T {
-            // Repeat the two return cases, first with two `comptime` checks,
-            // then with a runtime if/else
-            if (comptime embedded_len == max_len) {
+            if (comptime @sizeOf(Offset) == 0) {
                 return self.data.embedded[0..self.len];
             } else if (comptime embedded_len == 0) {
                 return backing[self.data.offset .. @as(usize, self.data.offset) + @as(usize, self.len)];
@@ -310,51 +348,34 @@ pub fn Slice(
             }
         }
 
-        pub fn sliceWith(
+        pub const value = if (is_shift)
+            void{}
+        else
+            _value;
+
+        fn _valueWith(
             self: *const Self,
             backing: Backing,
             single_item_buffer: *[1]T,
             cp: u21,
         ) []const T {
-            if (c.cp_packing == .shift and self.len == 1) {
+            if ((comptime is_shift) and self.len == 1) {
                 single_item_buffer[0] = self.data.shift.unshift(cp);
                 return single_item_buffer[0..1];
             } else {
-                return self._slice(backing);
+                return self._value(backing);
             }
         }
 
-        pub const slice = if (c.cp_packing == .direct)
-            _slice
+        pub const valueWith = if (T == u21)
+            _valueWith
         else
             void{};
 
-        // Note: while it would be better for modularity to pass `backing`
-        // in, this makes for a nicer API without having to wrap Slice.
-        const hardcoded_backing = @import("get.zig").backingFor(c.name);
-
-        fn _value(self: *const Self) []const T {
-            return self._slice(hardcoded_backing);
-        }
-
-        pub fn with(
-            self: *const Self,
-            single_item_buffer: *[1]T,
-            cp: u21,
-        ) []const T {
-            return self.sliceWith(hardcoded_backing, single_item_buffer, cp);
-        }
-
-        pub const value = if (c.cp_packing == .direct)
-            _value
-        else
-            void{};
 
         pub fn autoHash(self: Self, hasher: anytype) void {
-            // Repeat the two return cases, first with two `comptime` checks,
-            // then with a runtime if/else
             std.hash.autoHash(hasher, self.len);
-            if ((comptime c.cp_packing == .shift) and self.len == 1) {
+            if ((comptime is_shift) and self.len == 1) {
                 std.hash.autoHash(hasher, self.data.shift);
             } else if ((comptime embedded_len == 0) or self.len > embedded_len) {
                 std.hash.autoHash(hasher, self.data.offset);
@@ -367,7 +388,7 @@ pub fn Slice(
             if (a.len != b.len) {
                 return false;
             }
-            if ((comptime c.cp_packing == .shift) and a.len == 1) {
+            if ((comptime is_shift) and a.len == 1) {
                 return a.data.shift.eql(b.data.shift);
             } else if ((comptime embedded_len == 0) or a.len > embedded_len) {
                 return a.data.offset == b.data.offset;
@@ -377,7 +398,7 @@ pub fn Slice(
         }
 
         pub fn write(self: Self, writer: *std.Io.Writer) !void {
-            if ((comptime c.cp_packing == .shift) and self.len == 1) {
+            if ((comptime is_shift) and self.len == 1) {
                 if (self.eql(.same)) {
                     try writer.writeAll(".same");
                 } else {
@@ -456,19 +477,22 @@ fn basicTrackingOkay(tracking: anytype, comptime field: config.Field) !bool {
     return true;
 }
 
-pub fn SliceTracking(comptime T: type, comptime max_len: usize) type {
+pub fn SliceTracking(comptime T: type) type {
     return struct {
         backing: std.ArrayList(T),
+        len_counts: []usize,
         max_len: usize = 0,
         offset_map: SliceMap(T, usize) = .empty,
-        len_counts: [max_len]usize = [_]usize{0} ** max_len,
         shift: ShiftTracking = .{},
 
         const Self = @This();
 
         pub fn init(allocator: Allocator, field: config.Field) !Self {
+            const len_counts = try allocator.alloc(usize, field.max_len);
+            @memset(len_counts, 0);
             return .{
                 .backing = try std.ArrayList(T).initCapacity(allocator, field.max_offset),
+                .len_counts = len_counts,
             };
         }
 
@@ -723,21 +747,11 @@ pub fn OptionalTracking(comptime Optional: type) type {
     };
 }
 
-pub fn Shift(comptime c: config.Field, comptime is_packed: bool) type {
-    @setEvalBranchQuota(100_000);
-    const is_optional = @typeInfo(c.type) == .optional;
-
-    if (c.kind() == .shift and !((is_optional and @typeInfo(c.type).optional.child == u21) or
-        c.type == u21))
-    {
-        @compileError("Shift field '" ++ c.name ++ "' must be type u21 or ?u21");
-    }
-
-    if (c.kind() == .slice and @typeInfo(c.type).pointer.child != u21) {
-        @compileError("Slice field '" ++ c.name ++ "' must be type []const u21");
-    }
-
-    const Int = std.math.IntFittingRange(c.shift_low, c.shift_high + @intFromBool(is_optional));
+pub fn Shift(
+    comptime Int: type,
+    comptime is_optional: bool,
+    comptime is_packed: bool,
+) type {
     // Only valid if `is_optional`
     const null_data = std.math.maxInt(Int);
 
@@ -845,7 +859,7 @@ pub fn Shift(comptime c: config.Field, comptime is_packed: bool) type {
     };
 }
 
-pub fn Union(comptime c: config.Field, comptime is_packed: bool) type {
+pub fn Union(comptime c: config.Field, comptime _ShiftInt: type, comptime is_packed: bool) type {
     if (!is_packed and c.cp_packing == .direct) {
         return c.type;
     }
@@ -855,7 +869,10 @@ pub fn Union(comptime c: config.Field, comptime is_packed: bool) type {
     const Int = @typeInfo(Tag).@"enum".tag_type;
     inlineAssert(Int == std.meta.Int(.unsigned, @bitSizeOf(Tag)));
 
-    const ShiftMember = if (c.cp_packing == .shift) Shift(c, is_packed) else void;
+    const ShiftMember = if (_ShiftInt == void)
+        void
+    else
+        Shift(_ShiftInt, c.isOptional(), is_packed);
 
     var fields: [info.fields.len]std.builtin.Type.UnionField = undefined;
     var has_shift: bool = false;

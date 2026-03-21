@@ -1,6 +1,4 @@
 //! This file defines the low(er)-level `get` method, returning `Data`.
-//! (It also must be separate from `root.zig` so that `storage.zig` can use it to
-//! allow for a better API on `Slice` fields.)
 const std = @import("std");
 const tables_module = @import("tables");
 const tables = tables_module.tables;
@@ -116,6 +114,18 @@ fn DataField(comptime field: []const u8) type {
     return @FieldType(TableData(tableInfoFor(field).type), field);
 }
 
+pub fn WithBacking(comptime S: type) type {
+    const T = @typeInfo(S.Backing).pointer.child;
+    return struct {
+        slice: S,
+        backing: S.Backing,
+
+        pub fn with(self: *const @This(), single_item_buffer: *[1]T, cp: u21) []const T {
+            return self.slice.valueWith(self.backing, single_item_buffer, cp);
+        }
+    };
+}
+
 fn FieldValue(comptime field: []const u8) type {
     const D = DataField(field);
     if (@typeInfo(D) == .@"struct") {
@@ -125,6 +135,8 @@ fn FieldValue(comptime field: []const u8) type {
             return @typeInfo(@TypeOf(D.unpack)).@"fn".return_type.?;
         } else if (@hasDecl(D, "value") and @TypeOf(D.value) != void) {
             return @typeInfo(@TypeOf(D.value)).@"fn".return_type.?;
+        } else if (@hasDecl(D, "Backing")) {
+            return WithBacking(D);
         } else {
             return D;
         }
@@ -143,14 +155,16 @@ pub fn get(comptime field: FieldEnum, cp: u21) TypeOf(field) {
     const D = DataField(name);
     const table = comptime tableFor(name);
 
-    if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "unpack") or @hasDecl(D, "unshift") or (@hasDecl(D, "value") and @TypeOf(D.value) != void))) {
+    if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "unpack") or @hasDecl(D, "unshift") or @hasDecl(D, "Backing"))) {
         const d = @field(data(table, cp), name);
         if (@hasDecl(D, "unshift") and @TypeOf(D.unshift) != void) {
             return d.unshift(cp);
         } else if (@hasDecl(D, "unpack")) {
             return d.unpack();
+        } else if (@hasDecl(D, "value") and @TypeOf(D.value) != void) {
+            return d.value(backingFor(name));
         } else {
-            return d.value();
+            return .{ .slice = d, .backing = backingFor(name) };
         }
     } else {
         return @field(data(table, cp), name);

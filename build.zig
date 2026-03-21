@@ -391,14 +391,6 @@ fn createLibMod(
     tables_mod.addImport("storage.zig", storage_mod);
     tables_mod.addImport("build_config", build_config_mod);
 
-    const get_mod = b.createModule(.{
-        .root_source_file = b.path("src/get.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    get_mod.addImport("tables", tables_mod);
-    storage_mod.addImport("get.zig", get_mod);
-
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
@@ -408,7 +400,6 @@ fn createLibMod(
     lib_mod.addImport("types.zig", types_mod);
     lib_mod.addImport("config.zig", config_mod);
     lib_mod.addImport("tables", tables_mod);
-    lib_mod.addImport("get.zig", get_mod);
 
     return .{
         .lib = lib_mod,

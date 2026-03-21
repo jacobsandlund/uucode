@@ -344,7 +344,7 @@ const Info = struct {
                 &row,
                 "uppercase_mapping_first_char",
                 cp,
-                input.uppercase_mapping.sliceWith(
+                input.uppercase_mapping.valueWith(
                     backing.uppercase_mapping,
                     &single_item_buffer,
                     cp,
@@ -355,7 +355,7 @@ const Info = struct {
             setBuiltField(&row, "has_simple_lowercase", input.simple_lowercase_mapping.unshift(cp) != cp);
 
             var buffer: [13]u8 = undefined;
-            for (input.numeric_value_numeric.slice(backing.numeric_value_numeric), 0..) |digit, j| {
+            for (input.numeric_value_numeric.value(backing.numeric_value_numeric), 0..) |digit, j| {
                 buffer[input.numeric_value_numeric.len - j - 1] = digit;
             }
 
@@ -531,7 +531,7 @@ const CanonicalDecomposition = struct {
 
             var buffer: [1]u21 = undefined;
             const mapping = if (input.decomposition_type == .canonical)
-                input.decomposition_mapping.sliceWith(backing.decomposition_mapping, &buffer, cp)
+                input.decomposition_mapping.valueWith(backing.decomposition_mapping, &buffer, cp)
             else
                 &[_]u21{};
 

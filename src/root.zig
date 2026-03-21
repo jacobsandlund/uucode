@@ -14,6 +14,8 @@ pub const TypeOfAll = getpkg.TypeOfAll;
 pub const get = getpkg.get;
 pub const getAll = getpkg.getAll;
 pub const hasField = getpkg.hasField;
+pub const backingFor = getpkg.backingFor;
+pub const WithBacking = getpkg.WithBacking;
 
 test {
     _ = config;

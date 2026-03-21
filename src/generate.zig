@@ -29,6 +29,10 @@ fn visitField(comptime used: *[fields.len]bool, comptime field: []const u8) void
     }
 }
 
+comptime {
+    for (fields) |f| f.validate();
+}
+
 const is_field_used = blk: {
     var used: [fields.len]bool = @splat(false);
     for (unresolved_tables) |table| {
