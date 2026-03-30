@@ -865,7 +865,10 @@ pub fn Union(comptime c: config.Field, comptime is_packed: bool) type {
         const T = if (c.cp_packing == .shift and f.type == u21) blk: {
             has_shift = true;
             break :blk ShiftMember;
-        } else f.type;
+        } else if (is_packed and c.cp_packing == .shift and f.type == void)
+            ShiftMember
+        else
+            f.type;
         field_names[i] = f.name;
         field_types[i] = T;
         field_attrs[i] = .{
@@ -904,8 +907,10 @@ pub fn Union(comptime c: config.Field, comptime is_packed: bool) type {
             return .{
                 .tag = @intFromEnum(@as(Tag, value)),
                 .@"union" = switch (value) {
-                    inline else => |v, tag| if (@FieldType(InnerUnion, @tagName(tag)) == ShiftMember)
+                    inline else => |v, tag| if (@FieldType(c.type, @tagName(tag)) == u21)
                         @unionInit(InnerUnion, @tagName(tag), .init(cp, v))
+                    else if (@FieldType(c.type, @tagName(tag)) == void)
+                        @unionInit(InnerUnion, @tagName(tag), .init(cp, cp))
                     else
                         @unionInit(InnerUnion, @tagName(tag), v),
                 },
@@ -926,11 +931,17 @@ pub fn Union(comptime c: config.Field, comptime is_packed: bool) type {
         fn _unshift(self: Self, cp: u21) c.type {
             const tag: Tag = @enumFromInt(self.tag);
             return switch (tag) {
-                inline else => |comptime_tag| if (@FieldType(InnerUnion, @tagName(comptime_tag)) == ShiftMember)
+                inline else => |comptime_tag| if (@FieldType(c.type, @tagName(comptime_tag)) == u21)
                     @unionInit(
                         c.type,
                         @tagName(comptime_tag),
                         @field(self.@"union", @tagName(comptime_tag)).unshift(cp),
+                    )
+                else if (@FieldType(c.type, @tagName(comptime_tag)) == void)
+                    @unionInit(
+                        c.type,
+                        @tagName(comptime_tag),
+                        {},
                     )
                 else
                     @unionInit(
