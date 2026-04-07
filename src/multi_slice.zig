@@ -68,10 +68,27 @@ pub fn MultiSlice(comptime T: type) type {
                 const field: Field = @enumFromInt(i);
                 const value = @field(elem, field_info.name);
                 const F = field_info.type;
-                if (@bitSizeOf(F) != @sizeOf(F) * 8) {
-                    for (self.items(field)) |*item| item.* = value;
+                const slice = self.items(field);
+                if (@sizeOf(F) == 0) {
+                    // Zero-size types have nothing to set.
+                } else if (@bitSizeOf(F) != @sizeOf(F) * 8) {
+                    // Types like bool, u3, or enum(u2) have fewer bits than
+                    // their storage size, so @memset can't be called directly
+                    // on their slices. Convert to a byte-array representation
+                    // by zero-extending into a storage-sized int, then @memset
+                    // the reinterpreted byte array for the same performance as
+                    // a normal @memset.
+                    const StorageInt = std.meta.Int(.unsigned, @sizeOf(F) * 8);
+                    const storage: StorageInt = switch (@typeInfo(F)) {
+                        .int => @intCast(value),
+                        .bool => @intFromBool(value),
+                        .@"enum" => @intFromEnum(value),
+                        else => @compileError("memset: unsupported non-byte-aligned type '" ++ @typeName(F) ++ "'"),
+                    };
+                    const ints: [*]StorageInt = @ptrCast(slice.ptr);
+                    @memset(ints[0..slice.len], storage);
                 } else {
-                    @memset(self.items(field), value);
+                    @memset(slice, value);
                 }
             }
         }
@@ -226,6 +243,51 @@ test "memset bool field" {
     ms.memset(.{ .a = false, .b = 0 });
     try std.testing.expectEqual(false, ms.items(.a)[0]);
     try std.testing.expectEqual(0, ms.items(.b)[0]);
+}
+
+test "memset small int field" {
+    const Row = struct {
+        a: u3,
+        b: u8,
+    };
+    const MS = MultiSlice(Row);
+
+    var ms = try MS.initCapacity(std.testing.allocator, 4);
+    defer std.testing.allocator.free(@as([*]u8, @ptrCast(@alignCast(ms.ptrs[MS.sorted_fields[0]])))[0..MS.capacityInBytes(4)]);
+
+    ms.len = 4;
+    ms.memset(.{ .a = 5, .b = 7 });
+
+    for (0..4) |i| {
+        try std.testing.expectEqual(@as(u3, 5), ms.items(.a)[i]);
+        try std.testing.expectEqual(7, ms.items(.b)[i]);
+    }
+
+    ms.memset(.{ .a = 0, .b = 0 });
+    try std.testing.expectEqual(@as(u3, 0), ms.items(.a)[0]);
+}
+
+test "memset small enum field" {
+    const Color = enum(u2) { red, green, blue };
+    const Row = struct {
+        a: Color,
+        b: u8,
+    };
+    const MS = MultiSlice(Row);
+
+    var ms = try MS.initCapacity(std.testing.allocator, 4);
+    defer std.testing.allocator.free(@as([*]u8, @ptrCast(@alignCast(ms.ptrs[MS.sorted_fields[0]])))[0..MS.capacityInBytes(4)]);
+
+    ms.len = 4;
+    ms.memset(.{ .a = .blue, .b = 7 });
+
+    for (0..4) |i| {
+        try std.testing.expectEqual(Color.blue, ms.items(.a)[i]);
+        try std.testing.expectEqual(7, ms.items(.b)[i]);
+    }
+
+    ms.memset(.{ .a = .red, .b = 0 });
+    try std.testing.expectEqual(Color.red, ms.items(.a)[0]);
 }
 
 test "zero-field struct" {
