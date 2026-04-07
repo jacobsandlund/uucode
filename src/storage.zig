@@ -910,7 +910,7 @@ pub fn Union(comptime c: config.Field, comptime is_packed: bool) type {
                     inline else => |v, tag| if (@FieldType(c.type, @tagName(tag)) == u21)
                         @unionInit(InnerUnion, @tagName(tag), .init(cp, v))
                     else if (@FieldType(c.type, @tagName(tag)) == void)
-                        @unionInit(InnerUnion, @tagName(tag), .init(cp, cp))
+                        @unionInit(InnerUnion, @tagName(tag), .same)
                     else
                         @unionInit(InnerUnion, @tagName(tag), v),
                 },
@@ -1031,4 +1031,31 @@ pub fn Union(comptime c: config.Field, comptime is_packed: bool) type {
             );
         }
     };
+}
+
+test "packed union with shift and void member" {
+    const TestUnion = union(enum) {
+        open: u21,
+        close: u21,
+        none: void,
+    };
+    const c: config.Field = .{
+        .name = "test",
+        .type = TestUnion,
+        .cp_packing = .shift,
+        .shift_low = -3,
+        .shift_high = 3,
+    };
+    const U = Union(c, true);
+
+    const cp: u21 = 100;
+
+    const open = U.init(cp, .{ .open = 102 });
+    try std.testing.expectEqual(TestUnion{ .open = 102 }, open.unshift(cp));
+
+    const close = U.init(cp, .{ .close = 97 });
+    try std.testing.expectEqual(TestUnion{ .close = 97 }, close.unshift(cp));
+
+    const none = U.init(cp, .none);
+    try std.testing.expectEqual(TestUnion.none, none.unshift(cp));
 }
