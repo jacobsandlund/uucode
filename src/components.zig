@@ -238,21 +238,24 @@ const UnicodeData = struct {
         _ = inputs;
         _ = backing;
 
-        var default_row: Row = undefined;
-        setBuiltField(&default_row, "name", .empty);
-        setBuiltField(&default_row, "general_category", .other_not_assigned);
-        setBuiltField(&default_row, "canonical_combining_class", 0);
-        setBuiltField(&default_row, "decomposition_type", .default);
-        setBuiltField(&default_row, "decomposition_mapping", .same);
-        setBuiltField(&default_row, "numeric_type", .none);
+        var default_row: Row = comptime blk: {
+            var row: Row = undefined;
+            setBuiltField(&row, "name", .empty);
+            setBuiltField(&row, "general_category", .other_not_assigned);
+            setBuiltField(&row, "canonical_combining_class", 0);
+            setBuiltField(&row, "decomposition_type", .default);
+            setBuiltField(&row, "decomposition_mapping", .same);
+            setBuiltField(&row, "numeric_type", .none);
+            setBuiltField(&row, "numeric_value_numeric", .empty);
+            setBuiltField(&row, "is_bidi_mirrored", false);
+            setBuiltField(&row, "unicode_1_name", .empty);
+            setBuiltField(&row, "simple_uppercase_mapping", .same);
+            setBuiltField(&row, "simple_lowercase_mapping", .same);
+            setBuiltField(&row, "simple_titlecase_mapping", .same);
+            break :blk row;
+        };
         setField(&default_row, "numeric_value_decimal", 0, null, tracking);
         setField(&default_row, "numeric_value_digit", 0, null, tracking);
-        setBuiltField(&default_row, "numeric_value_numeric", .empty);
-        setBuiltField(&default_row, "is_bidi_mirrored", false);
-        setBuiltField(&default_row, "unicode_1_name", .empty);
-        setBuiltField(&default_row, "simple_uppercase_mapping", .same);
-        setBuiltField(&default_row, "simple_lowercase_mapping", .same);
-        setBuiltField(&default_row, "simple_titlecase_mapping", .same);
 
         const file_path = "ucd/UnicodeData.txt";
 
@@ -1282,7 +1285,7 @@ const BidiPairedBracket = struct {
                 else => unreachable,
             };
 
-            items[op] = initField(Row, "bidi_paired_bracket", @intCast(op), bracket_type, tracking);
+            items[op] = initField(Row, "bidi_paired_bracket", op, bracket_type, tracking);
         }
     }
 };
@@ -1322,7 +1325,7 @@ const BidiMirroring = struct {
             const cp = try parseCp(cp_str);
             const paired = try parseCp(paired_cp_str);
 
-            items[cp] = initField(Row, "bidi_mirroring", @intCast(cp), paired, tracking);
+            items[cp] = initField(Row, "bidi_mirroring", cp, paired, tracking);
         }
     }
 };
@@ -2421,7 +2424,7 @@ const CaseFoldingFull = struct {
             const common_only = input.case_folding_common_only.unshift(cp);
 
             const mapping = if (full_only.len > 0)
-                full_only.sliceWith(backing.case_folding_full_only, &buffer, cp)
+                full_only.valueWith(backing.case_folding_full_only, &buffer, cp)
             else blk: {
                 buffer[0] = common_only orelse cp;
                 break :blk &buffer;
@@ -2453,7 +2456,7 @@ const LowercaseMapping = struct {
 
             var buffer: [1]u21 = undefined;
             const mapping = if (use_special)
-                input.special_lowercase_mapping.sliceWith(backing.special_lowercase_mapping, &buffer, cp)
+                input.special_lowercase_mapping.valueWith(backing.special_lowercase_mapping, &buffer, cp)
             else blk: {
                 buffer[0] = input.simple_lowercase_mapping.unshift(cp);
                 break :blk &buffer;
@@ -2485,7 +2488,7 @@ const TitlecaseMapping = struct {
 
             var buffer: [1]u21 = undefined;
             const mapping = if (use_special)
-                input.special_titlecase_mapping.sliceWith(backing.special_titlecase_mapping, &buffer, cp)
+                input.special_titlecase_mapping.valueWith(backing.special_titlecase_mapping, &buffer, cp)
             else blk: {
                 buffer[0] = input.simple_titlecase_mapping.unshift(cp);
                 break :blk &buffer;
@@ -2517,7 +2520,7 @@ const UppercaseMapping = struct {
 
             var buffer: [1]u21 = undefined;
             const mapping = if (use_special)
-                input.special_uppercase_mapping.sliceWith(backing.special_uppercase_mapping, &buffer, cp)
+                input.special_uppercase_mapping.valueWith(backing.special_uppercase_mapping, &buffer, cp)
             else blk: {
                 buffer[0] = input.simple_uppercase_mapping.unshift(cp);
                 break :blk &buffer;

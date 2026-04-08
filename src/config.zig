@@ -179,6 +179,47 @@ pub const Field = struct {
         @"union",
     };
 
+    pub inline fn isOptional(self: Field) bool {
+        return @typeInfo(self.type) == .optional;
+    }
+
+    pub fn validate(comptime self: Field) void {
+        switch (self.kind()) {
+            .shift => {
+                switch (@typeInfo(self.type)) {
+                    .optional => |optional| {
+                        if (optional.child != u21) {
+                            @compileError("Shift field '" ++ self.name ++ "' must be type ?u21");
+                        }
+                    },
+                    .int => {
+                        if (self.type != u21) {
+                            @compileError("Shift field '" ++ self.name ++ "' must be type u21");
+                        }
+                    },
+                    else => unreachable,
+                }
+            },
+            .slice => {
+                if (self.cp_packing == .shift) {
+                    if (@typeInfo(self.type).pointer.child != u21) {
+                        @compileError("Slice field '" ++ self.name ++ "' with shift packing must be type []const u21");
+                    }
+                }
+                if (self.max_len == 0) {
+                    @compileError("Slice with max_len == 0 is not supported due to Zig compiler bug");
+                }
+
+                const all_embedded = self.embedded_len == self.max_len;
+                const all_shift = self.max_len == 1 and self.cp_packing == .shift;
+                if (self.max_offset == 0 and !(all_embedded or all_shift)) {
+                    @compileError("Slice with max_offset == 0 is only supported if embedded_len is max_len, or max_len is 1 with shift");
+                }
+            },
+            else => {},
+        }
+    }
+
     pub fn kind(self: Field) Kind {
         switch (@typeInfo(self.type)) {
             .pointer => return .slice,
@@ -193,12 +234,13 @@ pub const Field = struct {
                 }
             },
             .@"union" => return .@"union",
-            else => {
+            .int => {
                 switch (self.cp_packing) {
                     .direct => return .basic,
                     .shift => return .shift,
                 }
             },
+            else => return .basic,
         }
     }
 

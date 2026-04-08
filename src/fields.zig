@@ -116,6 +116,7 @@ pub const fields: []const config.Field = &.{
     .{
         .name = "case_folding_full_only",
         .type = []const u21,
+        .cp_packing = .direct,
         .max_len = 3,
         .max_offset = 160,
         .embedded_len = 0,
