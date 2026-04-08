@@ -58,7 +58,7 @@ pub fn Field(comptime c: config.Field, comptime is_packed: bool) type {
         .shift => {
             return Shift(_ShiftInt, is_optional, is_packed);
         },
-        .@"union" => return Union(c, _ShiftInt, is_packed),
+        .@"union" => return Union(c.type, _ShiftInt, is_packed),
         .optional => return if (is_packed) PackedOptional(c) else c.type,
         .basic => return c.type,
     }
@@ -859,40 +859,36 @@ pub fn Shift(
     };
 }
 
-pub fn Union(comptime c: config.Field, comptime _ShiftInt: type, comptime is_packed: bool) type {
-    if (!is_packed and c.cp_packing == .direct) {
-        return c.type;
+pub fn Union(comptime T: type, comptime _ShiftInt: type, comptime is_packed: bool) type {
+    const is_shift = _ShiftInt != void;
+
+    if (!is_packed and !is_shift) {
+        return T;
     }
 
-    const info = @typeInfo(c.type).@"union";
+    const info = @typeInfo(T).@"union";
     const Tag = info.tag_type.?;
     const Int = @typeInfo(Tag).@"enum".tag_type;
     inlineAssert(Int == std.meta.Int(.unsigned, @bitSizeOf(Tag)));
 
-    const ShiftMember = if (_ShiftInt == void)
-        void
+    const ShiftMember = if (is_shift)
+        Shift(_ShiftInt, false, is_packed)
     else
-        Shift(_ShiftInt, c.isOptional(), is_packed);
+        void;
 
     var fields: [info.fields.len]std.builtin.Type.UnionField = undefined;
-    var has_shift: bool = false;
     for (info.fields, 0..) |f, i| {
-        const T = if (c.cp_packing == .shift and f.type == u21) blk: {
-            has_shift = true;
-            break :blk ShiftMember;
-        } else if (is_packed and c.cp_packing == .shift and f.type == void)
+        const FieldType = if (is_shift and f.type == u21)
+            ShiftMember
+        else if (is_packed and is_shift and f.type == void)
             ShiftMember
         else
             f.type;
         fields[i] = .{
             .name = f.name,
-            .type = T,
-            .alignment = if (is_packed) 0 else @alignOf(T),
+            .type = FieldType,
+            .alignment = if (is_packed) 0 else @alignOf(FieldType),
         };
-    }
-
-    if (c.cp_packing == .shift and !has_shift) {
-        @compileError("Shift can only be used in unions with at least one field of type u21");
     }
 
     const InnerUnion = @Type(.{
@@ -910,7 +906,7 @@ pub fn Union(comptime c: config.Field, comptime _ShiftInt: type, comptime is_pac
 
         const Self = @This();
 
-        fn _init(value: c.type) Self {
+        fn _init(value: T) Self {
             return .{
                 .tag = @intFromEnum(@as(Tag, value)),
                 .@"union" = switch (value) {
@@ -919,13 +915,13 @@ pub fn Union(comptime c: config.Field, comptime _ShiftInt: type, comptime is_pac
             };
         }
 
-        fn _initShift(cp: u21, value: c.type) Self {
+        fn _initShift(cp: u21, value: T) Self {
             return .{
                 .tag = @intFromEnum(@as(Tag, value)),
                 .@"union" = switch (value) {
-                    inline else => |v, tag| if (@FieldType(c.type, @tagName(tag)) == u21)
+                    inline else => |v, tag| if (@FieldType(T, @tagName(tag)) == u21)
                         @unionInit(InnerUnion, @tagName(tag), .init(cp, v))
-                    else if (@FieldType(c.type, @tagName(tag)) == void)
+                    else if (@FieldType(T, @tagName(tag)) == void)
                         @unionInit(InnerUnion, @tagName(tag), .same)
                     else
                         @unionInit(InnerUnion, @tagName(tag), v),
@@ -933,45 +929,45 @@ pub fn Union(comptime c: config.Field, comptime _ShiftInt: type, comptime is_pac
             };
         }
 
-        fn _unpack(self: Self) c.type {
+        fn _unpack(self: Self) T {
             const tag: Tag = @enumFromInt(self.tag);
             return switch (tag) {
                 inline else => |comptime_tag| @unionInit(
-                    c.type,
+                    T,
                     @tagName(comptime_tag),
                     @field(self.@"union", @tagName(comptime_tag)),
                 ),
             };
         }
 
-        fn _unshift(self: Self, cp: u21) c.type {
+        fn _unshift(self: Self, cp: u21) T {
             const tag: Tag = @enumFromInt(self.tag);
             return switch (tag) {
-                inline else => |comptime_tag| if (@FieldType(c.type, @tagName(comptime_tag)) == u21)
+                inline else => |comptime_tag| if (@FieldType(T, @tagName(comptime_tag)) == u21)
                     @unionInit(
-                        c.type,
+                        T,
                         @tagName(comptime_tag),
                         @field(self.@"union", @tagName(comptime_tag)).unshift(cp),
                     )
-                else if (@FieldType(c.type, @tagName(comptime_tag)) == void)
+                else if (@FieldType(T, @tagName(comptime_tag)) == void)
                     @unionInit(
-                        c.type,
+                        T,
                         @tagName(comptime_tag),
                         {},
                     )
                 else
                     @unionInit(
-                        c.type,
+                        T,
                         @tagName(comptime_tag),
                         @field(self.@"union", @tagName(comptime_tag)),
                     ),
             };
         }
 
-        pub const Tracking = if (c.cp_packing == .shift) UnionShiftTracking else void;
-        pub const init = if (c.cp_packing == .shift) _initShift else _init;
-        pub const unpack = if (c.cp_packing == .shift) void{} else _unpack;
-        pub const unshift = if (c.cp_packing == .shift) _unshift else void{};
+        pub const Tracking = if (is_shift) UnionShiftTracking else void;
+        pub const init = if (is_shift) _initShift else _init;
+        pub const unpack = if (is_shift) void{} else _unpack;
+        pub const unshift = if (is_shift) _unshift else void{};
 
         pub fn autoHash(self: Self, hasher: anytype) void {
             const tag: Tag = @enumFromInt(self.tag);
@@ -1005,7 +1001,7 @@ pub fn Union(comptime c: config.Field, comptime _ShiftInt: type, comptime is_pac
         const Self = @This();
         pub const Tracking = UnionShiftTracking;
 
-        pub fn init(cp: u21, value: c.type) Self {
+        pub fn init(cp: u21, value: T) Self {
             return .{
                 .@"union" = switch (value) {
                     inline else => |v, tag| if (@FieldType(InnerUnion, @tagName(tag)) == ShiftMember)
@@ -1016,17 +1012,17 @@ pub fn Union(comptime c: config.Field, comptime _ShiftInt: type, comptime is_pac
             };
         }
 
-        pub fn unshift(self: Self, cp: u21) c.type {
+        pub fn unshift(self: Self, cp: u21) T {
             return switch (self.@"union") {
                 inline else => |v, comptime_tag| if (@FieldType(InnerUnion, @tagName(comptime_tag)) == ShiftMember)
                     @unionInit(
-                        c.type,
+                        T,
                         @tagName(comptime_tag),
                         v.unshift(cp),
                     )
                 else
                     @unionInit(
-                        c.type,
+                        T,
                         @tagName(comptime_tag),
                         v,
                     ),
@@ -1055,14 +1051,8 @@ test "packed union with shift and void member" {
         close: u21,
         none: void,
     };
-    const c: config.Field = .{
-        .name = "test",
-        .type = TestUnion,
-        .cp_packing = .shift,
-        .shift_low = -3,
-        .shift_high = 3,
-    };
-    const U = Union(c, true);
+    const _ShiftInt = ShiftInt(-3, 3, false, true);
+    const U = Union(TestUnion, _ShiftInt, true);
 
     const cp: u21 = 100;
 

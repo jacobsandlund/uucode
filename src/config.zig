@@ -216,6 +216,17 @@ pub const Field = struct {
                     @compileError("Slice with max_offset == 0 is only supported if embedded_len is max_len, or max_len is 1 with shift");
                 }
             },
+            .@"union" => {
+                if (self.cp_packing == .shift) {
+                    const info = @typeInfo(self.type).@"union";
+                    const has_u21 = for (info.fields) |f| {
+                        if (f.type == u21) break true;
+                    } else false;
+                    if (!has_u21) {
+                        @compileError("Union field '" ++ self.name ++ "' with shift packing must have at least one u21 member");
+                    }
+                }
+            },
             else => {},
         }
     }
