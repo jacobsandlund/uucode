@@ -59,7 +59,10 @@ pub fn Field(comptime c: config.Field, comptime is_packed: bool) type {
             return Shift(_ShiftInt, is_optional, is_packed);
         },
         .@"union" => return Union(c.type, _ShiftInt, is_packed),
-        .optional => return if (is_packed) PackedOptional(c) else c.type,
+        .optional => return if (is_packed) PackedOptional(
+            @typeInfo(c.type).optional.child,
+            std.math.IntFittingRange(c.min_value, c.max_value + 1),
+        ) else c.type,
         .basic => return c.type,
     }
 }
@@ -656,24 +659,18 @@ pub fn SliceMap(comptime T: type, comptime V: type) type {
     }, std.hash_map.default_max_load_percentage);
 }
 
-pub fn PackedOptional(comptime c: config.Field) type {
-    if (c.min_value == 0 and c.max_value == 0) {
-        @compileError("PackedOptional with min_value = 0 and max_value = 0. Set to minInt(isize), maxInt(isize) - 1 and run again to get actual values");
-    }
-
+pub fn PackedOptional(comptime T: type, comptime DataInt: type) type {
     return packed struct {
-        data: Int,
+        data: DataInt,
 
         const Self = @This();
-        pub const Tracking = OptionalTracking(c.type);
-        const T = @typeInfo(c.type).optional.child;
-        const Int = std.math.IntFittingRange(c.min_value, c.max_value + 1);
-        const null_data = std.math.maxInt(Int);
+        pub const Tracking = OptionalTracking(?T);
+        const null_data = std.math.maxInt(DataInt);
         pub const @"null" = Self{ .data = null_data };
 
         pub fn init(opt: ?T) Self {
             if (opt) |value| {
-                const d: Int = switch (@typeInfo(T)) {
+                const d: DataInt = switch (@typeInfo(T)) {
                     .int => value,
                     .@"enum" => @intFromEnum(value),
                     .bool => @intFromBool(value),

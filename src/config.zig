@@ -227,6 +227,11 @@ pub const Field = struct {
                     }
                 }
             },
+            .optional => {
+                if (self.min_value == 0 and self.max_value == 0) {
+                    @compileError("PackedOptional field '" ++ self.name ++ "' with min_value = 0 and max_value = 0. Set to minInt(isize), maxInt(isize) - 1 and run again to get actual values");
+                }
+            },
             else => {},
         }
     }
