@@ -132,10 +132,10 @@ pub fn build(b: *std.Build) void {
     );
 
     // b.addModule with an existing module
-    _ = b.modules.put(b.dupe("uucode"), mod.lib) catch @panic("OOM");
-    _ = b.modules.put(b.dupe("uucode_build_config"), mod.build_config) catch @panic("OOM");
+    _ = b.modules.put(b.allocator, b.dupe("uucode"), mod.lib) catch @panic("OOM");
+    _ = b.modules.put(b.allocator, b.dupe("uucode_build_config"), mod.build_config) catch @panic("OOM");
     if (mod.gen_build_config) |btc| {
-        _ = b.modules.put(b.dupe("uucode_gen_build_config"), btc) catch @panic("OOM");
+        _ = b.modules.put(b.allocator, b.dupe("uucode_gen_build_config"), btc) catch @panic("OOM");
     }
     b.addNamedLazyPath("tables.zig", mod.tables_path);
 
