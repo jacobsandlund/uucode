@@ -267,12 +267,14 @@ const Foo = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
+        _ = io;
         _ = backing;
         _ = tracking;
 
@@ -300,12 +302,14 @@ const EmojiOddOrEvenComponent = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
+        _ = io;
         _ = backing;
         _ = tracking;
 
@@ -329,11 +333,13 @@ const Info = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
+        _ = io;
         for (0..config.num_code_points) |i| {
             const cp: u21 = @intCast(i);
             const input = inputs.get(i);
@@ -378,12 +384,14 @@ const OptEmojiOddOrEven = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
+        _ = io;
         _ = backing;
 
         rows.len = config.num_code_points;
@@ -411,12 +419,14 @@ const NextOrPrevComponent = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
+        _ = io;
         _ = inputs;
         _ = backing;
 
@@ -443,12 +453,14 @@ const NextOrPrevDirect = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
+        _ = io;
         _ = backing;
         _ = tracking;
 
@@ -467,12 +479,14 @@ const BidiPairedBracketDirect = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
+        _ = io;
         _ = backing;
         _ = tracking;
 
@@ -491,12 +505,14 @@ const MaybeBit = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
+        _ = io;
         _ = inputs;
         _ = backing;
 
@@ -518,11 +534,13 @@ const CanonicalDecomposition = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
+        _ = io;
         rows.len = config.num_code_points;
         const items = rows.items(.canonical_decomposition_mapping);
         for (0..config.num_code_points) |i| {

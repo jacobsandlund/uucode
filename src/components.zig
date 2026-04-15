@@ -209,6 +209,14 @@ test "parseRange" {
     try std.testing.expectEqual(0x1F601, single.end);
 }
 
+fn readFile(allocator: std.mem.Allocator, io: std.Io, file_path: []const u8) ![]u8 {
+    const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
+    defer file.close(io);
+    var buf: [2048]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    return try file_reader.interface.allocRemaining(allocator, .unlimited);
+}
+
 pub fn trim(line: []const u8) []const u8 {
     if (std.mem.indexOf(u8, line, "#")) |idx| {
         return std.mem.trim(u8, line[0..idx], " \t\r");
@@ -221,6 +229,7 @@ const UnicodeData = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -259,9 +268,7 @@ const UnicodeData = struct {
         // definitive. However, for default values of properties, the extracted
         // data files are definitive.
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 10);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -518,6 +525,7 @@ const CaseFolding = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -540,9 +548,7 @@ const CaseFolding = struct {
 
         const file_path = "ucd/CaseFolding.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -607,6 +613,7 @@ const SpecialCasing = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -633,9 +640,7 @@ const SpecialCasing = struct {
 
         const file_path = "ucd/SpecialCasing.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -737,6 +742,7 @@ const DerivedCoreProperties = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -776,9 +782,7 @@ const DerivedCoreProperties = struct {
 
         const file_path = "ucd/DerivedCoreProperties.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -881,6 +885,7 @@ const DerivedBidiClass = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -896,9 +901,7 @@ const DerivedBidiClass = struct {
 
         const file_path = "ucd/extracted/DerivedBidiClass.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -970,6 +973,7 @@ const EastAsianWidth = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -985,9 +989,7 @@ const EastAsianWidth = struct {
 
         const file_path = "ucd/extracted/DerivedEastAsianWidth.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1059,6 +1061,7 @@ const GraphemeBreak = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -1074,9 +1077,7 @@ const GraphemeBreak = struct {
 
         const file_path = "ucd/auxiliary/GraphemeBreakProperty.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1120,6 +1121,7 @@ const EmojiData = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -1145,9 +1147,7 @@ const EmojiData = struct {
 
         const file_path = "ucd/emoji/emoji-data.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1204,6 +1204,7 @@ const EmojiVs = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -1215,9 +1216,7 @@ const EmojiVs = struct {
 
         const file_path = "ucd/emoji/emoji-variation-sequences.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         rows.len = config.num_code_points;
@@ -1249,6 +1248,7 @@ const BidiPairedBracket = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -1263,9 +1263,7 @@ const BidiPairedBracket = struct {
 
         const file_path = "ucd/BidiBrackets.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1297,6 +1295,7 @@ const BidiMirroring = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -1311,9 +1310,7 @@ const BidiMirroring = struct {
 
         const file_path = "ucd/BidiMirroring.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1338,6 +1335,7 @@ const Blocks = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -1353,9 +1351,7 @@ const Blocks = struct {
 
         const file_path = "ucd/Blocks.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1739,6 +1735,7 @@ const Scripts = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -1754,9 +1751,7 @@ const Scripts = struct {
 
         const file_path = "ucd/Scripts.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1967,6 +1962,7 @@ const JoiningType = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -1982,9 +1978,7 @@ const JoiningType = struct {
 
         const file_path = "ucd/extracted/DerivedJoiningType.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -2026,6 +2020,7 @@ const JoiningGroup = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -2041,9 +2036,7 @@ const JoiningGroup = struct {
 
         const file_path = "ucd/extracted/DerivedJoiningGroup.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -2186,6 +2179,7 @@ const CompositionExclusions = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -2201,9 +2195,7 @@ const CompositionExclusions = struct {
 
         const file_path = "ucd/CompositionExclusions.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -2226,6 +2218,7 @@ const IndicPositionalCategory = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -2241,9 +2234,7 @@ const IndicPositionalCategory = struct {
 
         const file_path = "ucd/IndicPositionalCategory.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -2296,6 +2287,7 @@ const IndicSyllabicCategory = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
@@ -2311,9 +2303,7 @@ const IndicSyllabicCategory = struct {
 
         const file_path = "ucd/IndicSyllabicCategory.txt";
 
-        const file = try std.fs.cwd().openFile(file_path, .{});
-        defer file.close();
-        const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+        const content = try readFile(allocator, io, file_path);
         defer allocator.free(content);
 
         var lines = std.mem.splitScalar(u8, content, '\n');
@@ -2387,12 +2377,14 @@ const CaseFoldingSimple = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
+        _ = io;
         _ = backing;
 
         rows.len = config.num_code_points;
@@ -2415,11 +2407,13 @@ const CaseFoldingFull = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
+        _ = io;
         rows.len = config.num_code_points;
         const items = rows.items(.case_folding_full);
         for (0..config.num_code_points) |i| {
@@ -2446,11 +2440,13 @@ const LowercaseMapping = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
+        _ = io;
         rows.len = config.num_code_points;
         const items = rows.items(.lowercase_mapping);
         for (0..config.num_code_points) |i| {
@@ -2476,11 +2472,13 @@ const TitlecaseMapping = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
+        _ = io;
         rows.len = config.num_code_points;
         const items = rows.items(.titlecase_mapping);
         for (0..config.num_code_points) |i| {
@@ -2506,11 +2504,13 @@ const UppercaseMapping = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
+        _ = io;
         rows.len = config.num_code_points;
         const items = rows.items(.uppercase_mapping);
         for (0..config.num_code_points) |i| {
@@ -2536,12 +2536,14 @@ const GraphemeBreakDerived = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
+        _ = io;
         _ = backing;
         _ = tracking;
 
@@ -2618,12 +2620,14 @@ const GraphemeBreakNoControlComponent = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
+        _ = io;
         _ = backing;
         _ = tracking;
 
@@ -2647,12 +2651,14 @@ const Wcwidth = struct {
         comptime InputRow: type,
         comptime Row: type,
         allocator: std.mem.Allocator,
+        io: std.Io,
         inputs: config.MultiSlice(InputRow),
         rows: *config.MultiSlice(Row),
         backing: anytype,
         tracking: anytype,
     ) !void {
         _ = allocator;
+        _ = io;
         _ = backing;
         _ = tracking;
 

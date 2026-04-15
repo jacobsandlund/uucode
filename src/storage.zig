@@ -73,27 +73,27 @@ pub fn Row(
     comptime table_packing: config.Table.Packing,
 ) type {
     @setEvalBranchQuota(50_000);
-    var row_fields: [fields.len]std.builtin.Type.StructField = undefined;
+    var field_names: [fields.len][]const u8 = undefined;
+    var field_types: [fields.len]type = undefined;
+    var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
 
     for (fields, fields_is_packed, 0..) |field, is_field_packed, i| {
         const F = Field(field, is_field_packed or table_packing == .@"packed");
-        row_fields[i] = .{
-            .name = field.name,
-            .type = F,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = if (table_packing == .@"packed") 0 else @alignOf(F),
+        field_names[i] = field.name;
+        field_types[i] = F;
+        field_attrs[i] = .{
+            .@"comptime" = false,
+            .@"align" = if (table_packing == .@"packed") null else @alignOf(F),
         };
     }
 
-    return @Type(.{
-        .@"struct" = .{
-            .layout = if (table_packing == .@"packed") .@"packed" else .auto,
-            .fields = &row_fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(
+        if (table_packing == .@"packed") .@"packed" else .auto,
+        null,
+        &field_names,
+        &field_types,
+        &field_attrs,
+    );
 }
 
 pub fn DeclStruct(
@@ -102,7 +102,9 @@ pub fn DeclStruct(
     comptime decl: []const u8,
 ) type {
     @setEvalBranchQuota(fields.len * 100 + 1000);
-    var struct_fields: [fields.len]std.builtin.Type.StructField = undefined;
+    var field_names: [fields.len][]const u8 = undefined;
+    var field_types: [fields.len]type = undefined;
+    var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
     var i: usize = 0;
 
     for (fields, fields_is_packed) |field, is_field_packed| {
@@ -111,12 +113,11 @@ pub fn DeclStruct(
             .@"struct", .@"union", .@"enum", .@"opaque" => {
                 if (@hasDecl(F, decl)) {
                     const DeclType = @field(F, decl);
-                    struct_fields[i] = .{
-                        .name = field.name,
-                        .type = DeclType,
-                        .default_value_ptr = null,
-                        .is_comptime = false,
-                        .alignment = @alignOf(DeclType),
+                    field_names[i] = field.name;
+                    field_types[i] = DeclType;
+                    field_attrs[i] = .{
+                        .@"comptime" = false,
+                        .@"align" = @alignOf(DeclType),
                     };
                     i += 1;
                 }
@@ -125,14 +126,13 @@ pub fn DeclStruct(
         }
     }
 
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = struct_fields[0..i],
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(
+        .auto,
+        null,
+        field_names[0..i],
+        field_types[0..i],
+        field_attrs[0..i],
+    );
 }
 
 pub fn writeField(comptime F: type, writer: *std.Io.Writer, field: F) !void {
@@ -375,7 +375,6 @@ pub fn Slice(
         else
             void{};
 
-
         pub fn autoHash(self: Self, hasher: anytype) void {
             std.hash.autoHash(hasher, self.len);
             if ((comptime is_shift) and self.len == 1) {
@@ -460,7 +459,7 @@ fn basicTrackingOkay(tracking: anytype, comptime field: config.Field) !bool {
         if (!config.field(config.fields, field.name).runtime().eql(min_config)) {
             std.debug.print("\nUnequal!\n", .{});
             var buffer: [4096]u8 = undefined;
-            var stderr_writer = std.fs.File.stderr().writer(&buffer);
+            var stderr_writer = std.Io.File.stderr().writer(&buffer);
             var w = &stderr_writer.interface;
             try w.writeAll(
                 \\
@@ -873,7 +872,9 @@ pub fn Union(comptime T: type, comptime _ShiftInt: type, comptime is_packed: boo
     else
         void;
 
-    var fields: [info.fields.len]std.builtin.Type.UnionField = undefined;
+    var field_names: [info.fields.len][]const u8 = undefined;
+    var field_types: [info.fields.len]type = undefined;
+    var field_attrs: [info.fields.len]std.builtin.Type.UnionField.Attributes = undefined;
     for (info.fields, 0..) |f, i| {
         const FieldType = if (is_shift and f.type == u21)
             ShiftMember
@@ -881,21 +882,20 @@ pub fn Union(comptime T: type, comptime _ShiftInt: type, comptime is_packed: boo
             ShiftMember
         else
             f.type;
-        fields[i] = .{
-            .name = f.name,
-            .type = FieldType,
-            .alignment = if (is_packed) 0 else @alignOf(FieldType),
+        field_names[i] = f.name;
+        field_types[i] = FieldType;
+        field_attrs[i] = .{
+            .@"align" = if (is_packed) null else @alignOf(FieldType),
         };
     }
 
-    const InnerUnion = @Type(.{
-        .@"union" = .{
-            .layout = if (is_packed) .@"packed" else .auto,
-            .tag_type = if (is_packed) null else Tag,
-            .fields = &fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-        },
-    });
+    const InnerUnion = @Union(
+        if (is_packed) .@"packed" else .auto,
+        if (is_packed) null else Tag,
+        &field_names,
+        &field_types,
+        &field_attrs,
+    );
 
     return if (is_packed) packed struct {
         tag: Int,

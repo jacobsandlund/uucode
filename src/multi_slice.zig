@@ -5,6 +5,7 @@ const inlineAssert = @import("config.zig").quirks.inlineAssert;
 /// `subset` extraction, handles 0-field structs, and avoids branch quota
 /// issues with large structs.
 pub fn MultiSlice(comptime T: type) type {
+    @setEvalBranchQuota(50_000);
     const fields = std.meta.fields(T);
 
     return struct {
@@ -17,6 +18,7 @@ pub fn MultiSlice(comptime T: type) type {
         pub const Field = std.meta.FieldEnum(T);
 
         pub fn FieldType(comptime field: Field) type {
+            @setEvalBranchQuota(50_000);
             return std.meta.fieldInfo(T, field).type;
         }
 
@@ -115,7 +117,10 @@ pub fn MultiSlice(comptime T: type) type {
         const alignment: std.mem.Alignment = blk: {
             var max_align: usize = 1;
             for (fields) |field_info| {
-                const a: usize = if (@sizeOf(field_info.type) == 0) 1 else field_info.alignment;
+                const a: usize = if (@sizeOf(field_info.type) == 0)
+                    1
+                else
+                    field_info.alignment orelse @alignOf(field_info.type);
                 if (a > max_align) max_align = a;
             }
             break :blk @enumFromInt(std.math.log2(max_align));
@@ -138,8 +143,14 @@ pub fn MultiSlice(comptime T: type) type {
             for (0..fields.len) |i| {
                 var best = i;
                 for (i + 1..fields.len) |j| {
-                    const best_align = if (@sizeOf(fields[order[best]].type) == 0) 1 else fields[order[best]].alignment;
-                    const j_align = if (@sizeOf(fields[order[j]].type) == 0) 1 else fields[order[j]].alignment;
+                    const best_align = if (@sizeOf(fields[order[best]].type) == 0)
+                        1
+                    else
+                        fields[order[best]].alignment orelse @alignOf(fields[order[best]].type);
+                    const j_align = if (@sizeOf(fields[order[j]].type) == 0)
+                        1
+                    else
+                        fields[order[j]].alignment orelse @alignOf(fields[order[j]].type);
                     if (j_align > best_align) best = j;
                 }
                 const tmp = order[i];

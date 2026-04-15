@@ -202,14 +202,19 @@ const AllRow = config.Row(fields, fields_is_packed, row_fields);
 const AllRowSlice = config.MultiSlice(AllRow);
 const Backing = config.Backing(fields, fields_is_packed, row_fields_and_backing);
 
-pub fn main() !void {
-    const total_start = try std.time.Instant.now();
-
+pub fn main(init: std.process.Init.Minimal) !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var args_iter = try std.process.argsWithAllocator(allocator);
+    var threaded = std.Io.Threaded.init(allocator, .{ .environ = init.environ });
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const total_start = std.Io.Clock.awake.now(io);
+
+    var args_iter = try init.args.iterateAllocator(allocator);
+    defer args_iter.deinit();
     _ = args_iter.skip(); // Skip program name
 
     const output_path = args_iter.next() orelse std.debug.panic("No output file arg!", .{});
@@ -293,6 +298,7 @@ pub fn main() !void {
             InputRow,
             ComponentRow,
             allocator,
+            io,
             inputs,
             &builds,
             &backing_subset,
@@ -314,17 +320,17 @@ pub fn main() !void {
 
     slice.len = config.num_code_points;
 
-    const build_components_end = try std.time.Instant.now();
-    std.log.debug("build_components.build time: {d}ms", .{build_components_end.since(total_start) / std.time.ns_per_ms});
+    const build_components_end = std.Io.Clock.awake.now(io);
+    std.log.debug("build_components.build time: {d}ms", .{total_start.durationTo(build_components_end).toMilliseconds()});
 
     if (!all_okay) {
         @panic("Tracking returned !okay. See above for details");
     }
 
-    var out_file = try std.fs.cwd().createFile(output_path, .{});
-    defer out_file.close();
+    var out_file = try std.Io.Dir.cwd().createFile(io, output_path, .{});
+    defer out_file.close(io);
     var out_buffer: [4096]u8 = undefined;
-    var file_writer = out_file.writer(&out_buffer);
+    var file_writer = out_file.writer(io, &out_buffer);
     var writer = &file_writer.interface;
 
     try writer.writeAll(
@@ -439,7 +445,7 @@ pub fn main() !void {
     );
 
     inline for (tables, 0..) |table, i| {
-        const start = try std.time.Instant.now();
+        const start = std.Io.Clock.awake.now(io);
 
         try writeTableRows(
             table,
@@ -449,8 +455,8 @@ pub fn main() !void {
             slice,
         );
 
-        const end = try std.time.Instant.now();
-        std.log.debug("`writeTableRows` for table {d} time: {d}ms", .{ i, end.since(start) / std.time.ns_per_ms });
+        const end = std.Io.Clock.awake.now(io);
+        std.log.debug("`writeTableRows` for table {d} time: {d}ms", .{ i, start.durationTo(end).toMilliseconds() });
     }
 
     try writer.writeAll(
@@ -510,8 +516,8 @@ pub fn main() !void {
 
     std.log.debug("Arena end capacity: {d}", .{arena.queryCapacity()});
 
-    const total_end = try std.time.Instant.now();
-    std.log.debug("Total time: {d}ms", .{total_end.since(total_start) / std.time.ns_per_ms});
+    const total_end = std.Io.Clock.awake.now(io);
+    std.log.debug("Total time: {d}ms", .{total_start.durationTo(total_end).toMilliseconds()});
 
     if (config.is_updating_ucd) {
         @panic("Updating Ucd -- tables not configured to actully run. flip `is_updating_ucd` to false and run again");

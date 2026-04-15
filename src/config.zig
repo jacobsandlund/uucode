@@ -127,7 +127,7 @@ pub const Field = struct {
             return is_okay;
         }
 
-        pub fn write(self: Runtime, writer: *std.io.Writer) !void {
+        pub fn write(self: Runtime, writer: *std.Io.Writer) !void {
             try writer.print(
                 \\.{{
                 \\    .name = "{s}",
@@ -345,6 +345,7 @@ pub const Component = struct {
     //     comptime InputRow: type,
     //     comptime Row: type,
     //     allocator: std.mem.Allocator,
+    //     io: std.Io,
     //     inputs: config.MultiSlice(InputRow),
     //     rows: *config.MultiSlice(Row),
     //     backing: anytype, // Backing,
@@ -370,7 +371,7 @@ pub const Component = struct {
     // other components (usually in "get" components).
     backing_only_fields: []const [:0]const u8 = &[_][:0]const u8{},
 
-    pub const Error = std.mem.Allocator.Error || std.fs.File.OpenError;
+    pub const Error = std.mem.Allocator.Error || std.Io.Dir.OpenError;
 
     fn coveredBy(comptime a: Component, comptime b: Component) bool {
         if (a.backing_only_fields.len != b.backing_only_fields.len) return false;
@@ -776,7 +777,7 @@ pub inline fn initBuiltField(
     value: anytype,
 ) @FieldType(R, name) {
     const F = @FieldType(R, name);
-    if (@TypeOf(value) == @Type(.enum_literal)) {
+    if (@typeInfo(@TypeOf(value)) == .enum_literal) {
         return @field(F, @tagName(value));
     } else {
         return value;
