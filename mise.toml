@@ -1,3 +1,3 @@
 [tools]
-zig = "master"
+zig = "0.16.0"
 hyperfine = "1.19.0"
