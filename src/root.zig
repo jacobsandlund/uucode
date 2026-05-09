@@ -145,6 +145,30 @@ test "bidi_mirroring" {
     try testing.expectEqual(null, get(.bidi_mirroring, 0x0041)); // 'A'
 }
 
+test "bidi_mirroring_glyph" {
+    const cases = [_]struct { from: u21, to: u21 }{
+        .{ .from = 0x0028, .to = 0x0029 }, // LEFT PARENTHESIS
+        .{ .from = 0x0029, .to = 0x0028 }, // RIGHT PARENTHESIS
+        .{ .from = 0x005B, .to = 0x005D }, // LEFT SQUARE BRACKET
+        .{ .from = 0x005D, .to = 0x005B }, // RIGHT SQUARE BRACKET
+        .{ .from = 0x007B, .to = 0x007D }, // LEFT CURLY BRACKET
+        .{ .from = 0x007D, .to = 0x007B }, // RIGHT CURLY BRACKET
+        .{ .from = 0x003C, .to = 0x003E }, // LESS-THAN SIGN
+        .{ .from = 0x003E, .to = 0x003C }, // GREATER-THAN SIGN
+        .{ .from = 0x2215, .to = 0x29F5 }, // DIVISION SLASH
+        .{ .from = 0x29F5, .to = 0x2215 }, // REVERSE SOLIDUS OPERATOR
+        .{ .from = 0x2208, .to = 0x220B }, // ELEMENT OF
+        .{ .from = 0x220B, .to = 0x2208 }, // CONTAINS AS MEMBER
+    };
+
+    for (cases) |case| {
+        try testing.expectEqual(case.to, get(.bidi_mirroring_glyph, case.from));
+    }
+
+    try testing.expectEqual(null, get(.bidi_mirroring_glyph, 0xFD3E));
+    try testing.expectEqual(null, get(.bidi_mirroring_glyph, 0x0041)); // 'A'
+}
+
 test "block" {
     try testing.expectEqual(.basic_latin, get(.block, 0x0041)); // 'A'
     try testing.expectEqual(.greek_and_coptic, get(.block, 0x03B1)); // α

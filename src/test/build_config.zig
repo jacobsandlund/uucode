@@ -215,6 +215,7 @@ pub const tables: []const config.Table = &.{
             "indic_positional_category",
             "indic_syllabic_category",
             "bidi_mirroring",
+            "bidi_mirroring_glyph",
         },
     },
     .{

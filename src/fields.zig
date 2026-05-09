@@ -300,6 +300,13 @@ pub const fields: []const config.Field = &.{
         .shift_low = -2527,
         .shift_high = 2527,
     },
+    .{
+        .name = "bidi_mirroring_glyph",
+        .type = ?u21,
+        .cp_packing = .shift,
+        .shift_low = -2527,
+        .shift_high = 2527,
+    },
 
     // Block
     .{ .name = "block", .type = types.Block },
