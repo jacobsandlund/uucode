@@ -92,7 +92,7 @@ pub const build_components: []const config.Component = &.{
     },
     .{ .Impl = EmojiVs, .fields = &.{"is_emoji_vs_base"} },
     .{ .Impl = BidiPairedBracket, .fields = &.{"bidi_paired_bracket"} },
-    .{ .Impl = BidiMirroring, .fields = &.{"bidi_mirroring"} },
+    .{ .Impl = BidiMirroring, .fields = &.{ "bidi_mirroring", "bidi_mirroring_glyph" } },
     .{ .Impl = Blocks, .fields = &.{"block"} },
     .{ .Impl = Scripts, .fields = &.{"script"} },
     .{ .Impl = JoiningType, .fields = &.{"joining_type"} },
@@ -1293,6 +1293,8 @@ const BidiPairedBracket = struct {
 };
 
 const BidiMirroring = struct {
+    const fields = .{ "bidi_mirroring", "bidi_mirroring_glyph" };
+
     pub fn build(
         comptime InputRow: type,
         comptime Row: type,
@@ -1306,8 +1308,12 @@ const BidiMirroring = struct {
         _ = backing;
 
         rows.len = config.num_code_points;
-        const items = rows.items(.bidi_mirroring);
-        @memset(items, initField(Row, "bidi_mirroring", 0, null, tracking));
+        inline for (fields) |field| {
+            if (@hasField(Row, field)) {
+                const items = rows.items(@field(config.MultiSlice(Row).Field, field));
+                @memset(items, initField(Row, field, 0, null, tracking));
+            }
+        }
 
         const file_path = "ucd/BidiMirroring.txt";
 
@@ -1328,7 +1334,12 @@ const BidiMirroring = struct {
             const cp = try parseCp(cp_str);
             const paired = try parseCp(paired_cp_str);
 
-            items[cp] = initField(Row, "bidi_mirroring", cp, paired, tracking);
+            inline for (fields) |field| {
+                if (@hasField(Row, field)) {
+                    const items = rows.items(@field(config.MultiSlice(Row).Field, field));
+                    items[cp] = initField(Row, field, cp, paired, tracking);
+                }
+            }
         }
     }
 };
