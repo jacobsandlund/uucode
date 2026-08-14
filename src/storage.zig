@@ -6,7 +6,7 @@ const Allocator = std.mem.Allocator;
 
 pub fn RoundedInt(comptime signedness: std.builtin.Signedness, comptime bit_count: u16) type {
     const rounded_bits = std.mem.alignForward(u16, if (bit_count == 0) 1 else bit_count, 8);
-    return std.meta.Int(signedness, rounded_bits);
+    return @Int(signedness, rounded_bits);
 }
 
 pub fn RoundedIntFitting(comptime from: comptime_int, comptime to: comptime_int) type {
@@ -75,7 +75,7 @@ pub fn Row(
     @setEvalBranchQuota(50_000);
     var field_names: [fields.len][]const u8 = undefined;
     var field_types: [fields.len]type = undefined;
-    var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
+    var field_attrs: [fields.len]std.builtin.Type.Struct.FieldAttributes = undefined;
 
     for (fields, fields_is_packed, 0..) |field, is_field_packed, i| {
         const F = Field(field, is_field_packed or table_packing == .@"packed");
@@ -104,7 +104,7 @@ pub fn DeclStruct(
     @setEvalBranchQuota(fields.len * 100 + 1000);
     var field_names: [fields.len][]const u8 = undefined;
     var field_types: [fields.len]type = undefined;
-    var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
+    var field_attrs: [fields.len]std.builtin.Type.Struct.FieldAttributes = undefined;
     var i: usize = 0;
 
     for (fields, fields_is_packed) |field, is_field_packed| {
@@ -225,7 +225,7 @@ pub fn Slice(
                 .len = 0,
                 .data = .{
                     .embedded = @splat(switch (@typeInfo(T)) {
-                        .@"enum" => @enumFromInt(0),
+                        .@"enum" => @fromBackingInt(@intCast(0)),
                         else => 0,
                     }),
                 },
@@ -233,7 +233,7 @@ pub fn Slice(
         pub const same = if (is_shift) Self{
             .data = .{ .shift = .same },
             .len = 1,
-        } else void{};
+        } else {};
 
         inline fn initInner(
             allocator: Allocator,
@@ -279,7 +279,7 @@ pub fn Slice(
                         @memset(embedded[s.len..], 0);
                     },
                     .@"enum" => {
-                        @memset(embedded[s.len..], @enumFromInt(0));
+                        @memset(embedded[s.len..], @fromBackingInt(@intCast(0)));
                     },
                     else => {
                         @memset(embedded[s.len..], 0);
@@ -351,10 +351,7 @@ pub fn Slice(
             }
         }
 
-        pub const value = if (is_shift)
-            void{}
-        else
-            _value;
+        pub const value = if (is_shift) {} else _value;
 
         fn _valueWith(
             self: *const Self,
@@ -372,8 +369,7 @@ pub fn Slice(
 
         pub const valueWith = if (T == u21)
             _valueWith
-        else
-            void{};
+        else {};
 
         pub fn autoHash(self: Self, hasher: anytype) void {
             std.hash.autoHash(hasher, self.len);
@@ -671,7 +667,7 @@ pub fn PackedOptional(comptime T: type, comptime DataInt: type) type {
             if (opt) |value| {
                 const d: DataInt = switch (@typeInfo(T)) {
                     .int => value,
-                    .@"enum" => @intFromEnum(value),
+                    .@"enum" => @backingInt(value),
                     .bool => @intFromBool(value),
                     else => unreachable,
                 };
@@ -688,7 +684,7 @@ pub fn PackedOptional(comptime T: type, comptime DataInt: type) type {
             } else {
                 return switch (@typeInfo(T)) {
                     .int => @intCast(self.data),
-                    .@"enum" => @enumFromInt(self.data),
+                    .@"enum" => @fromBackingInt(@intCast(self.data)),
                     .bool => self.data == 1,
                     else => unreachable,
                 };
@@ -714,7 +710,7 @@ pub fn OptionalTracking(comptime Optional: type) type {
             if (opt) |value| {
                 const d: isize = switch (@typeInfo(T)) {
                     .int => value,
-                    .@"enum" => @intFromEnum(value),
+                    .@"enum" => @backingInt(value),
                     .bool => @intFromBool(value),
                     else => unreachable,
                 };
@@ -865,24 +861,24 @@ pub fn Union(comptime T: type, comptime _ShiftInt: type, comptime is_packed: boo
     const info = @typeInfo(T).@"union";
     const Tag = info.tag_type.?;
     const Int = @typeInfo(Tag).@"enum".tag_type;
-    inlineAssert(Int == std.meta.Int(.unsigned, @bitSizeOf(Tag)));
+    inlineAssert(Int == @Int(.unsigned, @bitSizeOf(Tag)));
 
     const ShiftMember = if (is_shift)
         Shift(_ShiftInt, false, is_packed)
     else
         void;
 
-    var field_names: [info.fields.len][]const u8 = undefined;
-    var field_types: [info.fields.len]type = undefined;
-    var field_attrs: [info.fields.len]std.builtin.Type.UnionField.Attributes = undefined;
-    for (info.fields, 0..) |f, i| {
-        const FieldType = if (is_shift and f.type == u21)
+    var field_names: [info.field_names.len][]const u8 = undefined;
+    var field_types: [info.field_names.len]type = undefined;
+    var field_attrs: [info.field_names.len]std.builtin.Type.Union.FieldAttributes = undefined;
+    for (info.field_names, info.field_types, 0..) |field_name, field_type, i| {
+        const FieldType = if (is_shift and field_type == u21)
             ShiftMember
-        else if (is_packed and is_shift and f.type == void)
+        else if (is_packed and is_shift and field_type == void)
             ShiftMember
         else
-            f.type;
-        field_names[i] = f.name;
+            field_type;
+        field_names[i] = field_name;
         field_types[i] = FieldType;
         field_attrs[i] = .{
             .@"align" = if (is_packed) null else @alignOf(FieldType),
@@ -905,7 +901,7 @@ pub fn Union(comptime T: type, comptime _ShiftInt: type, comptime is_packed: boo
 
         fn _init(value: T) Self {
             return .{
-                .tag = @intFromEnum(@as(Tag, value)),
+                .tag = @backingInt(@as(Tag, value)),
                 .@"union" = switch (value) {
                     inline else => |v, tag| @unionInit(InnerUnion, @tagName(tag), v),
                 },
@@ -914,7 +910,7 @@ pub fn Union(comptime T: type, comptime _ShiftInt: type, comptime is_packed: boo
 
         fn _initShift(cp: u21, value: T) Self {
             return .{
-                .tag = @intFromEnum(@as(Tag, value)),
+                .tag = @backingInt(@as(Tag, value)),
                 .@"union" = switch (value) {
                     inline else => |v, tag| if (@FieldType(T, @tagName(tag)) == u21)
                         @unionInit(InnerUnion, @tagName(tag), .init(cp, v))
@@ -927,7 +923,7 @@ pub fn Union(comptime T: type, comptime _ShiftInt: type, comptime is_packed: boo
         }
 
         fn _unpack(self: Self) T {
-            const tag: Tag = @enumFromInt(self.tag);
+            const tag: Tag = @fromBackingInt(@intCast(self.tag));
             return switch (tag) {
                 inline else => |comptime_tag| @unionInit(
                     T,
@@ -938,7 +934,7 @@ pub fn Union(comptime T: type, comptime _ShiftInt: type, comptime is_packed: boo
         }
 
         fn _unshift(self: Self, cp: u21) T {
-            const tag: Tag = @enumFromInt(self.tag);
+            const tag: Tag = @fromBackingInt(@intCast(self.tag));
             return switch (tag) {
                 inline else => |comptime_tag| if (@FieldType(T, @tagName(comptime_tag)) == u21)
                     @unionInit(
@@ -963,11 +959,11 @@ pub fn Union(comptime T: type, comptime _ShiftInt: type, comptime is_packed: boo
 
         pub const Tracking = if (is_shift) UnionShiftTracking else void;
         pub const init = if (is_shift) _initShift else _init;
-        pub const unpack = if (is_shift) void{} else _unpack;
-        pub const unshift = if (is_shift) _unshift else void{};
+        pub const unpack = if (is_shift) {} else _unpack;
+        pub const unshift = if (is_shift) _unshift else {};
 
         pub fn autoHash(self: Self, hasher: anytype) void {
-            const tag: Tag = @enumFromInt(self.tag);
+            const tag: Tag = @fromBackingInt(@intCast(self.tag));
             std.hash.autoHash(hasher, tag);
             switch (tag) {
                 inline else => |comptime_tag| {
@@ -983,7 +979,7 @@ pub fn Union(comptime T: type, comptime _ShiftInt: type, comptime is_packed: boo
             if (a.tag != b.tag) {
                 return false;
             }
-            const tag: Tag = @enumFromInt(a.tag);
+            const tag: Tag = @fromBackingInt(@intCast(a.tag));
             switch (tag) {
                 inline else => |comptime_tag| {
                     const a_v = @field(a.@"union", @tagName(comptime_tag));

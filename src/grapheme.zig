@@ -535,23 +535,23 @@ pub fn GraphemeBreakTable(comptime GB: type, comptime State: type) type {
         result: bool,
         state: State,
     };
-    const gb_fields = @typeInfo(GB).@"enum".fields;
-    const state_fields = @typeInfo(State).@"enum".fields;
-    const n_gb = gb_fields.len;
+    const gb_values = @typeInfo(GB).@"enum".field_values;
+    const state_values = @typeInfo(State).@"enum".field_values;
+    const n_gb = gb_values.len;
     const n_gb_2 = n_gb * n_gb;
-    const n_state = state_fields.len;
+    const n_state = state_values.len;
     const n = n_state * n_gb_2;
 
     // Assert that these are simple enums (this isn't a full assertion, but
     // likely good enough.)
-    inlineAssert(gb_fields[gb_fields.len - 1].value == n_gb - 1);
-    inlineAssert(state_fields[state_fields.len - 1].value == n_state - 1);
+    inlineAssert(gb_values[gb_values.len - 1] == n_gb - 1);
+    inlineAssert(state_values[state_values.len - 1] == n_state - 1);
 
     return struct {
         data: [n]Result,
 
         inline fn index(gb1: GB, gb2: GB, state: State) usize {
-            return @intFromEnum(state) * n_gb_2 + @intFromEnum(gb1) * n_gb + @intFromEnum(gb2);
+            return @backingInt(state) * n_gb_2 + @backingInt(gb1) * n_gb + @backingInt(gb2);
         }
 
         pub fn set(self: *@This(), gb1: GB, gb2: GB, state: State, result: Result) void {
@@ -572,15 +572,15 @@ pub fn buildGraphemeBreakTable(
     @setEvalBranchQuota(20_000);
     var table: GraphemeBreakTable(GB, State) = undefined;
 
-    const gb_fields = @typeInfo(GB).@"enum".fields;
-    const state_fields = @typeInfo(State).@"enum".fields;
+    const gb_values = @typeInfo(GB).@"enum".field_values;
+    const state_values = @typeInfo(State).@"enum".field_values;
 
-    for (state_fields) |state_field| {
-        for (gb_fields) |gb1_field| {
-            for (gb_fields) |gb2_field| {
-                const original_state: State = @enumFromInt(state_field.value);
-                const gb1: GB = @enumFromInt(gb1_field.value);
-                const gb2: GB = @enumFromInt(gb2_field.value);
+    for (state_values) |state_value| {
+        for (gb_values) |gb1_value| {
+            for (gb_values) |gb2_value| {
+                const original_state: State = @fromBackingInt(@intCast(state_value));
+                const gb1: GB = @fromBackingInt(@intCast(gb1_value));
+                const gb2: GB = @fromBackingInt(@intCast(gb2_value));
                 var state = original_state;
                 const result = compute(gb1, gb2, &state);
                 table.set(gb1, gb2, original_state, .{
