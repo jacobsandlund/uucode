@@ -1,5 +1,10 @@
 const std = @import("std");
 
+// Zig's x86 backend is segfaulting when compiling the generated tables, so we
+// choose the LLVM backend always.
+// See https://github.com/jacobsandlund/uucode/issues/22
+const use_llvm = true;
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -154,11 +159,13 @@ pub fn build(b: *std.Build) void {
     const src_tests = b.addTest(.{
         .root_module = test_mod.lib,
         .filters = test_filters,
+        .use_llvm = use_llvm,
     });
 
     const generate_tests = b.addTest(.{
         .root_module = test_mod.generate.?,
         .filters = test_filters,
+        .use_llvm = use_llvm,
     });
 
     const build_tests = b.addTest(.{
@@ -168,6 +175,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
         .filters = test_filters,
+        .use_llvm = use_llvm,
     });
 
     const run_src_tests = b.addRunArtifact(src_tests);
@@ -311,9 +319,7 @@ fn generateTables(
     const gen_exe = b.addExecutable(.{
         .name = "uucode_generate",
         .root_module = gen_mod,
-
-        // Zig's x86 backend is segfaulting, so we choose the LLVM backend always.
-        .use_llvm = true,
+        .use_llvm = use_llvm,
     });
 
     gen_mod.addImport("config.zig", config_mod);
