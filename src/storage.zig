@@ -148,7 +148,7 @@ pub fn writeField(comptime F: type, writer: *std.Io.Writer, field: F) !void {
             if (std.enums.tagName(F, field)) |name| {
                 try writer.print(".{s}", .{name});
             } else {
-                try writer.print("@enumFromInt({d})", .{field});
+                try writer.print("@fromBackingInt({d})", .{field});
             }
         },
         .optional => {
