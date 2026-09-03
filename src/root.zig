@@ -286,16 +286,39 @@ test "case_folding_full" {
 test "case_folding_turkish_only" {
     // U+0049 'I' has Turkish-only case folding to U+0131 (ı)
     try testing.expectEqual(0x0131, get(.case_folding_turkish_only, 0x0049).?);
+    // U+0130 (İ) has Turkish-only case folding to U+0069 'i'
+    try testing.expectEqual(0x0069, get(.case_folding_turkish_only, 0x0130).?);
+    try testing.expectEqual(null, get(.case_folding_turkish_only, 0x0041));
 }
 
 test "case_folding_common_only" {
     // U+0041 'A' has common case folding to U+0061 'a'
     try testing.expectEqual(0x0061, get(.case_folding_common_only, 0x0041).?);
+    // U+1E9E (ẞ) only has full and simple case folding
+    try testing.expectEqual(null, get(.case_folding_common_only, 0x1E9E));
+    // U+1E921 (Adlam capital sha) to U+1E943, above the ASCII range
+    try testing.expectEqual(0x1E943, get(.case_folding_common_only, 0x1E921).?);
 }
 
 test "case_folding_simple_only" {
     // U+1E9E (ẞ) has simple-only case folding to U+00DF (ß)
     try testing.expectEqual(0x00DF, get(.case_folding_simple_only, 0x1E9E).?);
+    // U+1F88 has simple-only case folding to U+1F80
+    try testing.expectEqual(0x1F80, get(.case_folding_simple_only, 0x1F88).?);
+    try testing.expectEqual(null, get(.case_folding_simple_only, 0x0041));
+}
+
+test "case_folding _only fields in a packed table" {
+    // The `_only` fields are in the packed `case_only` table in the test
+    // config, so every code point's default row goes through
+    // `MultiSlice.memset` with packed shift structs.
+    // See https://github.com/jacobsandlund/uucode/issues/55
+    try testing.expectEqual(null, get(.case_folding_turkish_only, 0x10FFFF));
+    try testing.expectEqual(null, get(.case_folding_common_only, 0x10FFFF));
+    try testing.expectEqual(null, get(.case_folding_simple_only, 0x10FFFF));
+    try testing.expectEqual(null, get(.case_folding_turkish_only, 0x0000));
+    try testing.expectEqual(null, get(.case_folding_common_only, 0x0000));
+    try testing.expectEqual(null, get(.case_folding_simple_only, 0x0000));
 }
 
 test "case_folding_full_only" {

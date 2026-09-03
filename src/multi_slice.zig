@@ -72,15 +72,18 @@ pub fn MultiSlice(comptime T: type) type {
                 if (@sizeOf(F) == 0) {
                     // Zero-size types have nothing to set.
                 } else if (@bitSizeOf(F) != @sizeOf(F) * 8) {
-                    // Types like bool, u3, or enum(u2) have fewer bits than
-                    // their storage size, so @memset can't be called directly
-                    // on their slices. Convert to a byte-array representation
-                    // by zero-extending into a storage-sized int, then @memset
+                    // Types like bool, u3, enum(u2), or packed struct { data:
+                    // i14 } have fewer bits than their storage size, so
+                    // @memset can't be called directly on their slices.
+                    // Convert to a byte-array representation by bit-casting
+                    // to an unsigned int of the same bit width and
+                    // zero-extending into a storage-sized int, then @memset
                     // the reinterpreted byte array for the same performance as
                     // a normal @memset.
                     const StorageInt = std.meta.Int(.unsigned, @sizeOf(F) * 8);
+                    const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(F));
                     const storage: StorageInt = switch (@typeInfo(F)) {
-                        .int => @intCast(value),
+                        .int, .@"struct", .@"union" => @as(IntEquivalent, @bitCast(value)),
                         .bool => @intFromBool(value),
                         .@"enum" => @intFromEnum(value),
                         else => @compileError("memset: unsupported non-byte-aligned type '" ++ @typeName(F) ++ "'"),
@@ -288,6 +291,54 @@ test "memset small enum field" {
 
     ms.memset(.{ .a = .red, .b = 0 });
     try std.testing.expectEqual(Color.red, ms.items(.a)[0]);
+}
+
+test "memset small signed int field" {
+    const Row = struct {
+        a: i14,
+        b: u8,
+    };
+    const MS = MultiSlice(Row);
+
+    var ms = try MS.initCapacity(std.testing.allocator, 4);
+    defer std.testing.allocator.free(@as([*]u8, @ptrCast(@alignCast(ms.ptrs[MS.sorted_fields[0]])))[0..MS.capacityInBytes(4)]);
+
+    ms.len = 4;
+    ms.memset(.{ .a = -7615, .b = 7 });
+
+    for (0..4) |i| {
+        try std.testing.expectEqual(@as(i14, -7615), ms.items(.a)[i]);
+        try std.testing.expectEqual(7, ms.items(.b)[i]);
+    }
+
+    ms.memset(.{ .a = std.math.maxInt(i14), .b = 0 });
+    try std.testing.expectEqual(@as(i14, std.math.maxInt(i14)), ms.items(.a)[0]);
+}
+
+test "memset packed struct field" {
+    // Mirrors `storage.Shift` with `is_packed`, which is what packed shift
+    // fields such as `case_folding_simple_only` become in a packed table.
+    // See https://github.com/jacobsandlund/uucode/issues/55
+    const Shift = packed struct { data: i14 };
+    const Row = struct {
+        a: Shift,
+        b: u8,
+    };
+    const MS = MultiSlice(Row);
+
+    var ms = try MS.initCapacity(std.testing.allocator, 4);
+    defer std.testing.allocator.free(@as([*]u8, @ptrCast(@alignCast(ms.ptrs[MS.sorted_fields[0]])))[0..MS.capacityInBytes(4)]);
+
+    ms.len = 4;
+    ms.memset(.{ .a = .{ .data = std.math.maxInt(i14) }, .b = 7 });
+
+    for (0..4) |i| {
+        try std.testing.expectEqual(@as(i14, std.math.maxInt(i14)), ms.items(.a)[i].data);
+        try std.testing.expectEqual(7, ms.items(.b)[i]);
+    }
+
+    ms.memset(.{ .a = .{ .data = -42 }, .b = 0 });
+    try std.testing.expectEqual(@as(i14, -42), ms.items(.a)[0].data);
 }
 
 test "zero-field struct" {
