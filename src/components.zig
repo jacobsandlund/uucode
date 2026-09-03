@@ -2394,7 +2394,6 @@ const CaseFoldingSimple = struct {
             const input = inputs.get(i);
             const d = input.case_folding_simple_only.unshift(cp) orelse
                 input.case_folding_common_only.unshift(cp) orelse
-                input.case_folding_turkish_only.unshift(cp) orelse
                 cp;
 
             items[i] = initField(Row, "case_folding_simple", cp, d, tracking);
