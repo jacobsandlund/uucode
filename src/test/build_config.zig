@@ -223,9 +223,6 @@ pub const tables: []const config.Table = &.{
             "unicode_1_name",
             "has_special_casing",
             "case_folding_full",
-            "case_folding_turkish_only",
-            "case_folding_common_only",
-            "case_folding_simple_only",
             "case_folding_full_only",
             "special_titlecase_mapping",
             "special_uppercase_mapping",
@@ -235,6 +232,19 @@ pub const tables: []const config.Table = &.{
             "uppercase_mapping",
             "lowercase_mapping",
             "titlecase_mapping",
+        },
+    },
+    .{
+        // Packed shift fields in a table are represented as packed structs
+        // with non-byte-sized ints, which `MultiSlice.memset` must handle
+        // when the `CaseFolding` component fills in its default row.
+        // See https://github.com/jacobsandlund/uucode/issues/55
+        .name = "case_only",
+        .packing = .@"packed",
+        .fields = &.{
+            "case_folding_turkish_only",
+            "case_folding_common_only",
+            "case_folding_simple_only",
         },
     },
     .{

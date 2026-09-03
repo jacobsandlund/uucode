@@ -278,6 +278,54 @@ test "memset small enum field" {
     try std.testing.expectEqual(Color.red, ms.items(.a)[0]);
 }
 
+test "memset small signed int field" {
+    const Row = struct {
+        a: i14,
+        b: u8,
+    };
+    const MS = MultiSlice(Row);
+
+    var ms = try MS.initCapacity(std.testing.allocator, 4);
+    defer std.testing.allocator.free(@as([*]u8, @ptrCast(@alignCast(ms.ptrs[MS.sorted_fields[0]])))[0..MS.capacityInBytes(4)]);
+
+    ms.len = 4;
+    ms.memset(.{ .a = -7615, .b = 7 });
+
+    for (0..4) |i| {
+        try std.testing.expectEqual(@as(i14, -7615), ms.items(.a)[i]);
+        try std.testing.expectEqual(7, ms.items(.b)[i]);
+    }
+
+    ms.memset(.{ .a = std.math.maxInt(i14), .b = 0 });
+    try std.testing.expectEqual(@as(i14, std.math.maxInt(i14)), ms.items(.a)[0]);
+}
+
+test "memset packed struct field" {
+    // Mirrors `storage.Shift` with `is_packed`, which is what packed shift
+    // fields such as `case_folding_simple_only` become in a packed table.
+    // See https://github.com/jacobsandlund/uucode/issues/55
+    const Shift = packed struct { data: i14 };
+    const Row = struct {
+        a: Shift,
+        b: u8,
+    };
+    const MS = MultiSlice(Row);
+
+    var ms = try MS.initCapacity(std.testing.allocator, 4);
+    defer std.testing.allocator.free(@as([*]u8, @ptrCast(@alignCast(ms.ptrs[MS.sorted_fields[0]])))[0..MS.capacityInBytes(4)]);
+
+    ms.len = 4;
+    ms.memset(.{ .a = .{ .data = std.math.maxInt(i14) }, .b = 7 });
+
+    for (0..4) |i| {
+        try std.testing.expectEqual(@as(i14, std.math.maxInt(i14)), ms.items(.a)[i].data);
+        try std.testing.expectEqual(7, ms.items(.b)[i]);
+    }
+
+    ms.memset(.{ .a = .{ .data = -42 }, .b = 0 });
+    try std.testing.expectEqual(@as(i14, -42), ms.items(.a)[0].data);
+}
+
 test "zero-field struct" {
     const Empty = struct {};
     const MS = MultiSlice(Empty);
