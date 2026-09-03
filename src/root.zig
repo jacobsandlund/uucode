@@ -38,6 +38,15 @@ test "is_alphabetic" {
 test "case_folding_simple" {
     try testing.expectEqual(97, get(.case_folding_simple, 65)); // 'a'
     try testing.expectEqual(97, get(.case_folding_simple, 97)); // 'a'
+
+    // Simple case folding is defined by the C and S entries of CaseFolding.txt.
+    // The T (Turkic) entries must not be used: they are only valid in Turkish
+    // and Azeri locales. Historically case_folding_simple fell back to the T
+    // mapping when a code point had no C or S entry. That only ever affected
+    // U+0130 (which has only F and T entries), folding İ to 'i' instead of
+    // leaving it unchanged (see issue #54).
+    try testing.expectEqual(0x0130, get(.case_folding_simple, 0x0130)); // İ
+    try testing.expectEqual(0x0069, get(.case_folding_turkish_only, 0x0130).?); // 'i'
 }
 
 test "simple_uppercase_mapping" {
