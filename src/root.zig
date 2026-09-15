@@ -663,3 +663,41 @@ test "wcwidth_zero_in_grapheme emoji_modifier is true" {
     try testing.expect(get(.wcwidth_zero_in_grapheme, 0x1F3FB)); // 🏻 EMOJI MODIFIER FITZPATRICK TYPE-1-2
     try testing.expect(get(.wcwidth_zero_in_grapheme, 0x1F3FF)); // 🏿 EMOJI MODIFIER FITZPATRICK TYPE-6
 }
+
+test "Unicode 18 scripts and blocks" {
+    const cases = [_]struct { cp: u21, block: types.Block, script: types.Script }{
+        .{ .cp = 0x11DF0, .block = .bengali_supplement, .script = .bengali },
+        .{ .cp = 0x12550, .block = .archaic_cuneiform_numerals, .script = .cuneiform },
+        .{ .cp = 0x125A8, .block = .archaic_cuneiform_numerals, .script = .proto_cuneiform },
+        .{ .cp = 0x18E00, .block = .jurchen, .script = .jurchen },
+        .{ .cp = 0x19191, .block = .jurchen, .script = .jurchen },
+        .{ .cp = 0x191A0, .block = .jurchen_radicals, .script = .jurchen },
+        .{ .cp = 0x1D250, .block = .musical_symbols_supplement, .script = .common },
+        .{ .cp = 0x1DB10, .block = .miscellaneous_symbols_and_arrows_extended, .script = .common },
+        .{ .cp = 0x3D000, .block = .seal, .script = .seal },
+        .{ .cp = 0x3FC3F, .block = .seal, .script = .seal },
+    };
+    for (cases) |case| {
+        try testing.expectEqual(case.block, get(.block, case.cp));
+        try testing.expectEqual(case.script, get(.script, case.cp));
+        try testing.expect(get(.general_category, case.cp) != .other_not_assigned);
+    }
+    try testing.expectEqual(.other_not_assigned, get(.general_category, 0x19192));
+    try testing.expectEqual(.other_not_assigned, get(.general_category, 0x3FC40));
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x18E00));
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x3D000));
+    try testing.expectEqualStrings("CUNEIFORM NUMERIC SIGN ONE N01", get(.name, 0x12550));
+}
+
+test "Unicode 18 mappings and emoji" {
+    try testing.expectEqual(0x00DF, get(.case_folding_simple, 0x1DF95));
+    try testing.expectEqual(0x00DF, get(.case_folding_simple_only, 0x1DF95));
+    try testing.expectEqual(0x1DB10, get(.bidi_mirroring, 0x221D));
+    try testing.expectEqual(0x221D, get(.bidi_mirroring, 0x1DB10));
+    try testing.expectEqual(.crown_beh, get(.joining_group, 0x10ED9));
+    try testing.expectEqual(.crown_heh, get(.joining_group, 0x10EED));
+    try testing.expectEqualStrings("PICKLE", get(.name, 0x1FADD));
+    try testing.expect(get(.is_emoji, 0x1FADD));
+    try testing.expect(get(.is_emoji_presentation, 0x1FADD));
+    try testing.expectEqual(2, get(.wcwidth_standalone, 0x1FADD));
+}

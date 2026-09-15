@@ -457,17 +457,10 @@ fn basicTrackingOkay(tracking: anytype, comptime field: config.Field) !bool {
     if (config.is_updating_ucd) {
         const min_config = tracking.minBitsConfig(r);
         if (!config.field(config.fields, field.name).runtime().eql(min_config)) {
-            std.debug.print("\nUnequal!\n", .{});
-            var buffer: [4096]u8 = undefined;
-            var stderr_writer = std.Io.File.stderr().writer(&buffer);
-            var w = &stderr_writer.interface;
-            try w.writeAll(
-                \\
-                \\Update default config in `config.zig` with the correct field config:
-                \\
-            );
-            try min_config.write(w);
-            try w.flush();
+            var writer: std.Io.Writer.Allocating = .init(std.heap.page_allocator);
+            defer writer.deinit();
+            try min_config.write(&writer.writer);
+            std.debug.print("\nUpdate `src/fields.zig` with the correct field config:\n{s}\n", .{writer.written()});
             return false;
         }
     } else {

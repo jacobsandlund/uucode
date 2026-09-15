@@ -1,6 +1,7 @@
 const std = @import("std");
 const config = @import("config.zig");
 const types = @import("types.zig");
+const ucd_inputs = @import("ucd_inputs.zig");
 const inlineAssert = config.quirks.inlineAssert;
 
 const setBuiltField = config.setBuiltField;
@@ -210,11 +211,34 @@ test "parseRange" {
 }
 
 fn readFile(allocator: std.mem.Allocator, io: std.Io, file_path: []const u8) ![]u8 {
+    try ensureUcdInputDeclared(allocator, io, file_path);
+    return readFileRaw(allocator, io, file_path);
+}
+
+fn readFileRaw(allocator: std.mem.Allocator, io: std.Io, file_path: []const u8) ![]u8 {
     const file = try std.Io.Dir.cwd().openFile(io, file_path, .{});
     defer file.close(io);
     var buf: [2048]u8 = undefined;
     var file_reader = file.reader(io, &buf);
     return try file_reader.interface.allocRemaining(allocator, .unlimited);
+}
+
+// Every UCD file the generator reads must be marked `(used)` in
+// `ucd/.gitignore`, which is how `build.zig` knows to regenerate the tables
+// when it changes. See `src/ucd_inputs.zig`.
+fn ensureUcdInputDeclared(allocator: std.mem.Allocator, io: std.Io, file_path: []const u8) !void {
+    const ucd_dir = "ucd/";
+    if (!std.mem.startsWith(u8, file_path, ucd_dir)) return;
+
+    const gitignore = try readFileRaw(allocator, io, ucd_dir ++ ".gitignore");
+    defer allocator.free(gitignore);
+    if (!ucd_inputs.isUsed(gitignore, file_path[ucd_dir.len..])) {
+        std.log.err(
+            "{s} is read by the generator but isn't marked `(used)` in ucd/.gitignore",
+            .{file_path},
+        );
+        return error.UndeclaredUcdInput;
+    }
 }
 
 pub fn trim(line: []const u8) []const u8 {
@@ -1399,6 +1423,7 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Arabic Presentation Forms-B", .arabic_presentation_forms_b },
     .{ "Arabic Supplement", .arabic_supplement },
     .{ "Arabic", .arabic },
+    .{ "Archaic Cuneiform Numerals", .archaic_cuneiform_numerals },
     .{ "Armenian", .armenian },
     .{ "Arrows", .arrows },
     .{ "Avestan", .avestan },
@@ -1409,6 +1434,7 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Bassa Vah", .bassa_vah },
     .{ "Batak", .batak },
     .{ "Bengali", .bengali },
+    .{ "Bengali Supplement", .bengali_supplement },
     .{ "Beria Erfe", .beria_erfe },
     .{ "Bhaiksuki", .bhaiksuki },
     .{ "Block Elements", .block_elements },
@@ -1530,6 +1556,8 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Inscriptional Pahlavi", .inscriptional_pahlavi },
     .{ "Inscriptional Parthian", .inscriptional_parthian },
     .{ "Javanese", .javanese },
+    .{ "Jurchen", .jurchen },
+    .{ "Jurchen Radicals", .jurchen_radicals },
     .{ "Kaithi", .kaithi },
     .{ "Kaktovik Numerals", .kaktovik_numerals },
     .{ "Kana Extended-A", .kana_extended_a },
@@ -1592,6 +1620,7 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Miscellaneous Mathematical Symbols-B", .miscellaneous_mathematical_symbols_b },
     .{ "Miscellaneous Symbols Supplement", .miscellaneous_symbols_supplement },
     .{ "Miscellaneous Symbols and Arrows", .miscellaneous_symbols_and_arrows },
+    .{ "Miscellaneous Symbols and Arrows Extended", .miscellaneous_symbols_and_arrows_extended },
     .{ "Miscellaneous Symbols and Pictographs", .miscellaneous_symbols_and_pictographs },
     .{ "Miscellaneous Symbols", .miscellaneous_symbols },
     .{ "Miscellaneous Technical", .miscellaneous_technical },
@@ -1602,6 +1631,7 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Mro", .mro },
     .{ "Multani", .multani },
     .{ "Musical Symbols", .musical_symbols },
+    .{ "Musical Symbols Supplement", .musical_symbols_supplement },
     .{ "Myanmar Extended-A", .myanmar_extended_a },
     .{ "Myanmar Extended-B", .myanmar_extended_b },
     .{ "Myanmar Extended-C", .myanmar_extended_c },
@@ -1649,6 +1679,7 @@ const block_name_map = std.StaticStringMap(types.Block).initComptime(.{
     .{ "Runic", .runic },
     .{ "Samaritan", .samaritan },
     .{ "Saurashtra", .saurashtra },
+    .{ "Seal", .seal },
     .{ "Sharada Supplement", .sharada_supplement },
     .{ "Sharada", .sharada },
     .{ "Shavian", .shavian },
@@ -1843,6 +1874,7 @@ const script_name_map = std.StaticStringMap(types.Script).initComptime(.{
     .{ "Inscriptional_Pahlavi", .inscriptional_pahlavi },
     .{ "Inscriptional_Parthian", .inscriptional_parthian },
     .{ "Javanese", .javanese },
+    .{ "Jurchen", .jurchen },
     .{ "Kaithi", .kaithi },
     .{ "Kannada", .kannada },
     .{ "Katakana", .katakana },
@@ -1909,11 +1941,13 @@ const script_name_map = std.StaticStringMap(types.Script).initComptime(.{
     .{ "Pau_Cin_Hau", .pau_cin_hau },
     .{ "Phags_Pa", .phags_pa },
     .{ "Phoenician", .phoenician },
+    .{ "Proto_Cuneiform", .proto_cuneiform },
     .{ "Psalter_Pahlavi", .psalter_pahlavi },
     .{ "Rejang", .rejang },
     .{ "Runic", .runic },
     .{ "Samaritan", .samaritan },
     .{ "Saurashtra", .saurashtra },
+    .{ "Seal", .seal },
     .{ "Sharada", .sharada },
     .{ "Shavian", .shavian },
     .{ "Siddham", .siddham },
@@ -2076,6 +2110,16 @@ const joining_group_map = std.StaticStringMap(types.JoiningGroup).initComptime(.
     .{ "Beh", .beh },
     .{ "Beth", .beth },
     .{ "Burushaski_Yeh_Barree", .burushaski_yeh_barree },
+    .{ "Crown_Ain", .crown_ain },
+    .{ "Crown_Beh", .crown_beh },
+    .{ "Crown_Feh", .crown_feh },
+    .{ "Crown_Hah", .crown_hah },
+    .{ "Crown_Heh", .crown_heh },
+    .{ "Crown_Kaf", .crown_kaf },
+    .{ "Crown_Meem", .crown_meem },
+    .{ "Crown_Sad", .crown_sad },
+    .{ "Crown_Seen", .crown_seen },
+    .{ "Crown_Tah", .crown_tah },
     .{ "Dal", .dal },
     .{ "Dalath_Rish", .dalath_rish },
     .{ "E", .e },
@@ -2600,8 +2644,11 @@ const GraphemeBreakDerived = struct {
                     }
                 },
                 .linker => blk: {
-                    inlineAssert(original_grapheme_break == .extend);
-                    break :blk .indic_conjunct_break_linker;
+                    break :blk switch (original_grapheme_break) {
+                        .extend => .indic_conjunct_break_linker,
+                        .other => .indic_conjunct_break_linker_other,
+                        else => unreachable,
+                    };
                 },
                 .consonant => blk: {
                     inlineAssert(original_grapheme_break == .other);

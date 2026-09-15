@@ -1,4 +1,5 @@
 const std = @import("std");
+const ucd_inputs = @import("src/ucd_inputs.zig");
 
 // Zig's x86 backend is segfaulting when compiling the generated tables, so we
 // choose the LLVM backend always.
@@ -168,6 +169,20 @@ pub fn build(b: *std.Build) void {
         .use_llvm = use_llvm,
     });
 
+    // Zig only collects tests from a test binary's root module, so each module
+    // with tests of its own gets its own binary.
+    const config_tests = b.addTest(.{
+        .root_module = test_mod.config,
+        .filters = test_filters,
+        .use_llvm = use_llvm,
+    });
+
+    const storage_tests = b.addTest(.{
+        .root_module = test_mod.storage,
+        .filters = test_filters,
+        .use_llvm = use_llvm,
+    });
+
     const build_tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("build.zig"),
@@ -180,11 +195,15 @@ pub fn build(b: *std.Build) void {
 
     const run_src_tests = b.addRunArtifact(src_tests);
     const run_build_tables_tests = b.addRunArtifact(generate_tests);
+    const run_config_tests = b.addRunArtifact(config_tests);
+    const run_storage_tests = b.addRunArtifact(storage_tests);
     const run_build_tests = b.addRunArtifact(build_tests);
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_src_tests.step);
     test_step.dependOn(&run_build_tables_tests.step);
+    test_step.dependOn(&run_config_tests.step);
+    test_step.dependOn(&run_storage_tests.step);
     test_step.dependOn(&run_build_tests.step);
 }
 
@@ -327,6 +346,12 @@ fn generateTables(
     gen_mod.addImport("build_config", build_config_mod);
     const run_gen_exe = b.addRunArtifact(gen_exe);
     run_gen_exe.setCwd(b.path(""));
+    // The generator reads these at runtime, so they must invalidate the
+    // cached tables. See `src/ucd_inputs.zig`.
+    var ucd_files = ucd_inputs.iterateUsed(@embedFile("ucd/.gitignore"));
+    while (ucd_files.next()) |file| {
+        run_gen_exe.addFileInput(b.path(b.fmt("ucd/{s}", .{file})));
+    }
     const tables_path = run_gen_exe.addOutputFileArg("tables.zig");
 
     return .{
@@ -345,6 +370,8 @@ fn createLibMod(
     build_config_path: std.Build.LazyPath,
 ) struct {
     lib: *std.Build.Module,
+    config: *std.Build.Module,
+    storage: *std.Build.Module,
     build_config: *std.Build.Module,
     gen_build_config: ?*std.Build.Module,
     generate: ?*std.Build.Module,
@@ -409,6 +436,8 @@ fn createLibMod(
 
     return .{
         .lib = lib_mod,
+        .config = config_mod,
+        .storage = storage_mod,
         .build_config = build_config_mod,
         .generate = generate,
         .gen_build_config = gen_build_config,
@@ -527,4 +556,8 @@ test "complex build config with all fields_0 through fields_9" {
         try std.testing.expect(foundI.? > i);
         i = foundI.?;
     }
+}
+
+test {
+    _ = ucd_inputs;
 }

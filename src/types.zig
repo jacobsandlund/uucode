@@ -142,6 +142,10 @@ pub const GraphemeBreak = enum(u5) {
     //   indic_conjunct_break_linker
     indic_conjunct_break_extend,
     indic_conjunct_break_linker,
+    // InCB=Linker with Grapheme_Cluster_Break=Other (U+1CF5, U+1CF6, U+11A3A
+    // as of Unicode 18), so unlike `indic_conjunct_break_linker` it is not
+    // part of `extend`.
+    indic_conjunct_break_linker_other,
     indic_conjunct_break_consonant,
 };
 
@@ -166,6 +170,10 @@ pub const GraphemeBreakNoControl = enum(u5) {
     //   indic_conjunct_break_linker
     indic_conjunct_break_extend,
     indic_conjunct_break_linker,
+    // InCB=Linker with Grapheme_Cluster_Break=Other (U+1CF5, U+1CF6, U+11A3A
+    // as of Unicode 18), so unlike `indic_conjunct_break_linker` it is not
+    // part of `extend`.
+    indic_conjunct_break_linker_other,
     indic_conjunct_break_consonant,
 };
 
@@ -200,6 +208,7 @@ pub const Block = enum(u9) {
     arabic_presentation_forms_a,
     arabic_presentation_forms_b,
     arabic_supplement,
+    archaic_cuneiform_numerals,
     armenian,
     arrows,
     avestan,
@@ -210,6 +219,7 @@ pub const Block = enum(u9) {
     bassa_vah,
     batak,
     bengali,
+    bengali_supplement,
     beria_erfe,
     bhaiksuki,
     block_elements,
@@ -331,6 +341,8 @@ pub const Block = enum(u9) {
     inscriptional_parthian,
     ipa_extensions,
     javanese,
+    jurchen,
+    jurchen_radicals,
     kaithi,
     kaktovik_numerals,
     kana_extended_a,
@@ -393,6 +405,7 @@ pub const Block = enum(u9) {
     miscellaneous_mathematical_symbols_b,
     miscellaneous_symbols,
     miscellaneous_symbols_and_arrows,
+    miscellaneous_symbols_and_arrows_extended,
     miscellaneous_symbols_and_pictographs,
     miscellaneous_symbols_supplement,
     miscellaneous_technical,
@@ -403,6 +416,7 @@ pub const Block = enum(u9) {
     mro,
     multani,
     musical_symbols,
+    musical_symbols_supplement,
     myanmar,
     myanmar_extended_a,
     myanmar_extended_b,
@@ -450,6 +464,7 @@ pub const Block = enum(u9) {
     runic,
     samaritan,
     saurashtra,
+    seal,
     sharada,
     sharada_supplement,
     shavian,
@@ -601,6 +616,7 @@ pub const Script = enum(u8) {
     inscriptional_pahlavi,
     inscriptional_parthian,
     javanese,
+    jurchen,
     kaithi,
     kannada,
     katakana,
@@ -667,11 +683,13 @@ pub const Script = enum(u8) {
     pau_cin_hau,
     phags_pa,
     phoenician,
+    proto_cuneiform,
     psalter_pahlavi,
     rejang,
     runic,
     samaritan,
     saurashtra,
+    seal,
     sharada,
     shavian,
     siddham,
@@ -735,6 +753,16 @@ pub const JoiningGroup = enum(u7) {
     beh,
     beth,
     burushaski_yeh_barree,
+    crown_ain,
+    crown_beh,
+    crown_feh,
+    crown_hah,
+    crown_heh,
+    crown_kaf,
+    crown_meem,
+    crown_sad,
+    crown_seen,
+    crown_tah,
     dal,
     dalath_rish,
     e,

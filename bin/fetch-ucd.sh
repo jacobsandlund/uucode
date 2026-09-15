@@ -1,33 +1,33 @@
 #!/bin/bash
 
-version="17.0.0"
+set -euo pipefail
 
-base_url="https://www.unicode.org/Public/zipped/latest"
-emoji_url="https://www.unicode.org/Public/emoji/latest"
+version="18.0.0"
 
-mv ucd/.gitignore ucd-gitignore
+base_url="https://www.unicode.org/Public/${version}/ucd"
+emoji_url="https://www.unicode.org/Public/${version}/emoji"
+
+cd "$(dirname "$0")/.."
+
+download_dir=$(mktemp -d)
+trap 'rm -rf "$download_dir"' EXIT
+mkdir -p "$download_dir/ucd/emoji" "$download_dir/ucd/Unihan"
+
+curl -fLSs -o "$download_dir/ucd.zip" "${base_url}/UCD.zip"
+unzip -q "$download_dir/ucd.zip" -d "$download_dir/ucd"
+
+for file in emoji-sequences.txt emoji-test.txt emoji-zwj-sequences.txt; do
+    curl -fLSs -o "$download_dir/ucd/emoji/$file" "${emoji_url}/$file"
+done
+
+curl -fLSs -o "$download_dir/unihan.zip" "${base_url}/Unihan.zip"
+unzip -q "$download_dir/unihan.zip" -d "$download_dir/ucd/Unihan"
+
+# Replace ucd/ wholesale so files dropped upstream don't linger, keeping only
+# our .gitignore.
+cp ucd/.gitignore "$download_dir/ucd/.gitignore"
 rm -rf ucd
-mkdir -p ucd/Unihan
-mv ucd-gitignore ucd/.gitignore
-
-cd ucd
-curl -o ucd.zip "${base_url}/UCD.zip"
-unzip ucd.zip
-rm ucd.zip
-
-cd emoji
-curl -o emoji-sequences.txt "${emoji_url}/emoji-sequences.txt"
-curl -o emoji-test.txt "${emoji_url}/emoji-test.txt"
-curl -o emoji-zwj-sequences.txt "${emoji_url}/emoji-zwj-sequences.txt"
-cd ..
-
-cd Unihan
-curl -o unihan.zip "${base_url}/Unihan.zip"
-unzip unihan.zip
-rm unihan.zip
-cd ..
-
-cd ..
+mv "$download_dir/ucd" ucd
 
 echo
 echo "########################################################################"
@@ -38,6 +38,6 @@ echo "Explicitly add any new files to start parsing to the list of .gitignore"
 echo "exceptions. Add a '#' to comment them out, appending '(used)' at the end."
 echo
 echo "Next, flip the 'is_updating_ucd' flag in 'src/config.zig' to true, and"
-echo "'zig build test' once, updating the 'default' config if it needs"
+echo "'zig build test' once, updating 'src/fields.zig' if it needs"
 echo "changing, before flipping 'is_updating_ucd' back to false."
 echo
