@@ -408,7 +408,7 @@ test "Unicode 18 Indic linker boundaries and overlapping emoji sequences" {
         .{ .cps = &.{ 0x094D, 0x200C, 0x0300, 0x0915 }, .breaks = &.{ false, false, true } },
         .{ .cps = &.{ 0x094D, 0x0903, 0x0915 }, .breaks = &.{ false, true } },
         .{ .cps = &.{ 0x094D, 0x1F3FB, 0x0915 }, .breaks = &.{ true, true } },
-        // InCB=Linker with GCB=Other (`indic_conjunct_break_linker_other`):
+        // InCB=Linker with Grapheme_Cluster_Break=Other (`indic_conjunct_break_linker_other`):
         // breaks before it, but still joins a following consonant
         .{ .cps = &.{ 0x0061, 0x1CF5, 0x0300, 0x0915 }, .breaks = &.{ true, false, false } },
         .{ .cps = &.{ 0x1CF6, 0x0915 }, .breaks = &.{false} },
@@ -422,7 +422,7 @@ test "Unicode 18 Indic linker boundaries and overlapping emoji sequences" {
         .{ .cps = &.{ 0x1F600, 0x094D, 0x200C, 0x0915 }, .breaks = &.{ false, false, true } },
         // An emoji modifier sequence can lead into GB9c
         .{ .cps = &.{ 0x1F44D, 0x1F3FB, 0x094D, 0x0915 }, .breaks = &.{ false, false, false } },
-        // A GCB=Other linker ends the emoji sequence
+        // A Grapheme_Cluster_Break=Other linker ends the emoji sequence
         .{ .cps = &.{ 0x1F600, 0x1CF5, 0x0915 }, .breaks = &.{ true, false } },
     };
     inline for (.{ testGetActualComputedGraphemeBreak, isBreak, testGetActualComputedGraphemeBreakNoControl, isBreakNoControl }) |check| {
