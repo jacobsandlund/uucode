@@ -20,9 +20,8 @@ pub const Grapheme = struct {
 pub fn CustomIterator(
     comptime CodePointIterator: type,
     comptime GB: type,
-    comptime State: type,
     comptime grapheme_break_field: FieldEnum,
-    comptime customIsBreak: fn (gb1: GB, gb2: GB, state: *State) bool,
+    comptime customIsBreak: fn (gb1: GB, gb2: GB, state: *BreakState) bool,
 ) type {
     return struct {
         // This "i" is part of the documented API of this iterator, pointing to
@@ -30,7 +29,7 @@ pub fn CustomIterator(
         // `i` of the CodePointIterator).
         i: usize,
 
-        state: State,
+        state: BreakState,
         next_cp_it: CodePointIterator,
         next_cp: ?u21,
         next_gb: GB,
@@ -43,7 +42,7 @@ pub fn CustomIterator(
             const next_cp = next_cp_it.next();
 
             return .{
-                .state = .default,
+                .state = .{},
                 .i = i,
                 .next_cp_it = next_cp_it,
                 .next_cp = next_cp,
@@ -100,7 +99,6 @@ pub fn Iterator(comptime CodePointIterator: type) type {
     return CustomIterator(
         CodePointIterator,
         types.GraphemeBreak,
-        BreakState,
         .grapheme_break,
         precomputedGraphemeBreak,
     );
@@ -217,6 +215,7 @@ pub const BreakState = packed struct(u3) {
         regional_indicator,
     };
 
+    /// Deprecated: initialize with `.{}` instead.
     pub const default: BreakState = .{};
 
     pub const table_len = @typeInfo(Base).@"enum".fields.len * 2 - 1;
@@ -231,7 +230,7 @@ pub const BreakState = packed struct(u3) {
 };
 
 test "BreakState table index layout" {
-    try std.testing.expectEqual(0, BreakState.default.tableIndex());
+    try std.testing.expectEqual(0, (BreakState{}).tableIndex());
     try std.testing.expectEqual(1, (BreakState{ .after_linker = true }).tableIndex());
     try std.testing.expectEqual(2, (BreakState{ .base = .extended_pictographic }).tableIndex());
     try std.testing.expectEqual(3, (BreakState{ .base = .extended_pictographic, .after_linker = true }).tableIndex());
@@ -428,7 +427,7 @@ test "Unicode 18 Indic linker boundaries and overlapping emoji sequences" {
     };
     inline for (.{ testGetActualComputedGraphemeBreak, isBreak, testGetActualComputedGraphemeBreakNoControl, isBreakNoControl }) |check| {
         for (cases) |case| {
-            var state: BreakState = .default;
+            var state: BreakState = .{};
             for (case.breaks, 0..) |expected, i| {
                 try std.testing.expectEqual(expected, check(case.cps[i], case.cps[i + 1], &state));
             }
@@ -495,7 +494,7 @@ fn testGraphemeBreak(getActualIsBreak: fn (cp1: u21, cp2: u21, state: *BreakStat
         const start = parts.next().?;
         try std.testing.expect(std.mem.eql(u8, start, "÷"));
 
-        var state: BreakState = .default;
+        var state: BreakState = .{};
         var cp1 = try parseCp(parts.next().?);
         var gb1 = get(.grapheme_break, cp1);
         var expected_str = parts.next().?;
@@ -1152,7 +1151,6 @@ pub fn IteratorNoControl(comptime CodePointIterator: type) type {
     return CustomIterator(
         CodePointIterator,
         types.GraphemeBreakNoControl,
-        BreakState,
         .grapheme_break_no_control,
         precomputedGraphemeBreakNoControl,
     );
@@ -1392,7 +1390,7 @@ fn testGraphemeBreakNoControl(getActualIsBreak: fn (cp1: u21, cp2: u21, state: *
         const start = parts.next().?;
         try std.testing.expect(std.mem.eql(u8, start, "÷"));
 
-        var state: BreakState = .default;
+        var state: BreakState = .{};
         var cp1 = try parseCp(parts.next().?);
         var expected_str = parts.next().?;
         var cp2 = try parseCp(parts.next().?);
