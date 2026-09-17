@@ -557,15 +557,15 @@ test "GraphemeBreakTest.txt - computeGraphemeBreak" {
     try testGraphemeBreak(testGetActualComputedGraphemeBreak);
 }
 
-pub fn GraphemeBreakTable(comptime GB: type, comptime State: type) type {
+pub fn GraphemeBreakTable(comptime GB: type) type {
     const Result = packed struct {
         result: bool,
-        state: State,
+        state: BreakState,
     };
     const gb_values = @typeInfo(GB).@"enum".field_values;
     const n_gb = gb_values.len;
     const n_gb_2 = n_gb * n_gb;
-    const n = State.table_len * n_gb_2;
+    const n = BreakState.table_len * n_gb_2;
 
     // Assert that this is a simple enum (this isn't a full assertion, but
     // likely good enough.)
@@ -574,15 +574,15 @@ pub fn GraphemeBreakTable(comptime GB: type, comptime State: type) type {
     return struct {
         data: [n]Result,
 
-        inline fn index(gb1: GB, gb2: GB, state: State) usize {
+        inline fn index(gb1: GB, gb2: GB, state: BreakState) usize {
             return state.tableIndex() * n_gb_2 + @backingInt(gb1) * n_gb + @backingInt(gb2);
         }
 
-        pub fn set(self: *@This(), gb1: GB, gb2: GB, state: State, result: Result) void {
+        pub fn set(self: *@This(), gb1: GB, gb2: GB, state: BreakState, result: Result) void {
             self.data[index(gb1, gb2, state)] = result;
         }
 
-        pub fn get(self: @This(), gb1: GB, gb2: GB, state: State) Result {
+        pub fn get(self: @This(), gb1: GB, gb2: GB, state: BreakState) Result {
             return self.data[index(gb1, gb2, state)];
         }
     };
@@ -590,24 +590,23 @@ pub fn GraphemeBreakTable(comptime GB: type, comptime State: type) type {
 
 pub fn buildGraphemeBreakTable(
     comptime GB: type,
-    comptime State: type,
-    compute: fn (gb1: GB, gb2: GB, state: *State) bool,
-) GraphemeBreakTable(GB, State) {
+    compute: fn (gb1: GB, gb2: GB, state: *BreakState) bool,
+) GraphemeBreakTable(GB) {
     @setEvalBranchQuota(30_000);
-    var table: GraphemeBreakTable(GB, State) = undefined;
+    var table: GraphemeBreakTable(GB) = undefined;
 
     const gb_values = @typeInfo(GB).@"enum".field_values;
 
-    for (0..State.table_len) |state_i| {
+    for (0..BreakState.table_len) |state_i| {
         for (gb_values) |gb1_value| {
             for (gb_values) |gb2_value| {
-                const original_state = State.fromTableIndex(state_i);
+                const original_state = BreakState.fromTableIndex(state_i);
                 const gb1: GB = @fromBackingInt(@intCast(gb1_value));
                 const gb2: GB = @fromBackingInt(@intCast(gb2_value));
                 var state = original_state;
                 const result = compute(gb1, gb2, &state);
                 // The table must never hand back a state it has no row for.
-                inlineAssert(state.tableIndex() < State.table_len);
+                inlineAssert(state.tableIndex() < BreakState.table_len);
                 table.set(gb1, gb2, original_state, .{
                     .result = result,
                     .state = state,
@@ -626,7 +625,6 @@ pub fn precomputedGraphemeBreak(
 ) bool {
     const table = comptime buildGraphemeBreakTable(
         types.GraphemeBreak,
-        BreakState,
         computeGraphemeBreak,
     );
     // 5 BreakState rows x (21 GraphemeBreak fields)^2 = 2205
@@ -1476,7 +1474,6 @@ pub fn precomputedGraphemeBreakNoControl(
 ) bool {
     const table = comptime buildGraphemeBreakTable(
         types.GraphemeBreakNoControl,
-        BreakState,
         computeGraphemeBreakNoControl,
     );
     // 5 BreakState rows x (18 GraphemeBreakNoControl fields)^2 = 1620
