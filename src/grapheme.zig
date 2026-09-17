@@ -249,7 +249,7 @@ pub fn computeGraphemeBreak(
 ) bool {
     // Whether the next flag is set depends only on the input, not on the
     // rules below, which only read `after_linker` and only write `base`.
-    const after_linker = gb1 == .indic_conjunct_break_linker or
+    const after_linker = gb1 == .indic_conjunct_break_linker_extend or
         gb1 == .indic_conjunct_break_linker_other or
         (state.after_linker and isIndicConjunctBreakExtend(gb1));
     state.after_linker = after_linker and isIndicConjunctBreakExtend(gb2);
@@ -265,7 +265,7 @@ pub fn computeGraphemeBreak(
             switch (gb1) {
                 // Keep state if in possibly valid sequence
                 .indic_conjunct_break_extend, // extend
-                .indic_conjunct_break_linker, // extend
+                .indic_conjunct_break_linker_extend, // extend
                 .zwnj, // extend
                 .zwj,
                 .extended_pictographic,
@@ -279,7 +279,7 @@ pub fn computeGraphemeBreak(
             switch (gb2) {
                 // Keep state if in possibly valid sequence
                 .indic_conjunct_break_extend, // extend
-                .indic_conjunct_break_linker, // extend
+                .indic_conjunct_break_linker_extend, // extend
                 .zwnj, // extend
                 .zwj,
                 .extended_pictographic,
@@ -411,8 +411,8 @@ test "Unicode 18 Indic linker boundaries and overlapping emoji sequences" {
         // InCB=Linker with Grapheme_Cluster_Break=Other (`indic_conjunct_break_linker_other`):
         // breaks before it, but still joins a following consonant
         .{ .cps = &.{ 0x0061, 0x1CF5, 0x0300, 0x0915 }, .breaks = &.{ true, false, false } },
-        .{ .cps = &.{ 0x1CF6, 0x0915 }, .breaks = &.{false} },
-        .{ .cps = &.{ 0x11A3A, 0x11A0B }, .breaks = &.{false} },
+        .{ .cps = &.{ 0x0061, 0x1CF6, 0x0915 }, .breaks = &.{ true, false } },
+        .{ .cps = &.{ 0x0061, 0x11A3A, 0x11A0B }, .breaks = &.{ true, false } },
         .{ .cps = &.{ 0x11A3A, 0x0061 }, .breaks = &.{true} },
         // GB9c and GB11 overlap: a linker inside an emoji sequence can still
         // lead to either a ZWJ emoji or a consonant
@@ -457,7 +457,7 @@ fn isIndicConjunctBreakExtend(gb: types.GraphemeBreak) bool {
 fn isExtend(gb: types.GraphemeBreak) bool {
     return gb == .zwnj or
         gb == .indic_conjunct_break_extend or
-        gb == .indic_conjunct_break_linker;
+        gb == .indic_conjunct_break_linker_extend;
 }
 
 fn isExtendedPictographic(gb: types.GraphemeBreak) bool {
@@ -1218,7 +1218,7 @@ pub fn computeGraphemeBreakNoControl(
 ) bool {
     // Whether the next flag is set depends only on the input, not on the
     // rules below, which only read `after_linker` and only write `base`.
-    const after_linker = gb1 == .indic_conjunct_break_linker or
+    const after_linker = gb1 == .indic_conjunct_break_linker_extend or
         gb1 == .indic_conjunct_break_linker_other or
         (state.after_linker and isIndicConjunctBreakExtendNoControl(gb1));
     state.after_linker = after_linker and isIndicConjunctBreakExtendNoControl(gb2);
@@ -1232,7 +1232,7 @@ pub fn computeGraphemeBreakNoControl(
         .extended_pictographic => {
             switch (gb1) {
                 .indic_conjunct_break_extend,
-                .indic_conjunct_break_linker,
+                .indic_conjunct_break_linker_extend,
                 .zwnj,
                 .zwj,
                 .extended_pictographic,
@@ -1245,7 +1245,7 @@ pub fn computeGraphemeBreakNoControl(
 
             switch (gb2) {
                 .indic_conjunct_break_extend,
-                .indic_conjunct_break_linker,
+                .indic_conjunct_break_linker_extend,
                 .zwnj,
                 .zwj,
                 .extended_pictographic,
@@ -1353,7 +1353,7 @@ fn isIndicConjunctBreakExtendNoControl(gb: types.GraphemeBreakNoControl) bool {
 fn isExtendNoControl(gb: types.GraphemeBreakNoControl) bool {
     return gb == .zwnj or
         gb == .indic_conjunct_break_extend or
-        gb == .indic_conjunct_break_linker;
+        gb == .indic_conjunct_break_linker_extend;
 }
 
 fn isExtendedPictographicNoControl(gb: types.GraphemeBreakNoControl) bool {

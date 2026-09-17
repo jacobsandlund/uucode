@@ -139,11 +139,11 @@ pub const GraphemeBreak = enum(u5) {
     // extend, ==
     //   zwnj +
     //   indic_conjunct_break_extend +
-    //   indic_conjunct_break_linker
+    //   indic_conjunct_break_linker_extend
     indic_conjunct_break_extend,
-    indic_conjunct_break_linker,
+    indic_conjunct_break_linker_extend,
     // InCB=Linker with Grapheme_Cluster_Break=Other (U+1CF5, U+1CF6, U+11A3A
-    // as of Unicode 18), so unlike `indic_conjunct_break_linker` it is not
+    // as of Unicode 18), so unlike `indic_conjunct_break_linker_extend` it is not
     // part of `extend`.
     indic_conjunct_break_linker_other,
     indic_conjunct_break_consonant,
@@ -167,11 +167,11 @@ pub const GraphemeBreakNoControl = enum(u5) {
     // extend, ==
     //   zwnj +
     //   indic_conjunct_break_extend +
-    //   indic_conjunct_break_linker
+    //   indic_conjunct_break_linker_extend
     indic_conjunct_break_extend,
-    indic_conjunct_break_linker,
+    indic_conjunct_break_linker_extend,
     // InCB=Linker with Grapheme_Cluster_Break=Other (U+1CF5, U+1CF6, U+11A3A
-    // as of Unicode 18), so unlike `indic_conjunct_break_linker` it is not
+    // as of Unicode 18), so unlike `indic_conjunct_break_linker_extend` it is not
     // part of `extend`.
     indic_conjunct_break_linker_other,
     indic_conjunct_break_consonant,

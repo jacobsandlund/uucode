@@ -2645,7 +2645,7 @@ const GraphemeBreakDerived = struct {
                 },
                 .linker => blk: {
                     break :blk switch (original_grapheme_break) {
-                        .extend => .indic_conjunct_break_linker,
+                        .extend => .indic_conjunct_break_linker_extend,
                         .other => .indic_conjunct_break_linker_other,
                         else => unreachable,
                     };

@@ -502,6 +502,29 @@ test "original_grapheme_break" {
     try testing.expectEqual(.other, get(.original_grapheme_break, 0x0041)); // 'A'
 }
 
+test "Unicode 18 Indic linker classifications" {
+    const extend_linkers = [_]u21{
+        0x094D,  0x09CD,  0x0ACD,  0x0B4D,  0x0C4D,
+        0x0D4D,  0x1039,  0x17D2,  0x1A60,  0x1B44,
+        0x1BAB,  0xA9C0,  0xAAF6,  0x10A3F, 0x11133,
+        0x113D0, 0x1193E, 0x11A47, 0x11A99, 0x11F42,
+    };
+    const other_linkers = [_]u21{ 0x1CF5, 0x1CF6, 0x11A3A };
+
+    for (extend_linkers) |cp| {
+        try testing.expectEqual(.linker, get(.indic_conjunct_break, cp));
+        try testing.expectEqual(.extend, get(.original_grapheme_break, cp));
+        try testing.expectEqual(.indic_conjunct_break_linker_extend, get(.grapheme_break, cp));
+        try testing.expectEqual(.indic_conjunct_break_linker_extend, get(.grapheme_break_no_control, cp));
+    }
+    for (other_linkers) |cp| {
+        try testing.expectEqual(.linker, get(.indic_conjunct_break, cp));
+        try testing.expectEqual(.other, get(.original_grapheme_break, cp));
+        try testing.expectEqual(.indic_conjunct_break_linker_other, get(.grapheme_break, cp));
+        try testing.expectEqual(.indic_conjunct_break_linker_other, get(.grapheme_break_no_control, cp));
+    }
+}
+
 test "is_emoji" {
     try testing.expect(get(.is_emoji, 0x1F600)); // 😀
     try testing.expect(!get(.is_emoji, 0x0041)); // 'A'
