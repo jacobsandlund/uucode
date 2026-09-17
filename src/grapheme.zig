@@ -249,8 +249,7 @@ pub fn computeGraphemeBreak(
 ) bool {
     // Whether the next flag is set depends only on the input, not on the
     // rules below, which only read `after_linker` and only write `base`.
-    const after_linker = gb1 == .indic_conjunct_break_linker_extend or
-        gb1 == .indic_conjunct_break_linker_other or
+    const after_linker = isIndicConjunctBreakLinker(gb1) or
         (state.after_linker and isIndicConjunctBreakExtend(gb1));
     state.after_linker = after_linker and isIndicConjunctBreakExtend(gb2);
 
@@ -437,6 +436,11 @@ test "Unicode 18 Indic linker boundaries and overlapping emoji sequences" {
 
 fn isIndicConjunctBreakExtend(gb: types.GraphemeBreak) bool {
     return gb == .indic_conjunct_break_extend or gb == .zwj;
+}
+
+fn isIndicConjunctBreakLinker(gb: types.GraphemeBreak) bool {
+    return gb == .indic_conjunct_break_linker_extend or
+        gb == .indic_conjunct_break_linker_other;
 }
 
 // Despite `emoji_modifier` being `extend` according to
@@ -1218,8 +1222,7 @@ pub fn computeGraphemeBreakNoControl(
 ) bool {
     // Whether the next flag is set depends only on the input, not on the
     // rules below, which only read `after_linker` and only write `base`.
-    const after_linker = gb1 == .indic_conjunct_break_linker_extend or
-        gb1 == .indic_conjunct_break_linker_other or
+    const after_linker = isIndicConjunctBreakLinkerNoControl(gb1) or
         (state.after_linker and isIndicConjunctBreakExtendNoControl(gb1));
     state.after_linker = after_linker and isIndicConjunctBreakExtendNoControl(gb2);
 
@@ -1333,6 +1336,11 @@ pub fn computeGraphemeBreakNoControl(
 
 fn isIndicConjunctBreakExtendNoControl(gb: types.GraphemeBreakNoControl) bool {
     return gb == .indic_conjunct_break_extend or gb == .zwj;
+}
+
+fn isIndicConjunctBreakLinkerNoControl(gb: types.GraphemeBreakNoControl) bool {
+    return gb == .indic_conjunct_break_linker_extend or
+        gb == .indic_conjunct_break_linker_other;
 }
 
 // Despite `emoji_modifier` being `extend` according to
