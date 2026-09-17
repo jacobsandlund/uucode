@@ -907,3 +907,7 @@ pub inline fn setAllocField(
 }
 
 pub const is_updating_ucd = false;
+
+test {
+    _ = components;
+}

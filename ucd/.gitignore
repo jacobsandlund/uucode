@@ -1,6 +1,7 @@
 # We use explicit ignore instead of a blanket ignore rule
 # plus un-ignoring needed files because `fd` doesn't seem
 # to list un-ignored files correctly
+# Commented paths ending in (used) are the generator's inputs; see src/ucd_inputs.zig.
 
 ArabicShaping.txt
 # BidiBrackets.txt (used)
@@ -23,6 +24,7 @@ Index.txt
 # IndicPositionalCategory.txt (used)
 # IndicSyllabicCategory.txt (used)
 Jamo.txt
+JurchenSources.txt
 LineBreak.txt
 NameAliases.txt
 NamedSequences.txt
@@ -38,6 +40,7 @@ PropertyValueAliases.txt
 ReadMe.txt
 ScriptExtensions.txt
 # Scripts.txt (used)
+SealSources.txt
 # SpecialCasing.txt (used)
 StandardizedVariants.txt
 TangutSources.txt
@@ -57,7 +60,7 @@ Unikemet.txt
 VerticalOrientation.txt
 # auxiliary/GraphemeBreakProperty.txt (used)
 auxiliary/GraphemeBreakTest.html
-# auxiliary/GraphemeBreakTest.txt
+# auxiliary/GraphemeBreakTest.txt (only used for tests)
 auxiliary/LineBreakTest.html
 auxiliary/LineBreakTest.txt
 auxiliary/SentenceBreakProperty.txt

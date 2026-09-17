@@ -7,7 +7,7 @@ pub const fields: []const config.Field = &.{
         .name = "name",
         .type = []const u8,
         .max_len = 88,
-        .max_offset = 1041131,
+        .max_offset = 1065628,
         .embedded_len = 2,
     },
     .{ .name = "general_category", .type = types.GeneralCategory },
@@ -21,7 +21,7 @@ pub const fields: []const config.Field = &.{
         .shift_low = -181519,
         .shift_high = 99324,
         .max_len = 18,
-        .max_offset = 4602,
+        .max_offset = 4610,
         .embedded_len = 0,
     },
     .{ .name = "numeric_type", .type = types.NumericType },
@@ -79,7 +79,7 @@ pub const fields: []const config.Field = &.{
         .name = "case_folding_simple",
         .type = u21,
         .cp_packing = .shift,
-        .shift_low = -42561,
+        .shift_low = -122550,
         .shift_high = 35267,
     },
     .{
@@ -110,7 +110,7 @@ pub const fields: []const config.Field = &.{
         .name = "case_folding_simple_only",
         .type = ?u21,
         .cp_packing = .shift,
-        .shift_low = -7615,
+        .shift_low = -122550,
         .shift_high = 1,
     },
     .{
@@ -297,8 +297,8 @@ pub const fields: []const config.Field = &.{
         .name = "bidi_mirroring",
         .type = ?u21,
         .cp_packing = .shift,
-        .shift_low = -2527,
-        .shift_high = 2527,
+        .shift_low = -112883,
+        .shift_high = 112883,
     },
 
     // Block

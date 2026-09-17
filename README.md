@@ -77,7 +77,7 @@ str[result.?.start..result.?.end]; // "👨🏻‍🍼"
 //////////////////////
 // grapheme.isBreak
 
-var break_state: uucode.grapheme.BreakState = .default;
+var break_state: uucode.grapheme.BreakState = .{};
 
 var cp1: u21 = 0x1F469; // 👩
 var cp2: u21 = 0x1F3FD; // 🏽

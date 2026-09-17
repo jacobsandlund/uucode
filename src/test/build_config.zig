@@ -23,7 +23,7 @@ pub const fields = &config.mergeFields(config.fields, &.{
         .name = "uppercase_mapping_first_char",
         .type = u21,
         .cp_packing = .shift,
-        .shift_low = -64190,
+        .shift_low = -122690,
         .shift_high = 42561,
     },
     .{ .name = "has_simple_lowercase", .type = bool },
