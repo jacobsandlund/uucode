@@ -20,9 +20,8 @@ pub const Grapheme = struct {
 pub fn CustomIterator(
     comptime CodePointIterator: type,
     comptime GB: type,
-    comptime State: type,
     comptime grapheme_break_field: FieldEnum,
-    comptime customIsBreak: fn (gb1: GB, gb2: GB, state: *State) bool,
+    comptime customIsBreak: fn (gb1: GB, gb2: GB, state: *BreakState) bool,
 ) type {
     return struct {
         // This "i" is part of the documented API of this iterator, pointing to
@@ -30,7 +29,7 @@ pub fn CustomIterator(
         // `i` of the CodePointIterator).
         i: usize,
 
-        state: State,
+        state: BreakState,
         next_cp_it: CodePointIterator,
         next_cp: ?u21,
         next_gb: GB,
@@ -43,7 +42,7 @@ pub fn CustomIterator(
             const next_cp = next_cp_it.next();
 
             return .{
-                .state = .default,
+                .state = .{},
                 .i = i,
                 .next_cp_it = next_cp_it,
                 .next_cp = next_cp,
@@ -100,7 +99,6 @@ pub fn Iterator(comptime CodePointIterator: type) type {
     return CustomIterator(
         CodePointIterator,
         types.GraphemeBreak,
-        BreakState,
         .grapheme_break,
         precomputedGraphemeBreak,
     );
@@ -194,31 +192,79 @@ test "utf8Iterator nextGrapheme/peekGrapheme" {
     try std.testing.expect(it.nextGrapheme() == null);
 }
 
-pub const BreakState = enum(u3) {
-    default,
-    regional_indicator,
-    extended_pictographic,
-    indic_conjunct_break_consonant,
-    indic_conjunct_break_linker,
+// GB9c can overlap GB11: after `ExtPict Linker`, `Extend* ZWJ ExtPict` is
+// still an emoji ZWJ sequence while `Extend* Consonant` is still a conjunct.
+// So "after a linker" is tracked alongside `base` rather than as a state of
+// its own.
+//
+// Field order matters: packed struct fields are laid out from the low bits
+// up, so a `@bitCast` to `u3` gives `base * 2 + after_linker`. With
+// `regional_indicator` last in `Base`, the one combination that can never
+// occur (`regional_indicator` with `after_linker`, since the flag is only set
+// when gb2 is InCB Extend or ZWJ while the base only becomes
+// `regional_indicator` when gb2 is a regional indicator) is the highest value,
+// so the precomputed tables can leave it out. `buildGraphemeBreakTable`
+// asserts this at comptime.
+pub const BreakState = packed struct(u3) {
+    after_linker: bool = false,
+    base: Base = .default,
+
+    pub const Base = enum(u2) {
+        default,
+        extended_pictographic,
+        regional_indicator,
+    };
+
+    /// Deprecated: initialize with `.{}` instead.
+    pub const default: BreakState = .{};
+
+    pub const table_len = @typeInfo(Base).@"enum".field_values.len * 2 - 1;
+
+    pub inline fn tableIndex(self: BreakState) usize {
+        return @as(u3, @bitCast(self));
+    }
+
+    pub fn fromTableIndex(i: usize) BreakState {
+        return @bitCast(@as(u3, @intCast(i)));
+    }
 };
+
+test "BreakState table index layout" {
+    try std.testing.expectEqual(0, (BreakState{}).tableIndex());
+    try std.testing.expectEqual(1, (BreakState{ .after_linker = true }).tableIndex());
+    try std.testing.expectEqual(2, (BreakState{ .base = .extended_pictographic }).tableIndex());
+    try std.testing.expectEqual(3, (BreakState{ .base = .extended_pictographic, .after_linker = true }).tableIndex());
+    try std.testing.expectEqual(4, (BreakState{ .base = .regional_indicator }).tableIndex());
+    try std.testing.expectEqual(5, BreakState.table_len);
+    try std.testing.expectEqual(5, (BreakState{ .base = .regional_indicator, .after_linker = true }).tableIndex());
+    for (0..BreakState.table_len) |i| {
+        try std.testing.expectEqual(i, BreakState.fromTableIndex(i).tableIndex());
+    }
+}
 
 pub fn computeGraphemeBreak(
     gb1: types.GraphemeBreak,
     gb2: types.GraphemeBreak,
     state: *BreakState,
 ) bool {
+    // Whether the next flag is set depends only on the input, not on the
+    // rules below, which only read `after_linker` and only write `base`.
+    const after_linker = isIndicConjunctBreakLinker(gb1) or
+        (state.after_linker and isIndicConjunctBreakExtend(gb1));
+    state.after_linker = after_linker and isIndicConjunctBreakExtend(gb2);
+
     // Set state back to default when `gb1` or `gb2` is not expected in sequence.
-    switch (state.*) {
+    switch (state.base) {
         .regional_indicator => {
             if (gb1 != .regional_indicator or gb2 != .regional_indicator) {
-                state.* = .default;
+                state.base = .default;
             }
         },
         .extended_pictographic => {
             switch (gb1) {
                 // Keep state if in possibly valid sequence
                 .indic_conjunct_break_extend, // extend
-                .indic_conjunct_break_linker, // extend
+                .indic_conjunct_break_linker_extend, // extend
                 .zwnj, // extend
                 .zwj,
                 .extended_pictographic,
@@ -226,13 +272,13 @@ pub fn computeGraphemeBreak(
                 .emoji_modifier,
                 => {},
 
-                else => state.* = .default,
+                else => state.base = .default,
             }
 
             switch (gb2) {
                 // Keep state if in possibly valid sequence
                 .indic_conjunct_break_extend, // extend
-                .indic_conjunct_break_linker, // extend
+                .indic_conjunct_break_linker_extend, // extend
                 .zwnj, // extend
                 .zwj,
                 .extended_pictographic,
@@ -240,30 +286,7 @@ pub fn computeGraphemeBreak(
                 .emoji_modifier,
                 => {},
 
-                else => state.* = .default,
-            }
-        },
-        .indic_conjunct_break_consonant, .indic_conjunct_break_linker => {
-            switch (gb1) {
-                // Keep state if in possibly valid sequence
-                .indic_conjunct_break_consonant,
-                .indic_conjunct_break_linker,
-                .indic_conjunct_break_extend,
-                .zwj, // indic_conjunct_break_extend
-                => {},
-
-                else => state.* = .default,
-            }
-
-            switch (gb2) {
-                // Keep state if in possibly valid sequence
-                .indic_conjunct_break_consonant,
-                .indic_conjunct_break_linker,
-                .indic_conjunct_break_extend,
-                .zwj, // indic_conjunct_break_extend
-                => {},
-
-                else => state.* = .default,
+                else => state.base = .default,
             }
         },
         .default => {},
@@ -305,54 +328,10 @@ pub fn computeGraphemeBreak(
     // GB9b: Prepend
     if (gb1 == .prepend) return false;
 
-    // GB9c: Indic
-    if (gb1 == .indic_conjunct_break_consonant) {
-        // start of sequence:
-
-        // In normal operation, we'll be in this state, but
-        // buildGraphemeBreakTable iterates all states.
-        //inlineAssert(state.* == .default);
-
-        if (isIndicConjunctBreakExtend(gb2)) {
-            state.* = .indic_conjunct_break_consonant;
-            return false;
-        } else if (gb2 == .indic_conjunct_break_linker) {
-            // jump straight to linker state
-            state.* = .indic_conjunct_break_linker;
-            return false;
-        }
-        // else, not an Indic sequence
-
-    } else if (state.* == .indic_conjunct_break_consonant) {
-        // consonant state:
-
-        if (gb2 == .indic_conjunct_break_linker) {
-            // consonant -> linker transition
-            state.* = .indic_conjunct_break_linker;
-            return false;
-        } else if (isIndicConjunctBreakExtend(gb2)) {
-            // continue [extend]* sequence
-            return false;
-        } else {
-            // Not a valid Indic sequence
-            state.* = .default;
-        }
-    } else if (state.* == .indic_conjunct_break_linker) {
-        // linker state:
-
-        if (gb2 == .indic_conjunct_break_linker or
-            isIndicConjunctBreakExtend(gb2))
-        {
-            // continue [extend linker]* sequence
-            return false;
-        } else if (gb2 == .indic_conjunct_break_consonant) {
-            // linker -> end of sequence
-            state.* = .default;
-            return false;
-        } else {
-            // Not a valid Indic sequence
-            state.* = .default;
-        }
+    // GB9c: InCB=Linker InCB=Extend* x InCB=Consonant
+    if (after_linker and gb2 == .indic_conjunct_break_consonant) {
+        state.base = .default;
+        return false;
     }
 
     // GB11: Emoji ZWJ sequence and Emoji modifier sequence
@@ -361,22 +340,22 @@ pub fn computeGraphemeBreak(
 
         // In normal operation, we'll be in this state, but
         // buildGraphemeBreakTable iterates all states.
-        // inlineAssert(state.* == .default);
+        // inlineAssert(state.base == .default);
 
         if (isExtend(gb2) or gb2 == .zwj) {
-            state.* = .extended_pictographic;
+            state.base = .extended_pictographic;
             return false;
         }
 
         // The `emoji_modifier_sequence` case is described in the comment for
         // `isExtend` above, from UTS #51.
         if (gb1 == .emoji_modifier_base and gb2 == .emoji_modifier) {
-            state.* = .extended_pictographic;
+            state.base = .extended_pictographic;
             return false;
         }
 
         // else, not an Emoji ZWJ sequence
-    } else if (state.* == .extended_pictographic) {
+    } else if (state.base == .extended_pictographic) {
         // continue or end sequence:
 
         if ((isExtend(gb1) or gb1 == .emoji_modifier) and
@@ -386,21 +365,21 @@ pub fn computeGraphemeBreak(
             return false;
         } else if (gb1 == .zwj and isExtendedPictographic(gb2)) {
             // ZWJ -> end of sequence
-            state.* = .default;
+            state.base = .default;
             return false;
         } else {
             // Not a valid Emoji ZWJ sequence
-            state.* = .default;
+            state.base = .default;
         }
     }
 
     // GB12 and GB13: Regional Indicator
     if (gb1 == .regional_indicator and gb2 == .regional_indicator) {
-        if (state.* == .default) {
-            state.* = .regional_indicator;
+        if (state.base == .default) {
+            state.base = .regional_indicator;
             return false;
         } else {
-            state.* = .default;
+            state.base = .default;
             return true;
         }
     }
@@ -412,8 +391,56 @@ pub fn computeGraphemeBreak(
     return true;
 }
 
+test "Unicode 18 Indic linker boundaries and overlapping emoji sequences" {
+    const cases = [_]struct { cps: []const u21, breaks: []const bool }{
+        // GB9c no longer needs a leading consonant: Linker Extend* x Consonant
+        .{ .cps = &.{ 0x094D, 0x0915 }, .breaks = &.{false} },
+        .{ .cps = &.{ 0x0061, 0x094D, 0x0915 }, .breaks = &.{ false, false } },
+        .{ .cps = &.{ 0x094D, 0x0300, 0x200D, 0x0915 }, .breaks = &.{ false, false, false } },
+        .{ .cps = &.{ 0x094D, 0x094D, 0x0915 }, .breaks = &.{ false, false } },
+        // Extend without a linker doesn't join a consonant
+        .{ .cps = &.{ 0x0915, 0x0300, 0x0915 }, .breaks = &.{ false, true } },
+        // A consonant ends the linker sequence
+        .{ .cps = &.{ 0x094D, 0x0915, 0x0300, 0x0915 }, .breaks = &.{ false, false, true } },
+        // Only InCB=Extend continues the sequence: ZWNJ, SpacingMark and an
+        // emoji modifier all end it
+        .{ .cps = &.{ 0x094D, 0x200C, 0x0300, 0x0915 }, .breaks = &.{ false, false, true } },
+        .{ .cps = &.{ 0x094D, 0x0903, 0x0915 }, .breaks = &.{ false, true } },
+        .{ .cps = &.{ 0x094D, 0x1F3FB, 0x0915 }, .breaks = &.{ true, true } },
+        // InCB=Linker with Grapheme_Cluster_Break=Other (`indic_conjunct_break_linker_other`):
+        // breaks before it, but still joins a following consonant
+        .{ .cps = &.{ 0x0061, 0x1CF5, 0x0300, 0x0915 }, .breaks = &.{ true, false, false } },
+        .{ .cps = &.{ 0x0061, 0x1CF6, 0x0915 }, .breaks = &.{ true, false } },
+        .{ .cps = &.{ 0x0061, 0x11A3A, 0x11A0B }, .breaks = &.{ true, false } },
+        .{ .cps = &.{ 0x11A3A, 0x0061 }, .breaks = &.{true} },
+        // GB9c and GB11 overlap: a linker inside an emoji sequence can still
+        // lead to either a ZWJ emoji or a consonant
+        .{ .cps = &.{ 0x1F600, 0x094D, 0x0300, 0x200D, 0x1F600 }, .breaks = &.{ false, false, false, false } },
+        .{ .cps = &.{ 0x1F600, 0x094D, 0x0300, 0x0915 }, .breaks = &.{ false, false, false } },
+        .{ .cps = &.{ 0x1F600, 0x094D, 0x200C, 0x200D, 0x1F600 }, .breaks = &.{ false, false, false, false } },
+        .{ .cps = &.{ 0x1F600, 0x094D, 0x200C, 0x0915 }, .breaks = &.{ false, false, true } },
+        // An emoji modifier sequence can lead into GB9c
+        .{ .cps = &.{ 0x1F44D, 0x1F3FB, 0x094D, 0x0915 }, .breaks = &.{ false, false, false } },
+        // A Grapheme_Cluster_Break=Other linker ends the emoji sequence
+        .{ .cps = &.{ 0x1F600, 0x1CF5, 0x0915 }, .breaks = &.{ true, false } },
+    };
+    inline for (.{ testGetActualComputedGraphemeBreak, isBreak, testGetActualComputedGraphemeBreakNoControl, isBreakNoControl }) |check| {
+        for (cases) |case| {
+            var state: BreakState = .{};
+            for (case.breaks, 0..) |expected, i| {
+                try std.testing.expectEqual(expected, check(case.cps[i], case.cps[i + 1], &state));
+            }
+        }
+    }
+}
+
 fn isIndicConjunctBreakExtend(gb: types.GraphemeBreak) bool {
     return gb == .indic_conjunct_break_extend or gb == .zwj;
+}
+
+fn isIndicConjunctBreakLinker(gb: types.GraphemeBreak) bool {
+    return gb == .indic_conjunct_break_linker_extend or
+        gb == .indic_conjunct_break_linker_other;
 }
 
 // Despite `emoji_modifier` being `extend` according to
@@ -434,7 +461,7 @@ fn isIndicConjunctBreakExtend(gb: types.GraphemeBreak) bool {
 fn isExtend(gb: types.GraphemeBreak) bool {
     return gb == .zwnj or
         gb == .indic_conjunct_break_extend or
-        gb == .indic_conjunct_break_linker;
+        gb == .indic_conjunct_break_linker_extend;
 }
 
 fn isExtendedPictographic(gb: types.GraphemeBreak) bool {
@@ -471,7 +498,7 @@ fn testGraphemeBreak(getActualIsBreak: fn (cp1: u21, cp2: u21, state: *BreakStat
         const start = parts.next().?;
         try std.testing.expect(std.mem.eql(u8, start, "÷"));
 
-        var state: BreakState = .default;
+        var state: BreakState = .{};
         var cp1 = try parseCp(parts.next().?);
         var gb1 = get(.grapheme_break, cp1);
         var expected_str = parts.next().?;
@@ -536,22 +563,19 @@ pub fn GraphemeBreakTable(comptime GB: type, comptime State: type) type {
         state: State,
     };
     const gb_values = @typeInfo(GB).@"enum".field_values;
-    const state_values = @typeInfo(State).@"enum".field_values;
     const n_gb = gb_values.len;
     const n_gb_2 = n_gb * n_gb;
-    const n_state = state_values.len;
-    const n = n_state * n_gb_2;
+    const n = State.table_len * n_gb_2;
 
-    // Assert that these are simple enums (this isn't a full assertion, but
+    // Assert that this is a simple enum (this isn't a full assertion, but
     // likely good enough.)
     inlineAssert(gb_values[gb_values.len - 1] == n_gb - 1);
-    inlineAssert(state_values[state_values.len - 1] == n_state - 1);
 
     return struct {
         data: [n]Result,
 
         inline fn index(gb1: GB, gb2: GB, state: State) usize {
-            return @backingInt(state) * n_gb_2 + @backingInt(gb1) * n_gb + @backingInt(gb2);
+            return state.tableIndex() * n_gb_2 + @backingInt(gb1) * n_gb + @backingInt(gb2);
         }
 
         pub fn set(self: *@This(), gb1: GB, gb2: GB, state: State, result: Result) void {
@@ -569,20 +593,21 @@ pub fn buildGraphemeBreakTable(
     comptime State: type,
     compute: fn (gb1: GB, gb2: GB, state: *State) bool,
 ) GraphemeBreakTable(GB, State) {
-    @setEvalBranchQuota(20_000);
+    @setEvalBranchQuota(30_000);
     var table: GraphemeBreakTable(GB, State) = undefined;
 
     const gb_values = @typeInfo(GB).@"enum".field_values;
-    const state_values = @typeInfo(State).@"enum".field_values;
 
-    for (state_values) |state_value| {
+    for (0..State.table_len) |state_i| {
         for (gb_values) |gb1_value| {
             for (gb_values) |gb2_value| {
-                const original_state: State = @fromBackingInt(@intCast(state_value));
+                const original_state = State.fromTableIndex(state_i);
                 const gb1: GB = @fromBackingInt(@intCast(gb1_value));
                 const gb2: GB = @fromBackingInt(@intCast(gb2_value));
                 var state = original_state;
                 const result = compute(gb1, gb2, &state);
+                // The table must never hand back a state it has no row for.
+                inlineAssert(state.tableIndex() < State.table_len);
                 table.set(gb1, gb2, original_state, .{
                     .result = result,
                     .state = state,
@@ -604,8 +629,8 @@ pub fn precomputedGraphemeBreak(
         BreakState,
         computeGraphemeBreak,
     );
-    // 5 BreakState fields x (20 GraphemeBreak fields)^2 = 2000
-    inlineAssert(@sizeOf(@TypeOf(table)) == 2000);
+    // 5 BreakState rows x (21 GraphemeBreak fields)^2 = 2205
+    inlineAssert(@sizeOf(@TypeOf(table)) == 2205);
     const result = table.get(gb1, gb2, state.*);
     state.* = result.state;
     return result.result;
@@ -716,12 +741,12 @@ test "sequence of regional indicators" {
 
     var result = it.nextCodePoint();
     try std.testing.expect(result.?.code_point == 0x1F1FA); // U
-    try std.testing.expect(it.state == .regional_indicator);
+    try std.testing.expect(it.state.base == .regional_indicator);
     try std.testing.expect(!result.?.is_break);
 
     result = it.nextCodePoint();
     try std.testing.expect(result.?.code_point == 0x1F1F8); // S
-    try std.testing.expect(it.state == .default);
+    try std.testing.expect(it.state.base == .default);
     try std.testing.expect(result.?.is_break); // break
 
     result = it.nextCodePoint();
@@ -839,7 +864,7 @@ pub fn wcwidthNext(it: anytype) usize {
                 }
             },
             0x200D => {
-                if (prev_state == .extended_pictographic and
+                if (prev_state.base == .extended_pictographic and
                     !result.is_break)
                 {
                     const next = it.nextCodePoint() orelse unreachable;
@@ -857,7 +882,7 @@ pub fn wcwidthNext(it: anytype) usize {
                 );
             },
             else => {
-                if (prev_state == .regional_indicator) {
+                if (prev_state.base == .regional_indicator) {
                     width = 2;
                 } else if (!get(.wcwidth_zero_in_grapheme, result.code_point)) {
                     width += get(.wcwidth_standalone, result.code_point);
@@ -1130,7 +1155,6 @@ pub fn IteratorNoControl(comptime CodePointIterator: type) type {
     return CustomIterator(
         CodePointIterator,
         types.GraphemeBreakNoControl,
-        BreakState,
         .grapheme_break_no_control,
         precomputedGraphemeBreakNoControl,
     );
@@ -1196,16 +1220,22 @@ pub fn computeGraphemeBreakNoControl(
     gb2: types.GraphemeBreakNoControl,
     state: *BreakState,
 ) bool {
-    switch (state.*) {
+    // Whether the next flag is set depends only on the input, not on the
+    // rules below, which only read `after_linker` and only write `base`.
+    const after_linker = isIndicConjunctBreakLinkerNoControl(gb1) or
+        (state.after_linker and isIndicConjunctBreakExtendNoControl(gb1));
+    state.after_linker = after_linker and isIndicConjunctBreakExtendNoControl(gb2);
+
+    switch (state.base) {
         .regional_indicator => {
             if (gb1 != .regional_indicator or gb2 != .regional_indicator) {
-                state.* = .default;
+                state.base = .default;
             }
         },
         .extended_pictographic => {
             switch (gb1) {
                 .indic_conjunct_break_extend,
-                .indic_conjunct_break_linker,
+                .indic_conjunct_break_linker_extend,
                 .zwnj,
                 .zwj,
                 .extended_pictographic,
@@ -1213,12 +1243,12 @@ pub fn computeGraphemeBreakNoControl(
                 .emoji_modifier,
                 => {},
 
-                else => state.* = .default,
+                else => state.base = .default,
             }
 
             switch (gb2) {
                 .indic_conjunct_break_extend,
-                .indic_conjunct_break_linker,
+                .indic_conjunct_break_linker_extend,
                 .zwnj,
                 .zwj,
                 .extended_pictographic,
@@ -1226,28 +1256,7 @@ pub fn computeGraphemeBreakNoControl(
                 .emoji_modifier,
                 => {},
 
-                else => state.* = .default,
-            }
-        },
-        .indic_conjunct_break_consonant, .indic_conjunct_break_linker => {
-            switch (gb1) {
-                .indic_conjunct_break_consonant,
-                .indic_conjunct_break_linker,
-                .indic_conjunct_break_extend,
-                .zwj,
-                => {},
-
-                else => state.* = .default,
-            }
-
-            switch (gb2) {
-                .indic_conjunct_break_consonant,
-                .indic_conjunct_break_linker,
-                .indic_conjunct_break_extend,
-                .zwj,
-                => {},
-
-                else => state.* = .default,
+                else => state.base = .default,
             }
         },
         .default => {},
@@ -1277,68 +1286,43 @@ pub fn computeGraphemeBreakNoControl(
     // GB9b: Prepend
     if (gb1 == .prepend) return false;
 
-    // GB9c: Indic
-    if (gb1 == .indic_conjunct_break_consonant) {
-        if (isIndicConjunctBreakExtendNoControl(gb2)) {
-            state.* = .indic_conjunct_break_consonant;
-            return false;
-        } else if (gb2 == .indic_conjunct_break_linker) {
-            state.* = .indic_conjunct_break_linker;
-            return false;
-        }
-    } else if (state.* == .indic_conjunct_break_consonant) {
-        if (gb2 == .indic_conjunct_break_linker) {
-            state.* = .indic_conjunct_break_linker;
-            return false;
-        } else if (isIndicConjunctBreakExtendNoControl(gb2)) {
-            return false;
-        } else {
-            state.* = .default;
-        }
-    } else if (state.* == .indic_conjunct_break_linker) {
-        if (gb2 == .indic_conjunct_break_linker or
-            isIndicConjunctBreakExtendNoControl(gb2))
-        {
-            return false;
-        } else if (gb2 == .indic_conjunct_break_consonant) {
-            state.* = .default;
-            return false;
-        } else {
-            state.* = .default;
-        }
+    // GB9c: InCB=Linker InCB=Extend* x InCB=Consonant
+    if (after_linker and gb2 == .indic_conjunct_break_consonant) {
+        state.base = .default;
+        return false;
     }
 
     // GB11: Emoji ZWJ sequence and Emoji modifier sequence
     if (isExtendedPictographicNoControl(gb1)) {
         if (isExtendNoControl(gb2) or gb2 == .zwj) {
-            state.* = .extended_pictographic;
+            state.base = .extended_pictographic;
             return false;
         }
 
         if (gb1 == .emoji_modifier_base and gb2 == .emoji_modifier) {
-            state.* = .extended_pictographic;
+            state.base = .extended_pictographic;
             return false;
         }
-    } else if (state.* == .extended_pictographic) {
+    } else if (state.base == .extended_pictographic) {
         if ((isExtendNoControl(gb1) or gb1 == .emoji_modifier) and
             (isExtendNoControl(gb2) or gb2 == .zwj))
         {
             return false;
         } else if (gb1 == .zwj and isExtendedPictographicNoControl(gb2)) {
-            state.* = .default;
+            state.base = .default;
             return false;
         } else {
-            state.* = .default;
+            state.base = .default;
         }
     }
 
     // GB12 and GB13: Regional Indicator
     if (gb1 == .regional_indicator and gb2 == .regional_indicator) {
-        if (state.* == .default) {
-            state.* = .regional_indicator;
+        if (state.base == .default) {
+            state.base = .regional_indicator;
             return false;
         } else {
-            state.* = .default;
+            state.base = .default;
             return true;
         }
     }
@@ -1352,6 +1336,11 @@ pub fn computeGraphemeBreakNoControl(
 
 fn isIndicConjunctBreakExtendNoControl(gb: types.GraphemeBreakNoControl) bool {
     return gb == .indic_conjunct_break_extend or gb == .zwj;
+}
+
+fn isIndicConjunctBreakLinkerNoControl(gb: types.GraphemeBreakNoControl) bool {
+    return gb == .indic_conjunct_break_linker_extend or
+        gb == .indic_conjunct_break_linker_other;
 }
 
 // Despite `emoji_modifier` being `extend` according to
@@ -1372,7 +1361,7 @@ fn isIndicConjunctBreakExtendNoControl(gb: types.GraphemeBreakNoControl) bool {
 fn isExtendNoControl(gb: types.GraphemeBreakNoControl) bool {
     return gb == .zwnj or
         gb == .indic_conjunct_break_extend or
-        gb == .indic_conjunct_break_linker;
+        gb == .indic_conjunct_break_linker_extend;
 }
 
 fn isExtendedPictographicNoControl(gb: types.GraphemeBreakNoControl) bool {
@@ -1409,7 +1398,7 @@ fn testGraphemeBreakNoControl(getActualIsBreak: fn (cp1: u21, cp2: u21, state: *
         const start = parts.next().?;
         try std.testing.expect(std.mem.eql(u8, start, "÷"));
 
-        var state: BreakState = .default;
+        var state: BreakState = .{};
         var cp1 = try parseCp(parts.next().?);
         var expected_str = parts.next().?;
         var cp2 = try parseCp(parts.next().?);
@@ -1490,8 +1479,8 @@ pub fn precomputedGraphemeBreakNoControl(
         BreakState,
         computeGraphemeBreakNoControl,
     );
-    // 5 BreakState fields x (17 GraphemeBreak fields)^2 = 1445
-    inlineAssert(@sizeOf(@TypeOf(table)) == 1445);
+    // 5 BreakState rows x (18 GraphemeBreakNoControl fields)^2 = 1620
+    inlineAssert(@sizeOf(@TypeOf(table)) == 1620);
     const result = table.get(gb1, gb2, state.*);
     state.* = result.state;
     return result.result;
