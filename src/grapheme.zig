@@ -218,7 +218,7 @@ pub const BreakState = packed struct(u3) {
     /// Deprecated: initialize with `.{}` instead.
     pub const default: BreakState = .{};
 
-    pub const table_len = @typeInfo(Base).@"enum".fields.len * 2 - 1;
+    pub const table_len = @typeInfo(Base).@"enum".field_values.len * 2 - 1;
 
     pub inline fn tableIndex(self: BreakState) usize {
         return @as(u3, @bitCast(self));
@@ -562,20 +562,20 @@ pub fn GraphemeBreakTable(comptime GB: type) type {
         result: bool,
         state: BreakState,
     };
-    const gb_fields = @typeInfo(GB).@"enum".fields;
-    const n_gb = gb_fields.len;
+    const gb_values = @typeInfo(GB).@"enum".field_values;
+    const n_gb = gb_values.len;
     const n_gb_2 = n_gb * n_gb;
     const n = BreakState.table_len * n_gb_2;
 
     // Assert that this is a simple enum (this isn't a full assertion, but
     // likely good enough.)
-    inlineAssert(gb_fields[gb_fields.len - 1].value == n_gb - 1);
+    inlineAssert(gb_values[gb_values.len - 1] == n_gb - 1);
 
     return struct {
         data: [n]Result,
 
         inline fn index(gb1: GB, gb2: GB, state: BreakState) usize {
-            return state.tableIndex() * n_gb_2 + @intFromEnum(gb1) * n_gb + @intFromEnum(gb2);
+            return state.tableIndex() * n_gb_2 + @backingInt(gb1) * n_gb + @backingInt(gb2);
         }
 
         pub fn set(self: *@This(), gb1: GB, gb2: GB, state: BreakState, result: Result) void {
@@ -595,14 +595,14 @@ pub fn buildGraphemeBreakTable(
     @setEvalBranchQuota(30_000);
     var table: GraphemeBreakTable(GB) = undefined;
 
-    const gb_fields = @typeInfo(GB).@"enum".fields;
+    const gb_values = @typeInfo(GB).@"enum".field_values;
 
     for (0..BreakState.table_len) |state_i| {
-        for (gb_fields) |gb1_field| {
-            for (gb_fields) |gb2_field| {
+        for (gb_values) |gb1_value| {
+            for (gb_values) |gb2_value| {
                 const original_state = BreakState.fromTableIndex(state_i);
-                const gb1: GB = @enumFromInt(gb1_field.value);
-                const gb2: GB = @enumFromInt(gb2_field.value);
+                const gb1: GB = @fromBackingInt(@intCast(gb1_value));
+                const gb2: GB = @fromBackingInt(@intCast(gb2_value));
                 var state = original_state;
                 const result = compute(gb1, gb2, &state);
                 // The table must never hand back a state it has no row for.
