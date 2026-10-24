@@ -652,10 +652,10 @@ pub fn writeTableRows(
     const B = Block(Stage2Elem);
 
     var row_map: RowMap(Row) = .empty;
-    var stage3: std.ArrayListUnmanaged(Row) = .empty;
+    var stage3: std.ArrayList(Row) = .empty;
     var block_map: BlockMap(B) = .empty;
-    var stage2: std.ArrayListUnmanaged(Stage2Elem) = .empty;
-    var stage1: std.ArrayListUnmanaged(u32) = .empty;
+    var stage2: std.ArrayList(Stage2Elem) = .empty;
+    var stage1: std.ArrayList(u32) = .empty;
 
     var block: B = undefined;
     var block_len: usize = 0;
