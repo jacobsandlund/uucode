@@ -2,7 +2,7 @@
     .name = .uucode,
     .version = "0.2.0",
     .fingerprint = 0x8d4ebdea3ec19865,
-    .minimum_zig_version = "0.17.0",
+    .minimum_zig_version = "0.18.0-dev.738+ae9a8acc7",
     .paths = .{
         "LICENSE.md",
         "README.md",
